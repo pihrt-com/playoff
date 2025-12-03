@@ -1,0 +1,53 @@
+SPUŠTĚNÍ BUILD PROCESSU (ONEFILE)
+1) Vyčistit staré buildy:
+rmdir /s /q build
+rmdir /s /q dist
+
+2) Spusťit PyInstaller:
+python -m PyInstaller playoff.spec
+
+Všechny parametry jsou už uvnitř .spec.
+
+3) Výsledný EXE:
+dist\playoff\playoff.exe
+
+------------------------------------------------
+2) AUTO-UPDATER — updater.py + build
+Tento updater stáhne novou verzi EXE
+přepíše starou (bez konfliktů)
+spustí update
+restartuje aplikaci
+
+Build updater.exe
+python -m PyInstaller --onefile --noconsole --icon=playoff.ico updater.py
+
+Výsledek:
+dist\updater.exe
+
+------------------------------------------------
+3) version.json – na URL pro kontrolu aktualizace
+
+příklad:
+https://www.pihrt.com/playoff/version.json
+
+Obsah:
+
+{
+  "version": "1.0.0",
+  "url": "https://www.pihrt.com/playoff/playoff.exe",
+  "notes": "Initial public release."
+}
+
+
+A při nové verzi změnit na:
+
+"version": "1.0.1"
+"url": "https://www.pihrt.com/playoff/playoff-1.0.1.exe"
+------------------------------------------------
+Compile přes:
+https://jrsoftware.org/isdl.php
+
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer_playoff.iss
+
+Hotový instalátor:
+output_installer\PlayoffSetup_1.0.0.exe
