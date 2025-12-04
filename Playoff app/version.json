@@ -1,5 +1,5 @@
 {
-  "version": "1.0.2",
-  "url": "https://www.pihrt.com/playoff/playoff_1.0.2.exe",
-  "notes": "Initial public release. Tested."
+  "version": "1.0.3",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.3/PlayoffSetup_1.0.3.exe",
+  "notes": "Added timer."
 }

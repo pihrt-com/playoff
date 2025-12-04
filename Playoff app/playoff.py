@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.2"                                         # aktuální verze aplikace
-APP_date          = "30.11.2025-16:52"                                    # aktuální datum verze 
-update_check_link = "https://www.pihrt.com/playoff/version.json"    # cesta k JSONu s verzí APP
+APP_current       = "1.0.3"                                         # aktuální verze aplikace
+APP_date          = "04.12.2025-13:14"                              # aktuální datum verze 
+update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # cesta k JSONu s verzí APP
 
 import tkinter as tk
 from tkinter import simpledialog, messagebox, filedialog, colorchooser
@@ -55,7 +55,7 @@ WINNER_TEXT_COLOR = "#000000"
 # Default USB settings defaults (kept in setup file)
 DEFAULT_USB_PORT = ""
 DEFAULT_USB_BAUD = 9600
-DEFAULT_USB_TIMEOUT = 2.0
+DEFAULT_USB_TIMEOUT = 10.0
 
 # --- Data classes ---
 class Slot:
@@ -218,6 +218,11 @@ class PlayoffApp:
         self.settings_menu.add_command(label='Uložit do souboru', command=self.save_setup)
         self.settings_menu.add_command(label='Načíst ze souboru', command=self.load_setup)
 
+        # timer enable
+        self.settings_menu.add_separator()        
+        self.timer_menu_var = tk.BooleanVar(value=False)
+        self.settings_menu.add_checkbutton(label='Povolit odpočet', variable=self.timer_menu_var, command=self.on_toggle_timer)
+
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label='USB nastavení', command=self.open_usb_dialog)
 
@@ -267,7 +272,26 @@ class PlayoffApp:
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind('<Configure>', lambda e: self.redraw())
 
-        # storage for canvas items
+        # storage for canvas items        # --- Timer overlay (canvas create_window) ---
+        self.enable_timer = True
+        self.timer_value = '05:00'
+        self.timer_running = False
+        self.timer_blink = False
+        self.current_seconds = 0
+        self.timer_label = tk.Label( # timer MM:SS box size
+            self.root, 
+            text=self.timer_value,
+            font=("Consolas", 100, "bold"), 
+            bg='black', 
+            fg='white',
+            bd=4,         # větší okraj
+            relief='ridge',
+            padx=20,      # horizontální vnitřní okraj
+            pady=10       # vertikální vnitřní okraj
+        ) 
+        self.timer_label.bind('<Button-3>', self.on_timer_right_click)
+        self.timer_window = None
+
         self.rect_items = {}
         self.text_items = {}
         self.title_items = {}
@@ -435,58 +459,13 @@ class PlayoffApp:
         except Exception as e:
             self.status_var.set(f'Chyba: {e}')
             self.start_btn.config(state='normal')
+        # start timer if enabled
+        try:
+            if getattr(self, 'enable_timer', False):
+                self.start_countdown()
+        except Exception:
+            pass
 
-    # --- Menu ---
-    def _create_menu(self):
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
-        settings = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='Nastavení', menu=settings)
-
-        # odd behavior submenu
-        odd_menu = tk.Menu(settings, tearoff=0)
-        settings.add_command(label='Počet týmů', command=self.ask_team_count)
-        settings.add_command(label='Generovat týmy', command=self.generate_from_entry)
-        settings.add_command(label='Smazat obsah', command=self.reset_values)
-        settings.add_command(label='Vymazat vše', command=self.clear_all)
-        settings.add_cascade(label='Chování při lichém počtu vítězů', menu=odd_menu)
-        odd_menu.add_radiobutton(label='Automatický BYE', command=lambda: self.set_odd_behavior('auto'))
-        odd_menu.add_radiobutton(label='Ruční postup', command=lambda: self.set_odd_behavior('manual'))
-        odd_menu.add_radiobutton(label='Čekající hráč', command=lambda: self.set_odd_behavior('waiting'))
-
-        settings.add_separator()
-        # background image commands
-        settings.add_command(label='Načíst pozadí', command=self.load_bg_image)
-        settings.add_command(label='Smazat pozadí', command=self.remove_bg)
-
-        # font size
-        font_menu = tk.Menu(settings, tearoff=0)
-        settings.add_cascade(label='Velikost písma', menu=font_menu)
-        font_menu.add_radiobutton(label='Malé', command=lambda: self.set_font_scale('small'))
-        font_menu.add_radiobutton(label='Střední', command=lambda: self.set_font_scale('medium'))
-        font_menu.add_radiobutton(label='Velké', command=lambda: self.set_font_scale('large'))
-
-        # canvas bg color
-        settings.add_command(label='Barva pozadí', command=self.choose_canvas_bg)
-        # line width
-        lw_menu = tk.Menu(settings, tearoff=0)
-        settings.add_cascade(label='Tloušťka čar', menu=lw_menu)
-        lw_menu.add_radiobutton(label='Normální', command=lambda: self.set_line_width(2))
-        lw_menu.add_radiobutton(label='Silné', command=lambda: self.set_line_width(4))
-
-        settings.add_separator()
-        settings.add_checkbutton(label='Zamknout pole týmů', command=self.toggle_lock_edit)
-        settings.add_command(label='Uložit do souboru', command=self.save_setup)
-        settings.add_command(label='Načíst ze souboru', command=self.load_setup)
-
-        # USB submenu entry - opens USB dialog from usb_module
-        settings.add_separator()
-        settings.add_command(label='USB nastavení', command=self.open_usb_dialog)
-
-        settings.add_separator()
-        settings.add_command(label='Export do PDF', command=self.export_pdf)
-        settings.add_command(label='Celá obrazovka ZAP/VYP', command=self.toggle_projector)
-        settings.add_command(label='Nápověda', command=self.show_help)
 
     # --- settings handlers ---
     def set_odd_behavior(self, mode):
@@ -640,7 +619,9 @@ class PlayoffApp:
             'lock_edit': self.lock_edit,
             'titles': self.bracket.titles,
             'rounds': [],
-            'winner': self.current_winner,            
+            'winner': self.current_winner,
+            'enable_timer': self.enable_timer,
+            'timer_value': self.timer_value,            
             # USB fields
             'usb_port': self.usb_port,
             'usb_baud': self.usb_baud,
@@ -678,6 +659,20 @@ class PlayoffApp:
         self.bg_path = data.get('bg_path')
         self.lock_edit = data.get('lock_edit', False)
         self.canvas.config(bg=self.canvas_bg)
+        # load timer settings
+        self.enable_timer = data.get('enable_timer', getattr(self, 'enable_timer', True))
+        self.timer_value = data.get('timer_value', getattr(self, 'timer_value', '05:00'))
+        try:
+            # ensure timer menu var exists
+            self.timer_menu_var.set(self.enable_timer)
+        except Exception:
+            pass
+        # update timer display/visibility
+        try:
+            self.timer_label.config(text=self.timer_value)
+            self.update_timer_visibility()
+        except Exception:
+            pass
 
         # create bracket skeleton
         self.generate_bracket_with_empty(n)
@@ -734,27 +729,222 @@ class PlayoffApp:
         self.redraw()
         messagebox.showinfo('Hotovo', 'Soubor byl načten')
 
-    # --- helper: auto resolve byes (single participants) ---
+
+    # --- Timer methods (MM:SS input, countdown, blinking) ---
+    def on_toggle_timer(self):
+        self.enable_timer = self.timer_menu_var.get()
+        # persist small settings to user home file
+        try:
+            spath = os.path.join(os.path.expanduser('~'), '.playoff_settings.json')
+            data = {}
+            if os.path.exists(spath):
+                try:
+                    with open(spath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except Exception:
+                    data = {}
+            data['enable_timer'] = self.enable_timer
+            data['timer_value'] = self.timer_value
+            with open(spath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        try:
+            self.update_timer_visibility()
+        except Exception:
+            pass
+
+    def update_timer_visibility(self):
+        try:
+            if getattr(self, 'timer_window', None) is None:
+                return
+            if self.enable_timer:
+                self.canvas.itemconfigure(self.timer_window, state='normal')
+            else:
+                self.canvas.itemconfigure(self.timer_window, state='hidden')
+        except Exception:
+            try:
+                if self.enable_timer:
+                    self.timer_label.place(relx=0.98, rely=0.98, anchor='se')
+                else:
+                    self.timer_label.place_forget()
+            except Exception:
+                pass
+
+    def update_timer_display(self):
+        try:
+            self.timer_label.config(text=self.timer_value, bg='black', fg='white')
+        except Exception:
+            pass
+
+    def on_timer_right_click(self, event=None):
+        class WideEntryDialog(simpledialog._QueryString):
+            def body(self, master):
+                super().body(master)
+                self.entry.config(width=15)  # šířka pole
+                return self.entry
+
+        d = WideEntryDialog(
+            title='Nastavení odpočtu',
+            prompt='Zadejte čas ve formátu MM:SS',
+            initialvalue=getattr(self, 'timer_value', '05:00'),
+            parent=self.root
+        )
+
+        val = d.result
+        if val is None:
+            return
+        
+        if self.validate_time_format(val):
+            self.timer_value = val
+            self.timer_label.config(text=self.timer_value)
+
+            # uložit nastavení
+            try:
+                spath = os.path.join(os.path.expanduser('~'), '.playoff_settings.json')
+                data = {}
+                if os.path.exists(spath):
+                    with open(spath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                data['timer_value'] = self.timer_value
+                with open(spath, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+        else:
+            messagebox.showerror('Chyba', 'Neplatný formát času. Použij MM:SS (např. 03:30).')
+
+    def validate_time_format(self, text):
+        try:
+            parts = text.split(':')
+            if len(parts) != 2:
+                return False
+            m = int(parts[0]); s = int(parts[1])
+            if m < 0 or s < 0 or s >= 60:
+                return False
+            return True
+        except Exception:
+            return False
+
+    def time_to_seconds(self, t):
+        parts = t.split(':')
+        if len(parts) != 2:
+            return 0
+        return int(parts[0]) * 60 + int(parts[1])
+
+    def seconds_to_time(self, sec):
+        m = sec // 60
+        s = sec % 60
+        return f"{m:02d}:{s:02d}"
+
+    def start_countdown(self):
+        try:
+            # stop blinking if active
+            self.stop_blinking()
+        except Exception:
+            pass
+        try:
+            if getattr(self, 'countdown_after_id', None):
+                try:
+                    self.root.after_cancel(self.countdown_after_id)
+                except Exception:
+                    pass
+                self.countdown_after_id = None
+        except Exception:
+            self.countdown_after_id = None
+        try:
+            self.current_seconds = self.time_to_seconds(self.timer_value)
+            self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
+            self.timer_running = True
+            # schedule tick
+            self.countdown_after_id = self.root.after(1000, self.countdown_tick)
+        except Exception:
+            pass
+
+    def countdown_tick(self):
+        try:
+            if not getattr(self, 'timer_running', False):
+                return
+            if self.current_seconds <= 0:
+                self.timer_running = False
+                self.start_blinking()
+                return
+            self.current_seconds -= 1
+            try:
+                self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
+            except Exception:
+                pass
+            self.countdown_after_id = self.root.after(1000, self.countdown_tick)
+        except Exception:
+            pass
+
+    def start_blinking(self):
+        try:
+            self.timer_blink = True
+            self.blink_state = False
+            # kickoff blink loop
+            self._blink_step()
+        except Exception:
+            pass
+
+    def _blink_step(self):
+        try:
+            if not getattr(self, 'timer_blink', False):
+                return
+            self.blink_state = not getattr(self, 'blink_state', False)
+            if self.blink_state:
+                self.timer_label.config(bg='red', fg='white')
+            else:
+                self.timer_label.config(bg='white', fg='red')
+            # schedule next
+            self.blink_after_id = self.root.after(500, self._blink_step)
+        except Exception:
+            pass
+
+    def stop_blinking(self):
+        try:
+            self.timer_blink = False
+            if getattr(self, 'blink_after_id', None):
+                try:
+                    self.root.after_cancel(self.blink_after_id)
+                except Exception:
+                    pass
+                self.blink_after_id = None
+            self.timer_label.config(bg='black', fg='white')
+        except Exception:
+            pass
+
+
     def _auto_resolve_byes(self):
-        # iterate rounds and if a match has only one participant, promote it to next round slot
-        for r_idx in range(len(self.bracket.rounds)-1):
-            matches = self.bracket.rounds[r_idx]
+        """Automatické doplnění BYE týmů (když hraje jen jeden soupeř)."""
+        rounds = self.bracket.rounds
+        last_round_index = len(rounds) - 1  # poslední kolo je Vítěz
+
+        for r_idx in range(len(rounds) - 1):
+            # přeskočit kolo Vítěz
+            if r_idx == last_round_index:
+                continue
+
+            matches = rounds[r_idx]
+
             for m_idx, match in enumerate(matches):
-                # --- SKIP A/B BOXES FOR WINNER COLUMN ---
-                if r_idx == last_round_index and len(matches) == 1:
-                    continue
+
                 a = match.a.text.strip()
                 b = match.b.text.strip()
+
+                # pokud A existuje a B je prázdné nebo naopak → automatický postup
                 if (a and not b) or (b and not a):
                     winner = a if a else b
+
                     next_index = m_idx // 2
-                    next_match = self.bracket.rounds[r_idx+1][next_index]
-                    # choose side in next match
+                    next_match = rounds[r_idx + 1][next_index]
                     side = 'a' if (m_idx % 2 == 0) else 'b'
+
                     if side == 'a':
                         next_match.a.text = winner
                     else:
                         next_match.b.text = winner
+
 
     # --- editing title (wide dialog) ---                       
     def edit_title(self, r_idx):
@@ -962,6 +1152,7 @@ class PlayoffApp:
             "- Chování při lichém počtu vítězů: Automaticky / Ručně / Čekající hráč.\n"
             "- Zamknout editaci: Zablokuje úpravy (při prezentaci).\n"
             "- Uložit do souboru / Načíst ze souboru: Ukládá celý stav (týmy, pozadí, nastavení).\n"
+            "- Povolit odpočet: Pod vítězem se při povolení vytvoří okno s odpočtem. Pravé tlačítko edit času.\n"
             "- Export do PDF: Vytvoří PDF pro tisk.\n"
             "- Projektor mód: Celá obrazovka (tl. Escape vypíná).\n"
             "- USB nastavení: Nastavení → USB spojení (COM port, baud a timeout).\n"
@@ -1214,6 +1405,36 @@ class PlayoffApp:
             avg_x = sum(p[0] for p in final_centers) / len(final_centers)
             avg_y = sum(p[1] for p in final_centers) / len(final_centers)
             self.line_items.append((avg_x, avg_y, win_x1, (win_y1 + win_y2) / 2, self.line_width, LINE_COLOR))
+
+        # --- TIMER OVERLAY (ALWAYS RE-CREATE AFTER canvas.delete('all')) ---
+        try:
+            if self.enable_timer:
+                # pozice pod boxem vítěze
+                tx = win_x2
+                ty = win_y2 + 30
+
+                # Timer window je vždy ZNOVU vytvořen po delete('all')
+                # → proto staré ID neplatí, musíme ho přegenerovat
+                self.timer_window = self.canvas.create_window(
+                    tx, ty,
+                    window=self.timer_label,
+                    anchor='ne'
+                )
+
+                # timer musí být viditelný
+                self.canvas.itemconfigure(self.timer_window, state='normal')
+
+            else:
+                # timer vypnut → schovat widget
+                if self.timer_window:
+                    try:
+                        self.canvas.itemconfigure(self.timer_window, state='hidden')
+                    except:
+                        pass
+
+        except Exception as e:
+            print("TIMER ERROR:", e)
+
 
     # --- PDF export ---
     def export_pdf(self):
