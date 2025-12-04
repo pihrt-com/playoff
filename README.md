@@ -1,6 +1,6 @@
 
 # Vítejte v playoff!
-Zde naleznete aplikaci pro MS Windows (instalace, nebo portable verze), dokumentaci hardware (zapojení, 3D design...) V aplikaci lze vygenerovat pavouka až pro 24 týmů. Levým tlačítkem zadáváme číslo (název) týmu a pravým tlačítkem postupujeme tým do dalšího kola. Na pozadí aplikace se dá vložit obrázek, nebo libovolná barva. Výsledný list můžeme exportovat do PDF pro následný tisk. Pavouka si můžeme připravit dopředu (doma) a před soutěží nahrát ze souboru. Aplikace umí spustit tlačítkem zvukovou a světelnou signalizaci (semafor) pro start utkání. Zároveň lze zobrazit (pod vítězem) odpočet času (nastavuje se pravým tlačítkem myši). Odpočet se spouští tlačítkem "START" spolu se zvukovou a světelnou signalizací.
+Zde naleznete aplikaci pro MS Windows (instalace, nebo portable verze), dokumentaci hardware (zapojení, 3D design...) V aplikaci lze vygenerovat pavouka až pro 24 týmů. Levým tlačítkem zadáváme číslo (název) týmu a pravým tlačítkem postupujeme tým do dalšího kola. Seznam kol si můžeme pravým tlačítkem pojmenovat. Na pozadí aplikace se dá vložit obrázek, nebo libovolná barva. Výsledný list můžeme exportovat do PDF pro následný tisk. Pavouka si můžeme připravit dopředu (doma) a před soutěží nahrát ze souboru. Aplikace umí spustit tlačítkem zvukovou a světelnou signalizaci (semafor) pro start utkání. Zároveň lze zobrazit (pod vítězem) odpočet času (nastavuje se pravým tlačítkem myši). Odpočet se spouští tlačítkem "START" spolu se zvukovou a světelnou signalizací.
 
 ## Aplikace
 Magnetická tabule (takto to nemá vypadat)
@@ -28,6 +28,6 @@ TODO sem dát potom foto a video
 
 ## Kredity
 - Arduino.cc -> deska mega (samozřejmě by to zvládla i deska uno nebo jiná)
-- Python pro běh aplikace
-- Tkinter jako Python interface (grafika)
+- Python -> pro běh aplikace
+- Tkinter -> jako Python interface (grafika)
 - Martin Pihrt a David Netušil
