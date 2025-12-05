@@ -24,7 +24,7 @@ TODO doplnit 3 díly a foto
 
 ## ROBO 2026
 > Ukázka použití ze soutěže ROBO 2026 **Techmania a SOUE Plzeň** 
-TODO sem dát potom foto a video
+TODO sem dát potom foto a video, pak smazat
 
 ## Kredity
 - Arduino.cc -> deska mega (samozřejmě by to zvládla i deska uno nebo jiná)
