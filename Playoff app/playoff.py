@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.3"                                         # aktuální verze aplikace
-APP_date          = "04.12.2025-13:14"                              # aktuální datum verze 
+APP_current       = "1.0.4"                                         # aktuální verze aplikace
+APP_date          = "08.12.2025-17:34"                              # aktuální datum verze 
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # cesta k JSONu s verzí APP
 
 import tkinter as tk
