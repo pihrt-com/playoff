@@ -326,18 +326,31 @@ class PlayoffApp:
         try:
             with urllib.request.urlopen(update_check_link, timeout=3) as r:
                 info = json.loads(r.read().decode('utf-8'))
-        except:
-            messagebox.showwarning("Aktualizace programu", "Nepodařilo se stáhnout data z Internetu.")
+        except Exception as e:
+            messagebox.showwarning(
+                "Aktualizace programu",
+                f"Nepodařilo se stáhnout data z Internetu:\n{e}"
+            )
             return
 
         latest = info.get("version")
         url = info.get("url")
 
+        if not latest or not url:
+            messagebox.showerror(
+                "Aktualizace programu",
+                "Chybná data aktualizace (chybí version nebo url)."
+            )
+            return
+
         if latest != APP_current:
-            if messagebox.askyesno("Aktualizace programu", f"Dostupná verze {latest}. Aktualizovat?"):
-                # cesta k souboru, který se má aktualizovat
+            if messagebox.askyesno(
+                "Aktualizace programu",
+                f"Dostupná verze {latest}.\n\nAktualizovat?"
+            ):
+                # zjištění cesty k běžící aplikaci
                 if getattr(sys, 'frozen', False):
-                    # běží jako EXE
+                    # běží jako EXE (PyInstaller)
                     exe_path = sys.executable
                     app_dir = os.path.dirname(sys.executable)
                 else:
@@ -347,18 +360,39 @@ class PlayoffApp:
 
                 updater = os.path.join(app_dir, "updater.exe")
 
-                import subprocess
-                try:
-                    subprocess.Popen([updater, exe_path, url], close_fds=True)
-                except Exception as e:
-                    messagebox.showerror("Updater chyba", f"Nelze spustit updater.exe:\n{e}")
+                if not os.path.exists(updater):
+                    messagebox.showerror(
+                        "Updater chyba",
+                        f"Soubor updater.exe nebyl nalezen:\n{updater}"
+                    )
                     return
 
+                import subprocess
+                try:
+                    # ✅ spustíme instalační updater
+                    subprocess.Popen([
+                        updater,
+                        exe_path,
+                        url
+                    ], close_fds=True)
+
+                except Exception as e:
+                    messagebox.showerror(
+                        "Updater chyba",
+                        f"Nelze spustit updater.exe:\n{e}"
+                    )
+                    return
+
+                # ✅ korektní ukončení aplikace
                 self.root.destroy()
                 sys.exit(0)
 
         else:
-            messagebox.showinfo("Aktualizace", "Máte nejnovější verzi.")
+            messagebox.showinfo(
+                "Aktualizace",
+                "Máte nejnovější verzi."
+            )
+
     
     def ask_team_count(self):
         dlg = tk.Toplevel(self.root)

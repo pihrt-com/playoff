@@ -1,5 +1,5 @@
 {
-  "version": "1.0.3",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.3/PlayoffSetup_1.0.3.exe",
-  "notes": "Added timer."
+  "version": "1.0.4",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.4/PlayoffSetup_1.0.4.exe",
+  "notes": "Fix updater."
 }

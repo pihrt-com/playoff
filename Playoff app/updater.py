@@ -1,54 +1,42 @@
-# updater.py - Martin Pihrt Playoff auto-updater
-import os, sys, urllib.request, shutil, time, tempfile
+import sys
+import os
+import urllib.request
+import tempfile
+import subprocess
 
-def download(url, dest):
-    with urllib.request.urlopen(url, timeout=30) as r:
-        with open(dest, "wb") as f:
-            shutil.copyfileobj(r, f)
+print("=== Playoff Installer Updater ===")
 
-def replace(target, newfile):
-    # rename old → .bak
-    bak = target + ".bak"
-    try:
-        if os.path.exists(bak):
-            os.remove(bak)
-        if os.path.exists(target):
-            os.rename(target, bak)
-        os.rename(newfile, target)
-        return True
-    except Exception as e:
-        print("ERROR:", e)
-        return False
+if len(sys.argv) < 3:
+    print("Použití:")
+    print("updater.exe <target_exe> <installer_url>")
+    sys.exit(1)
 
-def main():
-    if len(sys.argv) < 3:
-        print("Usage: updater.exe <path_to_playoff.exe> <download_url>")
-        sys.exit(1)
+target_exe = sys.argv[1]
+installer_url = sys.argv[2]
 
-    target = sys.argv[1]
-    url = sys.argv[2]
+print("Cílová aplikace:", target_exe)
+print("URL instalátoru:", installer_url)
 
-    fd, tmp = tempfile.mkstemp(suffix=".exe")
-    os.close(fd)
+# Kam se instalátor stáhne
+tmp_dir = tempfile.gettempdir()
+installer_path = os.path.join(tmp_dir, "PlayoffSetup_update.exe")
 
-    print("Downloading:", url)
-    try:
-        download(url, tmp)
-    except Exception as e:
-        print("Download error:", e)
-        sys.exit(2)
+try:
+    print("Stahuji instalátor...")
+    urllib.request.urlretrieve(installer_url, installer_path)
+    print("Staženo do:", installer_path)
+except Exception as e:
+    print("CHYBA při stahování:", e)
+    input("Stiskni Enter pro ukončení...")
+    sys.exit(2)
 
-    print("Replacing...")
-    if replace(target, tmp):
-        print("Update complete.")
-        try:
-            os.startfile(target)
-        except:
-            pass
-        sys.exit(0)
-    else:
-        print("Update failed.")
-        sys.exit(3)
+print("Spouštím instalátor...")
+try:
+    subprocess.Popen([installer_path], shell=True)
+except Exception as e:
+    print("CHYBA při spouštění instalátoru:", e)
+    input("Stiskni Enter pro ukončení...")
+    sys.exit(3)
 
-if __name__ == "__main__":
-    main()
+print("Updater hotov — instalátor běží.")
+sys.exit(0)
