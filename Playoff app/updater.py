@@ -17,7 +17,6 @@ installer_url = sys.argv[2]
 print("Cílová aplikace:", target_exe)
 print("URL instalátoru:", installer_url)
 
-# Kam se instalátor stáhne
 tmp_dir = tempfile.gettempdir()
 installer_path = os.path.join(tmp_dir, "PlayoffSetup_update.exe")
 
@@ -31,8 +30,12 @@ except Exception as e:
     sys.exit(2)
 
 print("Spouštím instalátor...")
+
 try:
-    subprocess.Popen([installer_path], shell=True)
+    subprocess.Popen(
+        [installer_path],
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    )
 except Exception as e:
     print("CHYBA při spouštění instalátoru:", e)
     input("Stiskni Enter pro ukončení...")
