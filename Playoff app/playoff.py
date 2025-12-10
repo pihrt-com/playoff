@@ -2,16 +2,16 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.4"                                         # aktuální verze aplikace
-APP_date          = "08.12.2025-17:34"                              # aktuální datum verze 
-update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # cesta k JSONu s verzí APP
+APP_current       = "1.0.5"                                         # current version of the application
+APP_date          = "10.12.2025-13:24"                              # current version date  
+update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
 from tkinter import simpledialog, messagebox, filedialog, colorchooser
 import math, json, os, sys
 import urllib.request
 
-# univerzální cesta k resources (funguje v Pythonu i v PyInstaller EXE)
+# universal path to resources (works in Python and PyInstaller EXE)
 if getattr(sys, 'frozen', False):
     BASE_PATH = sys._MEIPASS
 else:
@@ -25,11 +25,11 @@ except Exception:
     PIL_AVAILABLE = False
 
 # try import usb_module (the new module we added). If missing, we provide a stub.
-# vždy přidej aktuální složku do sys.path, aby se NAČETL místní usb_module.py
+# Always add the current folder to sys.path so that the local usb_module.py is loaded.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    import usb_module   # teď bude 100% brát C:\Playoff\usb_module.py
+    import usb_module   # C:\Playoff\usb_module.py
     USB_AVAILABLE = True
 except Exception as e:
     print("USB module error:", e)
@@ -108,8 +108,8 @@ class Bracket:
                 self.titles.append(f"Kolo {r+1}")
             prev_matches = next_matches
             r += 1
-        # --- VÍTĚZ ---
-        # poslední reálné kolo = finále → přidáme kolo s jedním slotem
+        # --- Winner ---
+        # last real round = final → add a round with one slot
         winner_match = Match(Slot(""), Slot(""))
         self.rounds.append([winner_match])
         self.titles.append("Vítěz")            
@@ -130,11 +130,24 @@ class PlayoffApp:
         self.bg_image = None
         self.bg_tk = None
         self.canvas_bg = CANVAS_BG_DEFAULT
-        self.line_width = 3
-        self.font_scale = "medium"  # small/medium/large
+        self.line_width = 2           # normal/thick
+        self.font_scale = "medium"    # small/medium/large
         self.odd_behavior = "manual"  # auto/manual/waiting
         self.lock_edit = False
         self.projector_mode = False
+        self.enable_timer = True
+        self.timer_value = '05:00'
+        self.timer_running = False
+        self.timer_blink = False
+        self.current_seconds = 0
+        self.timer_start_mode = "ok"   # "start" | "ok"  
+        self.team_names = []              # Team naming database
+
+        self.font_scale_var = tk.StringVar(value=self.font_scale)
+        self.odd_behavior_var = tk.StringVar(value=self.odd_behavior)
+        self.line_width_var = tk.IntVar(value=self.line_width)
+        self.timer_menu_var = tk.BooleanVar(value=self.enable_timer)
+        self.timer_start_mode_var = tk.StringVar(value=self.timer_start_mode)
 
         # USB manager (from usb_module)
         if USB_AVAILABLE:
@@ -153,7 +166,7 @@ class PlayoffApp:
         toolbar = tk.Frame(root)
         toolbar.pack(side='top', fill='x', padx=4, pady=4)
 
-        # --- Ikona nastavení (ozubené kolo) ---
+        # --- Settings icon (gear wheel) ---
         try:
             # načtení obrázku (funguje i v EXE díky BASE_PATH)
             settings_img_path = os.path.join(BASE_PATH, "settings.ico")
@@ -183,15 +196,33 @@ class PlayoffApp:
         # týmy
         self.settings_menu.add_command(label='Počet týmů', command=self.ask_team_count)
         self.settings_menu.add_command(label='Generovat týmy', command=self.generate_from_entry)
+        self.settings_menu.add_command(label='Pojmenování týmů', command=self.open_team_naming_dialog)
         self.settings_menu.add_command(label='Smazat obsah', command=self.reset_values)
         self.settings_menu.add_command(label='Vymazat vše', command=self.clear_all)
 
         # odd behavior
         odd_menu = tk.Menu(self.settings_menu, tearoff=0)
-        odd_menu.add_radiobutton(label='Automatický BYE', command=lambda: self.set_odd_behavior('auto'))
-        odd_menu.add_radiobutton(label='Ruční postup', command=lambda: self.set_odd_behavior('manual'))
-        odd_menu.add_radiobutton(label='Čekající hráč', command=lambda: self.set_odd_behavior('waiting'))
-        self.settings_menu.add_cascade(label='Chování při lichém počtu vítězů', menu=odd_menu)
+        self.settings_menu.add_cascade(label='Chování při lichém počtu vítězů', menu=odd_menu)        
+        odd_menu.add_radiobutton(
+            label='Automatický BYE',
+            variable=self.odd_behavior_var,
+            value='auto',
+            command=lambda: self.set_odd_behavior('auto')
+        )
+
+        odd_menu.add_radiobutton(
+            label='Ruční postup',
+            variable=self.odd_behavior_var,
+            value='manual',
+            command=lambda: self.set_odd_behavior('manual')
+        )
+
+        odd_menu.add_radiobutton(
+            label='Čekající hráč',
+            variable=self.odd_behavior_var,
+            value='waiting',
+            command=lambda: self.set_odd_behavior('waiting')
+        )
 
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label='Načíst pozadí', command=self.load_bg_image)
@@ -199,29 +230,74 @@ class PlayoffApp:
 
         # font submenu
         font_menu = tk.Menu(self.settings_menu, tearoff=0)
-        font_menu.add_radiobutton(label='Malé', command=lambda: self.set_font_scale('small'))
-        font_menu.add_radiobutton(label='Střední', command=lambda: self.set_font_scale('medium'))
-        font_menu.add_radiobutton(label='Velké', command=lambda: self.set_font_scale('large'))
-    
-        self.settings_menu.add_cascade(label='Velikost písma', menu=font_menu)
+        self.settings_menu.add_cascade(label='Velikost písma', menu=font_menu)        
+        font_menu.add_radiobutton(
+            label='Malé',
+            variable=self.font_scale_var,
+            value='small',
+            command=lambda: self.set_font_scale('small')
+        )
 
+        font_menu.add_radiobutton(
+            label='Střední',
+            variable=self.font_scale_var,
+            value='medium',
+            command=lambda: self.set_font_scale('medium')
+        )
+
+        font_menu.add_radiobutton(
+            label='Velké',
+            variable=self.font_scale_var,
+            value='large',
+            command=lambda: self.set_font_scale('large')
+        )
+    
         self.settings_menu.add_command(label='Barva pozadí', command=self.choose_canvas_bg)
 
         # line width submenu
         lw_menu = tk.Menu(self.settings_menu, tearoff=0)
-        lw_menu.add_radiobutton(label='Normální', command=lambda: self.set_line_width(2))
-        lw_menu.add_radiobutton(label='Silné', command=lambda: self.set_line_width(4))
         self.settings_menu.add_cascade(label='Tloušťka čar', menu=lw_menu)
+        lw_menu.add_radiobutton(
+            label='Normální',
+            variable=self.line_width_var,
+            value=2,
+            command=lambda: self.set_line_width(2)
+        )
+
+        lw_menu.add_radiobutton(
+            label='Silné',
+            variable=self.line_width_var,
+            value=4,
+            command=lambda: self.set_line_width(4)
+        )
 
         self.settings_menu.add_separator()
         self.settings_menu.add_checkbutton(label='Zamknout editaci týmů', command=self.toggle_lock_edit)
-        self.settings_menu.add_command(label='Uložit do souboru', command=self.save_setup)
         self.settings_menu.add_command(label='Načíst ze souboru', command=self.load_setup)
+        self.settings_menu.add_command(label='Uložit do souboru', command=self.save_setup)
 
         # timer enable
         self.settings_menu.add_separator()        
-        self.timer_menu_var = tk.BooleanVar(value=False)
+        self.timer_menu_var = tk.BooleanVar(value=self.enable_timer)
         self.settings_menu.add_checkbutton(label='Povolit odpočet', variable=self.timer_menu_var, command=self.on_toggle_timer)
+
+        # timer mode
+        timer_mode_menu = tk.Menu(self.settings_menu, tearoff=0)
+        self.settings_menu.add_cascade(label='Režim spuštění odpočtu', menu=timer_mode_menu)
+
+        timer_mode_menu.add_radiobutton(
+            label='Spustit odpočet ihned (po START)',
+            variable=self.timer_start_mode_var,
+            value='start',
+            command=lambda: self.set_timer_start_mode('start')
+        )
+
+        timer_mode_menu.add_radiobutton(
+            label='Spustit odpočet až po semaforu (OK)',
+            variable=self.timer_start_mode_var,
+            value='ok',
+            command=lambda: self.set_timer_start_mode('ok')
+        )
 
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label='USB nastavení', command=self.open_usb_dialog)
@@ -239,7 +315,7 @@ class PlayoffApp:
         spacer = tk.Label(toolbar, text='')
         spacer.pack(side='left', expand=True)
 
-        # ----- Živý čas a datum -----
+        # ----- Live time and date -----
         self.datetime_var = tk.StringVar(value="")
         self.datetime_label = tk.Label(toolbar, textvariable=self.datetime_var, font=("Consolas", 22, "bold")) # 16
         self.datetime_label.pack(side='left', expand=True)
@@ -254,9 +330,9 @@ class PlayoffApp:
             toolbar,
             text='Start',
             command=self.on_start,
-            font=("Arial", 12, "bold"),   # ← větší a tučný text
-            padx=15,                      # ← horizontální padding
-            pady=5                        # ← vertikální padding
+            font=("Arial", 12, "bold"),   # ← larger and bold text
+            padx=15,                      # ← horizontal padding
+            pady=5                        # ← vertical padding
         )
 
         self.start_btn.pack(side='right', padx=4)
@@ -272,22 +348,17 @@ class PlayoffApp:
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind('<Configure>', lambda e: self.redraw())
 
-        # storage for canvas items        # --- Timer overlay (canvas create_window) ---
-        self.enable_timer = True
-        self.timer_value = '05:00'
-        self.timer_running = False
-        self.timer_blink = False
-        self.current_seconds = 0
+        # Timer overlay (canvas create_window)
         self.timer_label = tk.Label( # timer MM:SS box size
             self.root, 
             text=self.timer_value,
             font=("Consolas", 100, "bold"), 
             bg='black', 
             fg='white',
-            bd=4,         # větší okraj
+            bd=4,         # larger margin
             relief='ridge',
-            padx=20,      # horizontální vnitřní okraj
-            pady=10       # vertikální vnitřní okraj
+            padx=20,      # horizontal inner edge
+            pady=10       # vertical inner edge
         ) 
         self.timer_label.bind('<Button-3>', self.on_timer_right_click)
         self.timer_window = None
@@ -326,73 +397,39 @@ class PlayoffApp:
         try:
             with urllib.request.urlopen(update_check_link, timeout=3) as r:
                 info = json.loads(r.read().decode('utf-8'))
-        except Exception as e:
-            messagebox.showwarning(
-                "Aktualizace programu",
-                f"Nepodařilo se stáhnout data z Internetu:\n{e}"
-            )
+        except:
+            messagebox.showwarning("Aktualizace programu", "Nepodařilo se stáhnout data z Internetu.")
             return
 
         latest = info.get("version")
         url = info.get("url")
 
-        if not latest or not url:
-            messagebox.showerror(
-                "Aktualizace programu",
-                "Chybná data aktualizace (chybí version nebo url)."
-            )
-            return
-
         if latest != APP_current:
-            if messagebox.askyesno(
-                "Aktualizace programu",
-                f"Dostupná verze {latest}.\n\nAktualizovat?"
-            ):
-                # zjištění cesty k běžící aplikaci
+            if messagebox.askyesno("Aktualizace programu", f"Dostupná verze {latest}. Aktualizovat?"):
+                # path to the file to be updated
                 if getattr(sys, 'frozen', False):
-                    # běží jako EXE (PyInstaller)
+                    # runs as EXE
                     exe_path = sys.executable
                     app_dir = os.path.dirname(sys.executable)
                 else:
-                    # běží jako .py
+                    # runs as .py
                     exe_path = os.path.abspath(__file__)
                     app_dir = os.path.dirname(exe_path)
 
                 updater = os.path.join(app_dir, "updater.exe")
 
-                if not os.path.exists(updater):
-                    messagebox.showerror(
-                        "Updater chyba",
-                        f"Soubor updater.exe nebyl nalezen:\n{updater}"
-                    )
-                    return
-
                 import subprocess
                 try:
-                    # ✅ spustíme instalační updater
-                    subprocess.Popen([
-                        updater,
-                        exe_path,
-                        url
-                    ], close_fds=True)
-
+                    subprocess.Popen([updater, exe_path, url], close_fds=True)
                 except Exception as e:
-                    messagebox.showerror(
-                        "Updater chyba",
-                        f"Nelze spustit updater.exe:\n{e}"
-                    )
+                    messagebox.showerror("Updater chyba", f"Nelze spustit updater.exe:\n{e}")
                     return
 
-                # ✅ korektní ukončení aplikace
                 self.root.destroy()
                 sys.exit(0)
 
         else:
-            messagebox.showinfo(
-                "Aktualizace",
-                "Máte nejnovější verzi."
-            )
-
+            messagebox.showinfo("Aktualizace", "Máte nejnovější verzi.")
     
     def ask_team_count(self):
         dlg = tk.Toplevel(self.root)
@@ -425,6 +462,7 @@ class PlayoffApp:
         tk.Button(dlg, text="OK", command=on_ok).pack(pady=8)
         dlg.bind("<Return>", lambda e: on_ok())
         dlg.bind("<Escape>", lambda e: dlg.destroy())
+    
     def update_datetime(self):
         import datetime
         now = datetime.datetime.now()
@@ -442,30 +480,35 @@ class PlayoffApp:
     # --- USB / toolbar actions ---
     def on_start(self):
         # send 'start' via usb.manager asynchronously and update status label
-        if not self.usb:
-            self.status_var.set('USB není dostupné')
-            self.status_label.config(fg='red')
-            return
-        if not self.usb_port:
-            self.status_var.set('Vyber port v Nastavení → USB nastavení')
-            self.status_label.config(fg='red')
-            return
-        # disable button while sending
         print("DEBUG USB PLAYOFF:",
               "usb_port=", self.usb_port,
               "usb_baud=", self.usb_baud,
               "usb_timeout=", self.usb_timeout,
-              "usb obj existuje:", bool(self.usb))
+              "usb obj existuje:", bool(self.usb),
+              "timer_start_mode=", self.timer_start_mode)
+
+        # At each START, first stop any running countdown.
+        try:
+            self.timer_running = False
+            if getattr(self, 'countdown_after_id', None):
+                self.root.after_cancel(self.countdown_after_id)
+                self.countdown_after_id = None
+        except Exception:
+            pass
 
         self.start_btn.config(state='disabled')
         self.status_var.set('Odesílám...')
         self.status_label.config(fg='black')
+
         def on_result(ok, reason):
             # this callback runs in worker thread; marshal to mainloop
             def cb():
                 if ok:
                     self.status_var.set('Přijato')
                     self.status_label.config(fg='green')
+                    # v režimu "ok" startujeme odpočet až po "OK"
+                    if self.enable_timer and self.timer_start_mode == 'ok':
+                        self.start_countdown()
                 else:
                     if reason == 'timeout':
                         self.status_var.set('Chyba spojení (timeout)')
@@ -475,39 +518,233 @@ class PlayoffApp:
                         self.status_var.set('pyserial není nainstalován')
                     else:
                         self.status_var.set('Chyba spojení')
+
                     self.status_label.config(fg='red')
+
+                    # POZOR: odpočet stopneme jen v režimu "ok".
+                    # V režimu "start" musí běžet dál i při chybě spojení.
+                    if self.timer_start_mode == 'ok':
+                        self.timer_running = False
+
                 self.start_btn.config(state='normal')
             try:
                 self.root.after(0, cb)
             except Exception:
                 pass
+
+        # The time is ALWAYS set, but the countdown only runs in "start" mode.
+        try:
+            if self.enable_timer:
+                self.current_seconds = self.time_to_seconds(self.timer_value)
+                self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
+
+                if self.timer_start_mode == 'start':
+                    # v režimu "start" se odpočet spustí vždy hned,
+                    # bez ohledu na to, jestli USB vyjde nebo ne.
+                    self.start_countdown()
+                else:
+                    # In "ok" mode, only display the time, but DO NOT START the countdown.
+                    self.timer_running = False
+        except Exception:
+            pass
+
         # kick off send
         try:
-            # ensure manager uses current settings
-            if self.usb:
+            usb_available = bool(self.usb and self.usb_port)
+            if usb_available:
                 self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
                 self.usb.send_start_async(on_result)
             else:
-                self.status_var.set('USB modul chybí')
-                self.start_btn.config(state='normal')
+                # USB není k dispozici → nahlásíme chybu
+                self.status_var.set('Chyba spojení')
+                self.status_label.config(fg='red')
+
+                # v režimu "ok" se NESMÍ nic spouštět
+                if self.timer_start_mode == 'ok':
+                    self.timer_running = False
+
+            self.start_btn.config(state='normal')
+
         except Exception as e:
             self.status_var.set(f'Chyba: {e}')
+            self.status_label.config(fg='red')
             self.start_btn.config(state='normal')
-        # start timer if enabled
-        try:
-            if getattr(self, 'enable_timer', False):
-                self.start_countdown()
-        except Exception:
-            pass
+            # v režimu "ok" se při chybě NIC nespustí
+            if self.timer_start_mode == 'ok':
+                self.timer_running = False
+
+    def open_team_naming_dialog(self):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Pojmenování týmů")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.geometry("700x500")
+
+        # --- HLAVNÍ DATA ---
+        if not hasattr(self, "team_names"):
+            self.team_names = []
+
+        # --- SCROLL KONTEJNER ---
+        container = tk.Frame(dlg)
+        container.pack(fill="both", expand=True, padx=10, pady=10)
+
+        canvas = tk.Canvas(container, borderwidth=0, highlightthickness=0)
+        scrollbar = tk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scroll_frame = tk.Frame(canvas)
+
+        scroll_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        scroll_frame.bind_all(
+            "<MouseWheel>",
+            lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units")
+        )
+
+        # --- HLAVIČKY ---
+        tk.Label(scroll_frame, text="ID týmu", font=("Arial", 10, "bold")).grid(row=0, column=0, padx=5, pady=5)
+        tk.Label(scroll_frame, text="Popis týmu", font=("Arial", 10, "bold")).grid(row=0, column=1, padx=5, pady=5)
+        tk.Label(scroll_frame, text="Akce", font=("Arial", 10, "bold")).grid(row=0, column=2, padx=5, pady=5)
+
+        row_widgets = []
+
+        def refresh_table():
+            nonlocal row_widgets
+            for w in row_widgets:
+                for el in w:
+                    el.destroy()
+            row_widgets.clear()
+
+            for i, item in enumerate(self.team_names):
+                id_var = tk.StringVar(value=item.get("id", ""))
+                desc_var = tk.StringVar(value=item.get("desc", ""))
+
+                e1 = tk.Entry(scroll_frame, textvariable=id_var, width=10)
+                e2 = tk.Entry(scroll_frame, textvariable=desc_var, width=40)
+
+                e1.grid(row=i+1, column=0, padx=5, pady=2)
+                e2.grid(row=i+1, column=1, padx=5, pady=2)
+
+                def make_delete(idx):
+                    return lambda: delete_row(idx)
+
+                btn_del = tk.Button(scroll_frame, text="Smazat", command=make_delete(i))
+
+                btn_del.grid(row=i+1, column=2, padx=5)
+
+                def make_trace(index, var_id, var_desc):
+                    def tracer(*args):
+                        self.team_names[index]["id"] = var_id.get()
+                        self.team_names[index]["desc"] = var_desc.get()
+                    return tracer
+
+                id_var.trace_add("write", make_trace(i, id_var, desc_var))
+                desc_var.trace_add("write", make_trace(i, id_var, desc_var))
+
+                row_widgets.append((e1, e2, btn_del))
+
+        def add_row():
+            self.team_names.append({"id": "", "desc": ""})
+            refresh_table()
+
+        def delete_row(index):
+            if index < 0 or index >= len(self.team_names):
+                return
+            self.team_names.pop(index)
+            refresh_table()
+
+        def clear_all_rows():
+            if not messagebox.askyesno("Potvrzení", "Opravdu chceš smazat všechny záznamy?"):
+                return
+            self.team_names.clear()
+            refresh_table()
+
+        def export_to_excel():
+            if not self.team_names:
+                messagebox.showinfo("Info", "Nejsou žádná data k exportu.")
+                return
+
+            path = filedialog.asksaveasfilename(
+                defaultextension=".xlsx",
+                filetypes=[("Excel", "*.xlsx")]
+            )
+            if not path:
+                return
+
+            from openpyxl import Workbook
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Pojmenování týmů"
+
+            ws.append(["ID týmu", "Popis týmu"])
+
+            for item in self.team_names:
+                ws.append([item.get("id", ""), item.get("desc", "")])
+
+            wb.save(path)
+            messagebox.showinfo("Hotovo", f"Export dokončen:\n{path}")
+
+        def import_from_excel():
+            path = filedialog.askopenfilename(
+                filetypes=[("Excel", "*.xlsx")]
+            )
+            if not path:
+                return
+
+            from openpyxl import load_workbook
+
+            wb = load_workbook(path)
+            ws = wb.active
+
+            self.team_names.clear()
+
+            for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
+                if not row:
+                    continue
+                self.team_names.append({
+                    "id": str(row[0]) if row[0] is not None else "",
+                    "desc": str(row[1]) if row[1] is not None else ""
+                })
+
+            refresh_table()
+
+        # --- TLAČÍTKA ---
+        btn_frame = tk.Frame(dlg)
+        btn_frame.pack(fill="x", pady=8)
+
+        tk.Button(btn_frame, text="Přidat řádek", command=add_row).pack(side="left", padx=5)
+        tk.Button(btn_frame, text="Smazat vše", command=clear_all_rows).pack(side="left", padx=5)
+        tk.Button(btn_frame, text="Import z Excelu", command=import_from_excel).pack(side="left", padx=5)
+        tk.Button(btn_frame, text="Export do Excelu", command=export_to_excel).pack(side="left", padx=5)
+
+        def on_save():
+            dlg.destroy()
+            self.redraw()
+
+        tk.Button(btn_frame, text="Uložit", command=on_save).pack(side="right", padx=5)
+        tk.Button(btn_frame, text="Storno", command=dlg.destroy).pack(side="right", padx=5)
+
+        refresh_table()
+        self.root.wait_window(dlg)
 
 
     # --- settings handlers ---
     def set_odd_behavior(self, mode):
         self.odd_behavior = mode
+        self.odd_behavior_var.set(mode)
         self.redraw()
 
     def set_font_scale(self, size):
         self.font_scale = size
+        self.font_scale_var.set(size)
         self.redraw()
 
     def choose_canvas_bg(self):
@@ -519,11 +756,16 @@ class PlayoffApp:
 
     def set_line_width(self, w):
         self.line_width = w
+        self.line_width_var.set(w)
         self.redraw()
 
     def toggle_lock_edit(self):
         self.lock_edit = not self.lock_edit
         messagebox.showinfo('Info', f'Zamknutí polí bylo provedeno: {self.lock_edit}')
+
+    def set_timer_start_mode(self, mode):
+        self.timer_start_mode = mode
+        self.timer_start_mode_var.set(mode)
 
     # --- USB dialog wrapper ---
     def open_usb_dialog(self):
@@ -655,11 +897,13 @@ class PlayoffApp:
             'rounds': [],
             'winner': self.current_winner,
             'enable_timer': self.enable_timer,
-            'timer_value': self.timer_value,            
+            'timer_value': self.timer_value, 
+            'timer_start_mode': self.timer_start_mode,                       
             # USB fields
             'usb_port': self.usb_port,
             'usb_baud': self.usb_baud,
             'usb_timeout': self.usb_timeout,
+            'team_names': self.team_names,
         }
         for r in self.bracket.rounds:
             rd = []
@@ -689,13 +933,16 @@ class PlayoffApp:
         self.odd_behavior = data.get('odd_behavior', 'manual')
         self.font_scale = data.get('font_scale', 'medium')
         self.canvas_bg = data.get('canvas_bg', CANVAS_BG_DEFAULT)
-        self.line_width = data.get('line_width', 3)
+        self.line_width = data.get('line_width', 2)
+        self.line_width_var.set(self.line_width)
         self.bg_path = data.get('bg_path')
         self.lock_edit = data.get('lock_edit', False)
         self.canvas.config(bg=self.canvas_bg)
-        # load timer settings
         self.enable_timer = data.get('enable_timer', getattr(self, 'enable_timer', True))
         self.timer_value = data.get('timer_value', getattr(self, 'timer_value', '05:00'))
+        self.timer_start_mode = data.get('timer_start_mode', 'start')
+        self.timer_start_mode_var.set(self.timer_start_mode)
+        self.team_names = data.get('team_names', [])
         try:
             # ensure timer menu var exists
             self.timer_menu_var.set(self.enable_timer)
@@ -1209,6 +1456,40 @@ class PlayoffApp:
         self.root.attributes('-fullscreen', False)
         self.redraw()
 
+    def build_team_lookup_from_round1(self):
+        """Z Kola 1 vytvoří seřazený seznam (id, name) podle self.team_names."""
+        if not self.bracket or not self.bracket.rounds:
+            return []
+
+        # 1) posbíráme všechna ID z Kola 1 (A i B)
+        ids = []
+        for m in self.bracket.rounds[0]:
+            a = m.a.text.strip()
+            b = m.b.text.strip()
+            if a:
+                ids.append(a)
+            if b:
+                ids.append(b)
+
+        # 2) databáze pojmenování → dict pro rychlé hledání
+        lookup = {str(x.get("id", "")).strip(): x.get("desc", "") for x in self.team_names}
+
+        # 3) vytvoříme pouze páry, které existují v pojmenování
+        result = []
+        for tid in ids:
+            if tid in lookup:
+                result.append((tid, lookup[tid]))
+
+        # 4) číselné řazení podle ID
+        def sort_key(x):
+            try:
+                return int(x[0])
+            except Exception:
+                return 10**9
+
+        result.sort(key=sort_key)
+        return result
+
     # --- redraw ---
     def redraw(self):
         self.canvas.delete('all')
@@ -1220,28 +1501,16 @@ class PlayoffApp:
         if not self.bracket:
             return
 
-        # --- plátno ---
         width = self.root.winfo_screenwidth() if self.projector_mode else max(800, self.canvas.winfo_width())
         height = self.root.winfo_screenheight() if self.projector_mode else max(600, self.canvas.winfo_height())
         self.canvas.config(width=width, height=height, bg=self.canvas_bg)
 
-        # --- pozadí ---
-        if self.bg_image is not None and PIL_AVAILABLE:
-            try:
-                orig_w, orig_h = self.bg_image.size
-                scale = width / orig_w
-                bg_resized = self.bg_image.resize((width, int(orig_h * scale)), Image.LANCZOS)
-                self.bg_tk = ImageTk.PhotoImage(bg_resized)
-                self.canvas.create_image(0, 0, anchor='nw', image=self.bg_tk)
-            except Exception:
-                pass
-
         rounds = self.bracket.rounds
         rounds_count = len(rounds)
-        last_round = rounds_count - 1       # Vítěz je poslední kolo
-        final_real_round = last_round - 1   # Finále je předposlední
+        last_round = rounds_count - 1
+        final_real_round = last_round - 1
 
-        # --- font velikosti ---
+        # --- font sizes ---
         if self.font_scale == 'large':
             cell_font_size = 28
         elif self.font_scale == 'small':
@@ -1251,10 +1520,11 @@ class PlayoffApp:
 
         from tkinter import font as tkfont
         cell_font = tkfont.Font(family="Arial", size=cell_font_size)
+
         title_font_size = 33 if self.projector_mode or self.font_scale == 'large' else (20 if self.font_scale == 'medium' else 12)
         title_font = ("Arial", title_font_size, "bold")
 
-        # --- sloupcové šířky ---
+        # --- column widths ---
         col_widths = []
         padding = 20
         min_w = 60
@@ -1262,7 +1532,6 @@ class PlayoffApp:
 
         for r_idx, matches in enumerate(rounds):
             if r_idx == last_round:
-                # spočítat šířku podle obsahu vítěze
                 winner_match = rounds[last_round][0]
                 winner_text = winner_match.a.text.strip() or winner_match.b.text.strip() or self.current_winner
                 text_px = cell_font.measure(winner_text)
@@ -1273,16 +1542,13 @@ class PlayoffApp:
             for m in matches:
                 max_px = max(max_px, cell_font.measure(m.a.text.strip()))
                 max_px = max(max_px, cell_font.measure(m.b.text.strip()))
-
             col_widths.append(max(min_w, min(max_w, max_px + padding)))
 
-        # později se zvětší na základě textu vítěze
         margin_x = 40
         margin_y = 40
         h_gap = 180
         v_gap = 10
 
-        # --- výška ---
         box_h = 30
         per_match_h = box_h * 2 + 8
         initial_matches = len(rounds[0])
@@ -1295,23 +1561,18 @@ class PlayoffApp:
             v_gap = max(3, int(v_gap * scale))
             per_match_h = box_h * 2 + 8
 
-        # --- sloupcové X pozice ---
         col_x_positions = []
         x = margin_x
         for w in col_widths:
             col_x_positions.append(x)
             x += w + h_gap
 
-        # --- finálové středy pro spojení na vítěze ---
         final_centers = []
 
-        # --- KRESLENÍ SLOUPCŮ (kromě vítěze) ---
         for r_idx, matches in enumerate(rounds):
-
             col_x = col_x_positions[r_idx]
             box_w = col_widths[r_idx]
 
-            # --- titulek ---
             title_id = self.canvas.create_text(
                 col_x + box_w/2,
                 margin_y - 10,
@@ -1319,10 +1580,8 @@ class PlayoffApp:
                 font=title_font,
                 fill=TITLE_COLOR
             )
-            self.title_items[r_idx] = title_id
             self.canvas.tag_bind(title_id, '<Button-1>', lambda e, rr=r_idx: self.edit_title(rr))
 
-            # výpočet Y pozice celého kola
             matches_count = len(matches)
             total_col_h = matches_count * (box_h * 2 + 8) + (matches_count - 1) * v_gap
             start_y = max(margin_y + title_font_size + 10,
@@ -1330,57 +1589,54 @@ class PlayoffApp:
 
             for m_idx, match in enumerate(matches):
 
-                # --- POSLEDNÍ KOLO / VÍTĚZ – PŘESKOČIT ---
                 if r_idx == last_round and len(matches) == 1:
                     continue
 
                 top_y = start_y + m_idx * ((box_h * 2 + 8) + v_gap)
 
-                # Box A
-                a_x1 = col_x
-                a_y1 = top_y
-                a_x2 = a_x1 + box_w
-                a_y2 = a_y1 + box_h
+                match_x1 = col_x
+                match_y1 = top_y
+                match_x2 = match_x1 + box_w
+                match_y2 = match_y1 + box_h * 2 + 8
 
-                # Box B
-                b_x1 = col_x
-                b_y1 = a_y2 + 8
-                b_x2 = b_x1 + box_w
-                b_y2 = b_y1 + box_h
+                a_x1, a_y1, a_x2, a_y2 = match_x1, match_y1, match_x2, match_y1 + box_h
+                b_x1, b_y1, b_x2, b_y2 = match_x1, a_y2 + 8, match_x2, match_y2
 
-                # zvýraznění vítěze v běžných kol
+                rect_match = self.canvas.create_rectangle(
+                    match_x1, match_y1, match_x2, match_y2,
+                    fill=BOX_FILL, outline=BOX_OUTLINE, width=self.line_width
+                )
+
+                self.canvas.create_line(
+                    a_x1, a_y2 + 4,
+                    a_x2, a_y2 + 4,
+                    fill=BOX_OUTLINE,
+                    width=max(1, self.line_width - 1)
+                )
+
                 is_winner_a = (match.a.text.strip() == self.current_winner.strip())
                 is_winner_b = (match.b.text.strip() == self.current_winner.strip())
 
-                fill_a = WINNER_FILL if is_winner_a else BOX_FILL
-                fill_b = WINNER_FILL if is_winner_b else BOX_FILL
-                outline_a = WINNER_OUTLINE if is_winner_a else BOX_OUTLINE
-                outline_b = WINNER_OUTLINE if is_winner_b else BOX_OUTLINE
-
-                rect_a = self.canvas.create_rectangle(a_x1, a_y1, a_x2, a_y2,
-                                                      fill=fill_a, outline=outline_a, width=self.line_width)
-                rect_b = self.canvas.create_rectangle(b_x1, b_y1, b_x2, b_y2,
-                                                      fill=fill_b, outline=outline_b, width=self.line_width)
+                if is_winner_a:
+                    self.canvas.create_rectangle(a_x1, a_y1, a_x2, a_y2, fill=WINNER_FILL, outline="", width=0)
+                if is_winner_b:
+                    self.canvas.create_rectangle(b_x1, b_y1, b_x2, b_y2, fill=WINNER_FILL, outline="", width=0)
 
                 txt_a = self.canvas.create_text((a_x1+a_x2)/2, (a_y1+a_y2)/2,
                                                 text=match.a.text, font=("Arial", cell_font_size))
                 txt_b = self.canvas.create_text((b_x1+b_x2)/2, (b_y1+b_y2)/2,
                                                 text=match.b.text, font=("Arial", cell_font_size))
 
-                # propojení kliknutí
+                # HITBOXY MUSÍ BÝT POSLEDNÍ
+                hit_a = self.canvas.create_rectangle(a_x1, a_y1, a_x2, a_y2, fill="", outline="")
+                hit_b = self.canvas.create_rectangle(b_x1, b_y1, b_x2, b_y2, fill="", outline="")
+
                 if not self.lock_edit:
-                    self.canvas.tag_bind(rect_a, '<Button-1>', lambda e, rr=r_idx, mm=m_idx: self.edit_slot_dialog(rr, mm, 'a'))
-                    self.canvas.tag_bind(rect_b, '<Button-1>', lambda e, rr=r_idx, mm=m_idx: self.edit_slot_dialog(rr, mm, 'b'))
-                    self.canvas.tag_bind(txt_a,  '<Button-1>', lambda e, rr=r_idx, mm=m_idx: self.edit_slot_dialog(rr, mm, 'a'))
-                    self.canvas.tag_bind(txt_b,  '<Button-1>', lambda e, rr=r_idx, mm=m_idx: self.edit_slot_dialog(rr, mm, 'b'))
+                    self.canvas.tag_bind(hit_a, '<Button-1>', lambda e, rr=r_idx, mm=m_idx: self.edit_slot_dialog(rr, mm, 'a'))
+                    self.canvas.tag_bind(hit_b, '<Button-1>', lambda e, rr=r_idx, mm=m_idx: self.edit_slot_dialog(rr, mm, 'b'))
+                    self.canvas.tag_bind(hit_a, '<Button-3>', lambda e, rr=r_idx, mm=m_idx: self.promote(rr, mm, 'a'))
+                    self.canvas.tag_bind(hit_b, '<Button-3>', lambda e, rr=r_idx, mm=m_idx: self.promote(rr, mm, 'b'))
 
-                    # pravé tlačítko → postup do dalšího kola
-                    self.canvas.tag_bind(rect_a, '<Button-3>', lambda e, rr=r_idx, mm=m_idx: self.promote(rr, mm, 'a'))
-                    self.canvas.tag_bind(rect_b, '<Button-3>', lambda e, rr=r_idx, mm=m_idx: self.promote(rr, mm, 'b'))
-                    self.canvas.tag_bind(txt_a,  '<Button-3>', lambda e, rr=r_idx, mm=m_idx: self.promote(rr, mm, 'a'))
-                    self.canvas.tag_bind(txt_b,  '<Button-3>', lambda e, rr=r_idx, mm=m_idx: self.promote(rr, mm, 'b'))
-
-                # --- spojovací čáry ---
                 if r_idx + 1 < rounds_count:
                     cx = a_x2
                     cy = (a_y1 + b_y2) / 2
@@ -1393,23 +1649,16 @@ class PlayoffApp:
                                        (height - total_h_next) // 2)
                     ny = start_y_next + next_idx * ((box_h * 2 + 8) + v_gap) + box_h
 
-                    line = self.canvas.create_line(cx, cy, next_col_x, ny,
-                                                   width=self.line_width, fill=LINE_COLOR, smooth=True)
-                    self.line_items.append(line)
+                    self.canvas.create_line(cx, cy, next_col_x, ny,
+                                            width=self.line_width, fill=LINE_COLOR, smooth=True)
 
-                # uložit finálové středy pro spojení na vítěze
                 if r_idx == final_real_round:
-                    center_x = a_x2
-                    center_y = (a_y1 + b_y2) / 2
-                    final_centers.append((center_x, center_y))
+                    final_centers.append(((a_x2), (a_y1 + b_y2) / 2))
 
-        # -------------------------------------------------------------
-        #               KRESBA JEDNOHO VÍTĚZE (VELKÝ BOX)
-        # -------------------------------------------------------------
+        # --- Winner box ---
         winner_match = rounds[last_round][0]
         winner_text = winner_match.a.text.strip() or winner_match.b.text.strip() or self.current_winner
 
-        # dynamická šířka vítěze
         text_width = cell_font.measure(winner_text) if winner_text else 0
         win_w = max(text_width + 60, col_widths[last_round] + 40)
         win_h = box_h * 2
@@ -1422,23 +1671,82 @@ class PlayoffApp:
         win_y1 = (height // 2) - win_h//2
         win_y2 = win_y1 + win_h
 
-        # box vítěze
         self.canvas.create_rectangle(
             win_x1, win_y1, win_x2, win_y2,
             fill=BOX_FILL, outline=BOX_OUTLINE, width=self.line_width+1
         )
 
-        # text vítěze (2× větší)
-        self.canvas.create_text((win_x1+win_x2)/2, (win_y1+win_y2)/2,
-                                text=winner_text,
-                                font=("Arial", cell_font_size*2, "bold"),
-                                fill="#000000")
+        self.canvas.create_text(
+            (win_x1+win_x2)/2, (win_y1+win_y2)/2,
+            text=winner_text,
+            font=("Arial", cell_font_size*2, "bold")
+        )
 
-        # jedna čára mezi finále a vítězem = použijeme PRŮMĚR obou center
+
+        # one line between the final and the winner = we will use the AVERAGE of both centers
         if final_centers:
             avg_x = sum(p[0] for p in final_centers) / len(final_centers)
             avg_y = sum(p[1] for p in final_centers) / len(final_centers)
             self.line_items.append((avg_x, avg_y, win_x1, (win_y1 + win_y2) / 2, self.line_width, LINE_COLOR))
+
+        # === TABULKA POJMENOVÁNÍ TÝMŮ (Z KOLA 1, VPRAVO OD PAVOUKA) ===
+        try:
+            table_data = self.build_team_lookup_from_round1()
+            if table_data:
+
+                # --- geometrie prostoru mezi pavoukem a vítězem ---
+                table_x1 = win_x2 + 20
+                table_x2 = width - 20
+
+                # pokud není prostor, tabulku nevykreslujeme
+                if table_x2 - table_x1 > 200:
+
+                    table_y = margin_y + 40
+                    row_h = 26
+                    col1_w = 90
+                    col2_w = table_x2 - table_x1 - col1_w - 10
+
+                    # --- HLAVIČKA ---
+                    self.canvas.create_rectangle(
+                        table_x1, table_y,
+                        table_x2, table_y + row_h,
+                        fill="#dddddd", outline=BOX_OUTLINE, width=1
+                    )
+
+                    self.canvas.create_text(
+                        table_x1 + col1_w/2, table_y + row_h/2,
+                        text="ID", font=("Arial", 11, "bold")
+                    )
+
+                    self.canvas.create_text(
+                        table_x1 + col1_w + col2_w/2 + 5, table_y + row_h/2,
+                        text="Popis týmu", font=("Arial", 11, "bold")
+                    )
+
+                    y = table_y + row_h
+
+                    # --- ŘÁDKY ---
+                    for tid, name in table_data:
+                        self.canvas.create_rectangle(
+                            table_x1, y,
+                            table_x2, y + row_h,
+                            fill="#ffffff", outline=BOX_OUTLINE, width=1
+                        )
+
+                        self.canvas.create_text(
+                            table_x1 + col1_w/2, y + row_h/2,
+                            text=str(tid), font=("Arial", 11)
+                        )
+
+                        self.canvas.create_text(
+                            table_x1 + col1_w + col2_w/2 + 5, y + row_h/2,
+                            text=name, font=("Arial", 11), anchor="center"
+                        )
+
+                        y += row_h
+
+        except Exception as e:
+            print("TEAM TABLE ERROR:", e)
 
         # --- TIMER OVERLAY (ALWAYS RE-CREATE AFTER canvas.delete('all')) ---
         try:
@@ -1448,18 +1756,18 @@ class PlayoffApp:
                 ty = win_y2 + 30
 
                 # Timer window je vždy ZNOVU vytvořen po delete('all')
-                # → proto staré ID neplatí, musíme ho přegenerovat
+                # → Therefore, the old ID is invalid and must be regenerated.
                 self.timer_window = self.canvas.create_window(
                     tx, ty,
                     window=self.timer_label,
                     anchor='ne'
                 )
 
-                # timer musí být viditelný
+                # The timer must be visible.
                 self.canvas.itemconfigure(self.timer_window, state='normal')
 
             else:
-                # timer vypnut → schovat widget
+                # timer off → hide widget
                 if self.timer_window:
                     try:
                         self.canvas.itemconfigure(self.timer_window, state='hidden')
@@ -1504,17 +1812,17 @@ class PlayoffApp:
         if not fname:
             return
 
-        # --- Geometrie jako redraw() ---
+        # --- Geometry as redraw() ---
         rounds = self.bracket.rounds
         rounds_count = len(rounds)
         last_round = rounds_count - 1
         final_real_round = last_round - 1
 
-        # canvas velikost
+        # canvas size
         canvas_w = self.root.winfo_screenwidth() if self.projector_mode else max(800, self.canvas.winfo_width())
         canvas_h = self.root.winfo_screenheight() if self.projector_mode else max(600, self.canvas.winfo_height())
 
-        # velikost písma
+        # font size
         if self.font_scale == 'large':
             cell_font_size = 28
         elif self.font_scale == 'small':
@@ -1531,7 +1839,7 @@ class PlayoffApp:
             else 12
         )
 
-        # --- šířky sloupců ---
+        # --- column widths ---
         col_widths = []
         padding = 20
         min_w = 60
@@ -1551,13 +1859,13 @@ class PlayoffApp:
                 max_px = max(max_px, cell_font.measure(m.b.text.strip()))
             col_widths.append(max(min_w, min(max_w, max_px + padding)))
 
-        # --- odsazení a mezery ---
+        # --- indents and spaces ---
         margin_x = 40
         margin_y = 40
         h_gap = 180
         v_gap = 10
 
-        # --- výška kol ---
+        # --- wheel height ---
         box_h = 30
         per_match_h = box_h * 2 + 8
         initial_matches = len(rounds[0])
@@ -1570,28 +1878,28 @@ class PlayoffApp:
             v_gap = max(3, int(v_gap * scale_local))
             per_match_h = box_h * 2 + 8
 
-        # --- X pozice sloupců ---
+        # --- X column positions ---
         col_x_positions = []
         x = margin_x
         for w in col_widths:
             col_x_positions.append(x)
             x += w + h_gap
 
-        # --- Geometrie pro PDF ---
+        # --- Geometry for PDF ---
         rects = []
         lines = []
         titles = []
 
-        # Budeme ukládat JEDINÝ bod finále
+        # We will save the ONLY point of the final
         final_center_x = None
         final_center_y = None
 
-        # --- Skenování kol ---
+        # --- Wheel scanning ---
         for r_idx, matches in enumerate(rounds):
             col_x = col_x_positions[r_idx]
             box_w = col_widths[r_idx]
 
-            # titulek
+            # titles
             titles.append((col_x + box_w / 2, margin_y - 10,
                            self.bracket.titles[r_idx], title_font_size))
 
@@ -1602,7 +1910,7 @@ class PlayoffApp:
 
             for m_idx, match in enumerate(matches):
 
-                # přeskoč kolo VÍTĚZE (kreslí se později)
+                # skip the WINNERS round (to be drawn later)
                 if r_idx == last_round and len(matches) == 1:
                     continue
 
@@ -1636,7 +1944,7 @@ class PlayoffApp:
                               self.line_width, fill_b, outline_b,
                               match.b.text, cell_font_size, False))
 
-                # propojení do dalšího kola
+                # connection to the next round
                 if (r_idx + 1 < rounds_count) and (r_idx != final_real_round):                    
                     cx = a_x2
                     cy = (a_y1 + b_y2) / 2
@@ -1652,12 +1960,12 @@ class PlayoffApp:
                     lines.append((cx, cy, next_col_x, ny,
                                   self.line_width, LINE_COLOR))
 
-                # --- JEDINÝ střed finále ---
+                # --- THE ONLY center of the finals ---
                 if r_idx == final_real_round and final_center_x is None:
                     final_center_x = a_x2
                     final_center_y = (a_y1 + b_y2) / 2
 
-        # --- Kresba vítěze ---
+        # --- Drawing of the winner ---
         winner_match = rounds[last_round][0]
         winner_text = (winner_match.a.text.strip()
                        or winner_match.b.text.strip()
@@ -1679,13 +1987,13 @@ class PlayoffApp:
                       self.line_width + 1, BOX_FILL, BOX_OUTLINE,
                       winner_text, cell_font_size * 2, True))
 
-        # --- JEDNA čára z finále → vítěz ---
+        # --- ONE line from the final → winner ---
         if final_center_x is not None:
             lines.append((final_center_x, final_center_y,
                           win_x1, (win_y1 + win_y2) / 2,
                           self.line_width, LINE_COLOR))
 
-        # --- Výpočet bounding boxu ---
+        # --- Bounding box calculation ---
         minx, miny = float('inf'), float('inf')
         maxx, maxy = float('-inf'), float('-inf')
 
@@ -1707,13 +2015,13 @@ class PlayoffApp:
             maxx = max(maxx, tx)
             maxy = max(maxy, ty)
 
-        # --- Rezerva dolů pro tisk ---
+        # --- Reserve for printing ---
         maxy += 60
 
         content_w = maxx - minx
         content_h = maxy - miny
 
-        # --- PDF stránka ---
+        # --- PDF page ---
         page_w, page_h = landscape(A4)
         margin_pdf = 20
 
@@ -1776,7 +2084,7 @@ class PlayoffApp:
             pdf.setLineWidth(max(0.5, lw * scale))
             pdf.line(TX(x1), TY(y1), TX(x2), TY(y2))
 
-        # --- Uložit PDF ---
+        # --- Save PDF ---
         try:
             pdf.save()
             messagebox.showinfo("Hotovo", f"PDF uložen: {fname}")
@@ -1787,7 +2095,7 @@ class PlayoffApp:
 if __name__ == '__main__':
     root = tk.Tk()
 
-    # --- FIX ikonky pro PyInstaller ONEFILE ---
+    # --- FIX icon for PyInstaller ONEFILE ---
     try:
         if getattr(sys, 'frozen', False):
             base = sys._MEIPASS
