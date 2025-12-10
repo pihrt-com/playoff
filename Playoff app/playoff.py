@@ -3,7 +3,7 @@
 __author__ = 'Martin Pihrt'
 
 APP_current       = "1.0.5"                                         # current version of the application
-APP_date          = "10.12.2025-13:24"                              # current version date  
+APP_date          = "10.12.2025-18:05"                              # current version date  
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -168,9 +168,30 @@ class PlayoffApp:
 
         # --- Settings icon (gear wheel) ---
         try:
-            # načtení obrázku (funguje i v EXE díky BASE_PATH)
             settings_img_path = os.path.join(BASE_PATH, "settings.ico")
-            settings_raw = tk.PhotoImage(file=settings_img_path)
+
+            if PIL_AVAILABLE:
+                from PIL import Image, ImageTk
+
+                img = Image.open(settings_img_path)
+
+                # cílová výška – odpovídá Start tlačítku
+                TARGET_H = 44  
+
+                w, h = img.size
+                scale = TARGET_H / h
+                new_w = int(w * scale)
+                new_h = int(h * scale)
+
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+                settings_raw = ImageTk.PhotoImage(img)
+
+            else:
+                settings_raw = tk.PhotoImage(file=settings_img_path)
+
+            self.settings_btn = tk.Menubutton(toolbar, image=settings_raw, relief=tk.FLAT)
+            self.settings_btn.image = settings_raw
+
 
             self.settings_btn = tk.Menubutton(toolbar, image=settings_raw, relief=tk.FLAT)
             self.settings_btn.image = settings_raw  # MUSÍ být kvůli garbage collection
@@ -513,11 +534,11 @@ class PlayoffApp:
                     if reason == 'timeout':
                         self.status_var.set('Chyba spojení (timeout)')
                     elif isinstance(reason, str) and reason.startswith('open_error'):
-                        self.status_var.set('Chyba spojení (otevření)')
+                        self.status_var.set('Chyba spojení (otevření portu)')
                     elif reason == 'pyserial_missing':
                         self.status_var.set('pyserial není nainstalován')
                     else:
-                        self.status_var.set('Chyba spojení')
+                        self.status_var.set('Chyba spojení (neznámá chyba)')
 
                     self.status_label.config(fg='red')
 
@@ -1702,7 +1723,11 @@ class PlayoffApp:
                 if table_x2 - table_x1 > 200:
 
                     table_y = margin_y + 40
-                    row_h = 26
+
+                    # --- řízení velikosti písma tabulky vůči pavouku ---
+                    table_font_size = min(cell_font_size, 18)     # <<< HORNÍ OMEZENÍ
+                    row_h = max(26, table_font_size + 10)         # <<< DYNAMICKÁ VÝŠKA ŘÁDKU
+
                     col1_w = 90
                     col2_w = table_x2 - table_x1 - col1_w - 10
 
@@ -1715,12 +1740,13 @@ class PlayoffApp:
 
                     self.canvas.create_text(
                         table_x1 + col1_w/2, table_y + row_h/2,
-                        text="ID", font=("Arial", 11, "bold")
+                        text="ID", font=("Arial", min(16, table_font_size), "bold")
                     )
 
+                    col_title = self.bracket.titles[0] if self.bracket.titles else "Popis"
                     self.canvas.create_text(
                         table_x1 + col1_w + col2_w/2 + 5, table_y + row_h/2,
-                        text="Popis týmu", font=("Arial", 11, "bold")
+                        text=col_title, font=("Arial", min(16, table_font_size), "bold")
                     )
 
                     y = table_y + row_h
@@ -1735,12 +1761,12 @@ class PlayoffApp:
 
                         self.canvas.create_text(
                             table_x1 + col1_w/2, y + row_h/2,
-                            text=str(tid), font=("Arial", 11)
+                            text=str(tid), font=("Arial", table_font_size)
                         )
 
                         self.canvas.create_text(
                             table_x1 + col1_w + col2_w/2 + 5, y + row_h/2,
-                            text=name, font=("Arial", 11), anchor="center"
+                            text=name, font=("Arial", table_font_size), anchor="center"
                         )
 
                         y += row_h
@@ -2083,6 +2109,89 @@ class PlayoffApp:
             pdf.setStrokeColor(HexColor(color))
             pdf.setLineWidth(max(0.5, lw * scale))
             pdf.line(TX(x1), TY(y1), TX(x2), TY(y2))
+
+        # --- DATUM A ČAS EXPORTU ---
+        import datetime
+        dt = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+
+        pdf.setFont("DejaVu", 10)
+        pdf.setFillColor(black)
+        pdf.drawRightString(
+            page_w - 20,
+            20,
+            f"Export: {dt}"
+        )
+
+        # === TABULKA POJMENOVÁNÍ TÝMŮ NA SAMOSTATNÉ STRÁNCE PDF ===
+        try:
+            table_data = self.build_team_lookup_from_round1()
+            if table_data:
+                pdf.showPage()   # ⬅⬅⬅ DRUHÁ STRANA
+
+                page_w, page_h = landscape(A4)
+                margin = 40
+
+                col1_w = 100
+                col2_w = page_w - col1_w - 2 * margin
+                row_h = max(26, min(cell_font_size, 18) + 10)
+
+                x1 = margin
+                y = page_h - margin
+
+                # --- HLAVIČKA ---
+                pdf.setFillColor(HexColor("#dddddd"))
+                pdf.rect(x1, y - row_h, col1_w, row_h, stroke=1, fill=1)
+                pdf.rect(x1 + col1_w, y - row_h, col2_w, row_h, stroke=1, fill=1)
+
+                pdf.setFont("DejaVu", 12)
+                pdf.setFillColor(black)
+                pdf.drawCentredString(x1 + col1_w / 2, y - row_h / 2 - 4, "ID")
+
+                col_title = self.bracket.titles[0] if self.bracket.titles else "Kolo 1"
+                pdf.drawCentredString(x1 + col1_w + col2_w / 2, y - row_h / 2 - 4, col_title)
+
+                y -= row_h
+                pdf.setFont("DejaVu", 11)
+
+                for tid, name in table_data:
+
+                    # --- STRÁNKOVÁNÍ ---
+                    if y - row_h < margin:
+                        pdf.showPage()
+                        y = page_h - margin
+
+                        pdf.setFillColor(HexColor("#dddddd"))
+                        pdf.rect(x1, y - row_h, col1_w, row_h, stroke=1, fill=1)
+                        pdf.rect(x1 + col1_w, y - row_h, col2_w, row_h, stroke=1, fill=1)
+
+                        pdf.setFont("DejaVu", 12)
+                        pdf.setFillColor(black)
+                        pdf.drawCentredString(x1 + col1_w / 2, y - row_h / 2 - 4, "ID")
+                        pdf.drawCentredString(x1 + col1_w + col2_w / 2, y - row_h / 2 - 4, col_title)
+
+                        y -= row_h
+                        pdf.setFont("DejaVu", 11)
+
+                    pdf.setFillColor(HexColor("#ffffff"))
+                    pdf.rect(x1, y - row_h, col1_w, row_h, stroke=1, fill=1)
+                    pdf.rect(x1 + col1_w, y - row_h, col2_w, row_h, stroke=1, fill=1)
+
+                    pdf.setFillColor(black)
+                    pdf.drawCentredString(x1 + col1_w / 2, y - row_h / 2 - 4, str(tid))
+                    pdf.drawString(x1 + col1_w + 6, y - row_h / 2 - 4, name)
+
+                    y -= row_h
+
+                pdf.setFont("DejaVu", 10)
+                pdf.setFillColor(black)
+                pdf.drawRightString(
+                    page_w - 20,
+                    20,
+                    f"Export: {dt}"
+                )
+
+        except Exception as e:
+            print("PDF TEAM TABLE ERROR:", e)
 
         # --- Save PDF ---
         try:
