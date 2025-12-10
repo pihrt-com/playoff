@@ -1443,25 +1443,128 @@ class PlayoffApp:
 
     # --- help ---
     def show_help(self):
-        help_text = (
-            "Nápověda – Playoff aplikace\n\n"
-            "- Vytvoření pavouka: Zadej počet týmů v Nastavení → Zadat počet týmů…\n"
-            "- Editace: Klik levým tlačítkem na buňku (pokud není zamčeno).\n"
-            "- Postup do dalšího kola: Pravé tlačítko myši na tým.\n"
-            "- Reset: Vymaže pouze texty, struktura zůstane.\n"
-            "- Vymaž vše: Vymaže komplet strukturu i pozadí.\n"
-            "- Pozadí: Nastavení → Načíst pozadí / Smazat pozadí.\n"
-            "- Chování při lichém počtu vítězů: Automaticky / Ručně / Čekající hráč.\n"
-            "- Zamknout editaci: Zablokuje úpravy (při prezentaci).\n"
-            "- Uložit do souboru / Načíst ze souboru: Ukládá celý stav (týmy, pozadí, nastavení).\n"
-            "- Povolit odpočet: Pod vítězem se při povolení vytvoří okno s odpočtem. Pravé tlačítko edit času.\n"
-            "- Export do PDF: Vytvoří PDF pro tisk.\n"
-            "- Projektor mód: Celá obrazovka (tl. Escape vypíná).\n"
-            "- USB nastavení: Nastavení → USB spojení (COM port, baud a timeout).\n"
-            "- Start: Odesílá ASCII 'start' (s newline) do COM zařízení (semaforu) a očekává 'ok' do timeoutu.\n"
-            "Autor: Playoff generátor by Martin Pihrt © www.pihrt.com.\n"            
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Nápověda – Playoff generátor")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.geometry("800x600")
+
+        frame = tk.Frame(dlg)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        scrollbar = tk.Scrollbar(frame)
+        scrollbar.pack(side="right", fill="y")
+
+        text = tk.Text(
+            frame,
+            wrap="word",
+            yscrollcommand=scrollbar.set,
+            font=("Arial", 11)
         )
-        messagebox.showinfo("Nápověda", help_text)
+        text.pack(side="left", fill="both", expand=True)
+
+        scrollbar.config(command=text.yview)
+
+        help_text = (
+            "NÁPOVĚDA – PLAYOFF GENERÁTOR\n"
+            "Autor: Martin Pihrt © www.pihrt.com\n\n"
+
+            "=== ZÁKLADNÍ OVLÁDÁNÍ ===\n"
+            "- Počet týmů: Nastavení → Počet týmů\n"
+            "- Generovat prázdné týmy: Nastavení → Generovat týmy\n"
+            "- Editace týmu: Levé tlačítko myši na buňku\n"
+            "- Postup do dalšího kola: Pravé tlačítko myši na tým\n"
+            "- Zamknout editaci: Nastavení → Zamknout editaci týmů\n"
+            "- Smazat obsah: Vymaže pouze názvy týmů\n"
+            "- Vymazat vše: Odstraní pavouka i pozadí\n\n"
+
+            "=== KOLO A TITULKY ===\n"
+            "- Kliknutím na nadpis kola lze změnit jeho název\n"
+            "- Poslední sloupec je vždy VÍTĚZ\n\n"
+
+            "=== POJMENOVÁNÍ TÝMŮ ===\n"
+            "Nastavení → Pojmenování týmů\n"
+            "- Sloupce: ID týmu / Popis týmu\n"
+            "- Neomezený počet řádků\n"
+            "- Ruční editace\n"
+            "- Import z Excelu\n"
+            "- Export do Excelu\n"
+            "- Tlačítko Smazat vše\n"
+            "- Data se ukládají do souboru spolu s pavoukem\n\n"
+
+            "=== TABULKA VPRAVO OD PAVOUKA ===\n"
+            "- Automaticky se generuje z Kola 1\n"
+            "- Zobrazuje pouze ID, které existují v pojmenování týmů\n"
+            "- Řazení je číselně vzestupně\n"
+            "- Velikost písma odpovídá nastavení velikosti pavouka\n\n"
+
+            "=== LICHÝ POČET TÝMŮ ===\n"
+            "Nastavení → Chování při lichém počtu vítězů\n"
+            "- Automatický BYE\n"
+            "- Ruční postup\n"
+            "- Čekající hráč\n\n"
+
+            "=== VZHLED ===\n"
+            "Nastavení → Velikost písma\n"
+            "- Malé / Střední / Velké\n\n"
+            "Nastavení → Tloušťka čar\n"
+            "- Normální / Silné\n\n"
+            "Nastavení → Barva pozadí\n"
+            "Nastavení → Načíst pozadí\n"
+            "Nastavení → Smazat pozadí\n\n"
+
+            "=== USB SEMAFOR ===\n"
+            "Nastavení → USB nastavení\n"
+            "- Výběr COM portu\n"
+            "- Nastavení Baud rate (výchozí 9600)\n"
+            "- Timeout odpovědi (výchozí 10 s)\n\n"
+            "Tlačítko START:\n"
+            "- Odešle text 'start' do zařízení\n"
+            "- Očekává zpět text 'ok'\n"
+            "- Stav je zobrazen v horní liště\n\n"
+
+            "=== ODPOČET ===\n"
+            "Nastavení → Povolit odpočet\n"
+            "- Pod vítězem se zobrazí časovač MM:SS\n"
+            "- Pravým tlačítkem myši lze změnit čas\n\n"
+            "Režim spuštění odpočtu:\n"
+            "- Spustit odpočet ihned (po START)\n"
+            "- Spustit odpočet až po semaforu (OK)\n\n"
+
+            "=== PDF EXPORT ===\n"
+            "Nastavení → Export do PDF\n"
+            "- První stránka: pavouk + vítěz + datum a čas exportu\n"
+            "- Druhá stránka: tabulka pojmenování týmů\n"
+            "- Automatické stránkování při dlouhé tabulce\n\n"
+
+            "=== PROJEKTOROVÝ REŽIM ===\n"
+            "Nastavení → Celá obrazovka ZAP/VYP\n"
+            "- Přepne aplikaci na fullscreen\n"
+            "- Klávesa ESC režim ukončí\n\n"
+
+            "=== UKLÁDÁNÍ A NAČÍTÁNÍ ===\n"
+            "Nastavení → Uložit do souboru\n"
+            "- Uloží kompletní stav pavouka, pozadí, USB, odpočet i pojmenování týmů\n\n"
+            "Nastavení → Načíst ze souboru\n"
+            "- Obnoví veškerý uložený obsah\n\n"
+
+            "=== AKTUALIZACE ===\n"
+            "Nastavení → Kontrola aktualizace\n"
+            "- Ověří novou verzi programu na internetu\n\n"
+
+            "=== ČAS A DATUM ===\n"
+            "- V horní liště se zobrazuje aktuální datum a čas v reálném čase\n"
+        )
+
+        text.insert("1.0", help_text)
+        text.config(state="disabled")  # jen pro čtení
+
+        btn = tk.Button(dlg, text="Zavřít", command=dlg.destroy)
+        btn.pack(pady=8)
+
+        dlg.bind("<Escape>", lambda e: dlg.destroy())
+        self.root.wait_window(dlg)
+
 
     # --- fullscreen ---
     def toggle_projector(self):
