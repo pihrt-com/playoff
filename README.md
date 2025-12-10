@@ -7,17 +7,15 @@ Magnetická tabule (takto to nemá vypadat)
 [![](https://github.com/pihrt-com/playoff/blob/main/Example/table.jpg?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/table.jpg)
 
 App (takto vypadá okno aplikace)
-[![](https://github.com/pihrt-com/playoff/blob/main/Example/example_pdf.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/example_pdf.png)
-
-App (okno nastavení)
-[![](https://github.com/pihrt-com/playoff/blob/main/Example/settings.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/settings.png)
-
-PDF export (takto vypadá list pro tisk)
-[![](https://github.com/pihrt-com/playoff/blob/main/Example/example_app.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/example_app.png)
+[![](https://github.com/pihrt-com/playoff/blob/main/Example/ex1.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/ex1.png)
 
 
 ## Hardware (Arduino)
 k desce Arduino MEGA je připojen samovybuzující piezoelement na pin číslo 12. Na semaforu jsou 3 patra LED (2x červený prstenec a 1x zelený) připojené na piny 9, 10, 11 (R, R, G) přes spínací tranzistory (bipolár, unipolár...). Tlačítko pro test (nebo spuštění cyklu zvukové a světelné signalizace) je připojeno z pinu 8 na 0V (gnd). Na piny UART1 (Rx, Tx) je připojen převodník RS485 s pinem EN na vývodu 2. Semafor reaguje na příkaz "START" na USB (UART0) nebo na RS485 (UART1). Rychlost komunikace je 9600 Bd. Přijetí se potvrzuje zpět do aplikace jako "OK". Posloupnost je následující: po stisku tlačítka, nebo příkazem "START" se spustí sekvence. Krátké pípnutí (0,1s) spolu se zapnutím prvního červeného prstence. Po 1s se opět ozve krátké pípnutí (0,1s) spolu se zapnutím druhého červeného prstence. Po 1s se ozve dlouhé pípnutí (1,5s) spolu se zapnutím zeleného prstence. Jízda vozítek může začít. Všechny LED prstence po 3s přejdou metodou fadeout do tmy. LED jsou řízeny PWM z CPU a svitem (zapnutí a vypnutí) simulují žárovky.
+
+## Firmware (Arduino)
+> FW 1.0 - výchozí verze (jeden semafor)
+> FW 1.1 - dva semafory a dvě laserové brány TODO
 
 ## 3D
 TODO doplnit 3 díly a foto

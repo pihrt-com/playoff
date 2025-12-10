@@ -1,0 +1,229 @@
+{
+  "team_count": 16,
+  "odd_behavior": "manual",
+  "font_scale": "medium",
+  "canvas_bg": "#c0c0c0",
+  "line_width": 4,
+  "bg_path": null,
+  "lock_edit": false,
+  "titles": [
+    "First 16",
+    "Quarterfinals",
+    "Semifinals",
+    "Final",
+    "Winner"
+  ],
+  "rounds": [
+    [
+      {
+        "a": "2",
+        "b": "10"
+      },
+      {
+        "a": "3",
+        "b": "5"
+      },
+      {
+        "a": "6",
+        "b": "7"
+      },
+      {
+        "a": "8",
+        "b": "9"
+      },
+      {
+        "a": "1",
+        "b": "11"
+      },
+      {
+        "a": "4",
+        "b": "12"
+      },
+      {
+        "a": "14",
+        "b": "13"
+      },
+      {
+        "a": "20",
+        "b": "21"
+      }
+    ],
+    [
+      {
+        "a": "2",
+        "b": "3"
+      },
+      {
+        "a": "6",
+        "b": "8"
+      },
+      {
+        "a": "1",
+        "b": "4"
+      },
+      {
+        "a": "14",
+        "b": "20"
+      }
+    ],
+    [
+      {
+        "a": "2",
+        "b": "6"
+      },
+      {
+        "a": "1",
+        "b": "14"
+      }
+    ],
+    [
+      {
+        "a": "6",
+        "b": "1"
+      }
+    ],
+    [
+      {
+        "a": "6",
+        "b": ""
+      }
+    ]
+  ],
+  "winner": "",
+  "enable_timer": true,
+  "timer_value": "05:00",
+  "timer_start_mode": "ok",
+  "usb_port": "COM12",
+  "usb_baud": 9600,
+  "usb_timeout": 10.0,
+  "team_names": [
+    {
+      "id": "1",
+      "desc": "Gymnázium, Stříbro"
+    },
+    {
+      "id": "2",
+      "desc": "Mehmet Kemal Coskunoz Vocational and Technical Antolian High School"
+    },
+    {
+      "id": "3",
+      "desc": "Střední odborné učiliště elektrotechnické, Plzeň"
+    },
+    {
+      "id": "4",
+      "desc": "Střední odborné učiliště, Domažlice"
+    },
+    {
+      "id": "5",
+      "desc": "Střední škola informatiky a finančních služeb, Plzeň"
+    },
+    {
+      "id": "6",
+      "desc": "Střední odborné učiliště elektrotechnické, Plzeň"
+    },
+    {
+      "id": "7",
+      "desc": "Tehnička škola Daruvar"
+    },
+    {
+      "id": "8",
+      "desc": "Bursa Hürriyet Mesleki ve Teknik Anadolu Lisesi"
+    },
+    {
+      "id": "9",
+      "desc": "Střední odborné učiliště, Domažlice"
+    },
+    {
+      "id": "10",
+      "desc": "Stredná priemyselná škola techniky a dizajnu, Poprad"
+    },
+    {
+      "id": "11",
+      "desc": "Tophane Vocational and Technical Anatolian Hign School"
+    },
+    {
+      "id": "12",
+      "desc": "Střední škola informatiky a finančních služeb, Plzeň"
+    },
+    {
+      "id": "13",
+      "desc": "Yesilyayla Vocational and Technical Anatolian High School"
+    },
+    {
+      "id": "14",
+      "desc": "Stredná odborná škola, Handlová"
+    },
+    {
+      "id": "15",
+      "desc": "Tianjin Technician Institute of Mechanical & Electrical Technology"
+    },
+    {
+      "id": "16",
+      "desc": "Gymnázium Stříbro"
+    },
+    {
+      "id": "17",
+      "desc": "Bursa Hürriyet Mesleki ve Teknik Anadolu Lisesi"
+    },
+    {
+      "id": "18",
+      "desc": "Sportovní gymnázium Plzeň"
+    },
+    {
+      "id": "19",
+      "desc": "Beruflliches Schulzentrum Cham"
+    },
+    {
+      "id": "20",
+      "desc": "Stredná odborná škola, Handlová"
+    },
+    {
+      "id": "21",
+      "desc": "Beruflliches Schulzentrum Cham"
+    },
+    {
+      "id": "22",
+      "desc": "Gymnázium Luďka Pika, Plzeň"
+    },
+    {
+      "id": "23",
+      "desc": "Stredná priemyselná škola techniky a dizajnu, Poprad"
+    },
+    {
+      "id": "24",
+      "desc": "Vyšší odborná škola a Střední průmyslová škola elektrotechnická, Plzeň"
+    },
+    {
+      "id": "25",
+      "desc": "Tianjin Technician Institute of Mechanical & Electrical Technology"
+    },
+    {
+      "id": "26",
+      "desc": "Beruflliches Schulzentrum Cham"
+    },
+    {
+      "id": "27",
+      "desc": "Tehnička škola Daruvar"
+    },
+    {
+      "id": "28",
+      "desc": "Otomotiv Endüstrisi İhracatçıları Birliği Mesleki ve Teknik Anadolu Lisesi"
+    },
+    {
+      "id": "29",
+      "desc": "Střední škola zemědělská a potravinářská, Klatovy"
+    },
+    {
+      "id": "30",
+      "desc": "Vyšší odborná škola a Střední průmyslová škola elektrotechnická, Plzeň"
+    },
+    {
+      "id": "31",
+      "desc": "Střední škola živnostenská a Základní škola, Planá"
+    },
+    {
+      "id": "32",
+      "desc": "Tehnička škola Daruvar"
+    }
+  ]
+}
