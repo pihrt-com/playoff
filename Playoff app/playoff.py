@@ -3,7 +3,7 @@
 __author__ = 'Martin Pihrt'
 
 APP_current       = "1.0.5"                                         # current version of the application
-APP_date          = "10.12.2025-18:05"                              # current version date  
+APP_date          = "11.12.2025-06:50"                              # current version date  
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
