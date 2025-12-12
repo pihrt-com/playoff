@@ -2,14 +2,36 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.5"                                         # current version of the application
-APP_date          = "11.12.2025-06:50"                              # current version date  
+APP_current       = "1.0.6"                                         # current version of the application
+APP_date          = "12.12.2025-20:50"                              # current version date  
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
-from tkinter import simpledialog, messagebox, filedialog, colorchooser
+from tkinter import ttk, simpledialog, messagebox, filedialog, colorchooser
+from tkinter import font as tkfont
+
 import math, json, os, sys
 import urllib.request
+
+try:
+    from reportlab.pdfgen import canvas as rl_canvas
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.colors import HexColor, black
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+except ImportError:
+    messagebox.showerror(
+        "Chyba",
+        "Pro vektorový PDF export je potřeba knihovna reportlab:\n\npip install reportlab"
+    )
+
+try:
+    from openpyxl import Workbook, load_workbook
+except ImportError:
+    messagebox.showerror(
+        "Chyba",
+        "Pro import/export excell je potřeba knihovna openpyxl:\n\npip install openpyxl"
+    )    
 
 # universal path to resources (works in Python and PyInstaller EXE)
 if getattr(sys, 'frozen', False):
@@ -140,8 +162,8 @@ class PlayoffApp:
         self.timer_running = False
         self.timer_blink = False
         self.current_seconds = 0
-        self.timer_start_mode = "ok"   # "start" | "ok"  
-        self.team_names = []              # Team naming database
+        self.timer_start_mode = "ok"  # "start" | "ok"  
+        self.team_names = []          # Team naming database
 
         self.font_scale_var = tk.StringVar(value=self.font_scale)
         self.odd_behavior_var = tk.StringVar(value=self.odd_behavior)
@@ -168,15 +190,26 @@ class PlayoffApp:
 
         # --- Settings icon (gear wheel) ---
         try:
+            # cesta k ikonám
             settings_img_path = os.path.join(BASE_PATH, "settings.ico")
 
             if PIL_AVAILABLE:
-                from PIL import Image, ImageTk
-
                 img = Image.open(settings_img_path)
 
-                # cílová výška – odpovídá Start tlačítku
-                TARGET_H = 44  
+                # VÝBĚR NEJVĚTŠÍ VRSTVY ICO
+                if hasattr(img, "n_frames"):  # ICO má více vrstev
+                    best_pixels = 0
+                    best_frame = 0
+                    for i in range(img.n_frames):
+                        img.seek(i)
+                        w, h = img.size
+                        if w * h > best_pixels:
+                            best_pixels = w * h
+                            best_frame = i
+                    img.seek(best_frame)
+
+                # výsledná cílová výška – stejná jako tlačítko START
+                TARGET_H = 44
 
                 w, h = img.size
                 scale = TARGET_H / h
@@ -187,32 +220,40 @@ class PlayoffApp:
                 settings_raw = ImageTk.PhotoImage(img)
 
             else:
+                # fallback bez Pillow
                 settings_raw = tk.PhotoImage(file=settings_img_path)
 
+            # vytvoření tlačítka
             self.settings_btn = tk.Menubutton(toolbar, image=settings_raw, relief=tk.FLAT)
-            self.settings_btn.image = settings_raw
-
-
-            self.settings_btn = tk.Menubutton(toolbar, image=settings_raw, relief=tk.FLAT)
-            self.settings_btn.image = settings_raw  # MUSÍ být kvůli garbage collection
+            self.settings_btn.image = settings_raw  # nutné pro garbage-collector
 
             self.settings_menu = tk.Menu(self.settings_btn, tearoff=0)
             self.settings_btn.config(menu=self.settings_menu)
             self.settings_btn.pack(side='left', padx=4)
+
             ver_txt = f"app verze: {APP_current} ({APP_date})"
             self.ver_label = tk.Label(toolbar, text=ver_txt, fg="#666666", font=("Arial", 7))
             self.ver_label.pack(side='left', padx=(10,0))
 
+            # --- USB STATUS INDICATOR ---
+            self.usb_status_canvas = tk.Canvas(toolbar, width=12, height=12, highlightthickness=0, bd=0, bg=toolbar.cget("bg"))
+            self.usb_status_id = self.usb_status_canvas.create_oval(2, 2, 10, 10, fill="red", outline="red")
+            self.usb_status_canvas.pack(side="left", padx=(10, 2))
+
+            self.usb_status_label = tk.Label(toolbar, text="USB", fg="#333333", font=("Arial", 8, "bold"))
+            self.usb_status_label.pack(side="left", padx=(0, 10)) 
+
         except Exception as e:
             print("Nelze načíst settings ikonu:", e)
-            # fallback
             self.settings_btn = tk.Menubutton(toolbar, text="⚙", relief=tk.RAISED)
             self.settings_menu = tk.Menu(self.settings_btn, tearoff=0)
             self.settings_btn.config(menu=self.settings_menu)
             self.settings_btn.pack(side='left')
+
             ver_txt = f"app verze: {APP_current} ({APP_date})"
             self.ver_label = tk.Label(toolbar, text=ver_txt, fg="#666666", font=("Arial", 7))
-            self.ver_label.pack(side='left', padx=(10,0))            
+            self.ver_label.pack(side='left', padx=(10,0))
+
 
         # týmy
         self.settings_menu.add_command(label='Počet týmů', command=self.ask_team_count)
@@ -325,7 +366,15 @@ class PlayoffApp:
 
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label='Export do PDF', command=self.export_pdf)
-        self.settings_menu.add_command(label='Celá obrazovka ZAP/VYP', command=self.toggle_projector)
+
+        # Fullscreen mode toggle
+        self.fullscreen_var = tk.BooleanVar(value=self.projector_mode)
+        self.settings_menu.add_checkbutton(
+            label='Celá obrazovka',
+            variable=self.fullscreen_var,
+            command=self.toggle_projector
+        )
+
         self.settings_menu.add_command(label='Nápověda', command=self.show_help)
         
         self.settings_menu.add_command(label='Kontrola aktualizace', command=self.check_for_update)
@@ -397,6 +446,9 @@ class PlayoffApp:
 
         self.update_datetime()
 
+        # automatická kontrola USB každých 1.5 s
+        self.root.after(1500, self.auto_check_usb)
+
         root.bind('<Escape>', lambda e: self.exit_fullscreen())
 
         # try load usb settings from previous setup file if available
@@ -450,7 +502,7 @@ class PlayoffApp:
                 sys.exit(0)
 
         else:
-            messagebox.showinfo("Aktualizace", "Máte nejnovější verzi.")
+            messagebox.showinfo("Aktualizace", "Máte nejnovější verzi :-)")
     
     def ask_team_count(self):
         dlg = tk.Toplevel(self.root)
@@ -470,8 +522,8 @@ class PlayoffApp:
                 messagebox.showerror("Chyba", "Počet týmů musí být kladné číslo.")
                 return
 
-            if not val.isdigit() or int(val) > 24:
-                messagebox.showerror("Chyba", "Počet týmů musí být < 25.")
+            if not val.isdigit() or int(val) > 28:
+                messagebox.showerror("Chyba", "Počet týmů musí být <= 28.")
                 return                
 
             self.team_var.set(val)
@@ -497,6 +549,35 @@ class PlayoffApp:
             self.ask_team_count()
         except Exception:
             pass
+
+    def update_usb_status(self, connected: bool):
+        """Zelená = připojeno, červená = odpojeno."""
+        try:
+            color = "green" if connected else "red"
+            self.usb_status_canvas.itemconfig(self.usb_status_id, fill=color, outline=color)
+        except:
+            pass
+
+    def auto_check_usb(self):
+        """Automaticky kontroluje, zda je vybraný USB port stále k dispozici."""
+        try:
+            if self.usb:
+                ports = self.usb.list_ports()
+                # Pokud je port vybraný a existoval, ale už není v seznamu → odpojen
+                if self.usb_port and (self.usb_port not in ports):
+                    self.update_usb_status(False)
+                else:
+                    # port existuje – ale nemůžeme být 100% jistí že je OK,
+                    # ale rozhodně víme, že nezmizel ze systému
+                    if self.usb_port:
+                        self.update_usb_status(True)
+                    else:
+                        self.update_usb_status(False)
+        except Exception:
+            self.update_usb_status(False)
+
+        # znovu za 1500 ms
+        self.root.after(1500, self.auto_check_usb)
 
     # --- USB / toolbar actions ---
     def on_start(self):
@@ -530,6 +611,7 @@ class PlayoffApp:
                     # v režimu "ok" startujeme odpočet až po "OK"
                     if self.enable_timer and self.timer_start_mode == 'ok':
                         self.start_countdown()
+                    self.update_usb_status(ok)
                 else:
                     if reason == 'timeout':
                         self.status_var.set('Chyba spojení (timeout)')
@@ -575,6 +657,7 @@ class PlayoffApp:
             if usb_available:
                 self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
                 self.usb.send_start_async(on_result)
+                self.update_usb_status(usb_available)
             else:
                 # USB není k dispozici → nahlásíme chybu
                 self.status_var.set('Chyba spojení')
@@ -593,6 +676,7 @@ class PlayoffApp:
             # v režimu "ok" se při chybě NIC nespustí
             if self.timer_start_mode == 'ok':
                 self.timer_running = False
+            self.app.update_usb_status(False)
 
     def open_team_naming_dialog(self):
         dlg = tk.Toplevel(self.root)
@@ -699,8 +783,6 @@ class PlayoffApp:
             if not path:
                 return
 
-            from openpyxl import Workbook
-
             wb = Workbook()
             ws = wb.active
             ws.title = "Pojmenování týmů"
@@ -719,8 +801,6 @@ class PlayoffApp:
             )
             if not path:
                 return
-
-            from openpyxl import load_workbook
 
             wb = load_workbook(path)
             ws = wb.active
@@ -790,7 +870,6 @@ class PlayoffApp:
 
     # --- USB dialog wrapper ---
     def open_usb_dialog(self):
-        # if usb_module unavailable, show message and allow manual entry
         dlg = tk.Toplevel(self.root)
         dlg.title("USB spojení")
         dlg.transient(self.root)
@@ -799,52 +878,78 @@ class PlayoffApp:
         x = (dlg.winfo_screenwidth()-w)//2; y = (dlg.winfo_screenheight()-h)//2
         dlg.geometry(f"{w}x{h}+{x}+{y}")
 
+        # --- PORT LABEL ---
         tk.Label(dlg, text="Vyber COM/USB port:").pack(anchor='w', padx=10, pady=(10,4))
+
         port_var = tk.StringVar(value=self.usb_port)
+
+        # --- PORTS LIST ---
         if self.usb:
             ports = self.usb.list_ports()
         else:
             ports = []
-        if not ports:
-            # allow manual entry
-            port_entry = tk.Entry(dlg, textvariable=port_var, width=30)
-            port_entry.pack(padx=10, pady=4)
-        else:
-            # option menu + refresh
-            frame = tk.Frame(dlg); frame.pack(fill='x', padx=10)
-            option = tk.OptionMenu(frame, port_var, *ports)
-            option.pack(side='left', fill='x', expand=True)
-            def refresh_ports():
-                new = self.usb.list_ports() if self.usb else []
-                try:
-                    option['menu'].delete(0, 'end')
-                    for p in new:
-                        option['menu'].add_command(label=p, command=tk._setit(port_var, p))
-                except Exception:
-                    pass
-            tk.Button(frame, text='Obnovit', command=refresh_ports).pack(side='right', padx=6)
 
+        frame = tk.Frame(dlg)
+        frame.pack(fill='x', padx=10)
+
+        # --- COMBOBOX místo OptionMenu ---
+        combo = ttk.Combobox(
+            frame,
+            textvariable=port_var,
+            values=ports,
+            state="readonly",
+            width=20
+        )
+        combo.pack(side='left', fill='x', expand=True)
+
+        # --- Preselect current port if available ---
+        if self.usb_port in ports:
+            port_var.set(self.usb_port)
+        elif ports:
+            port_var.set(ports[0])
+        else:
+            port_var.set("")
+
+        # --- REFRESH BUTTON ---
+        def refresh_ports():
+            new = self.usb.list_ports() if self.usb else []
+            combo['values'] = new
+
+            # Re-apply selected port
+            if self.usb_port in new:
+                port_var.set(self.usb_port)
+            elif new:
+                port_var.set(new[0])
+            else:
+                port_var.set("")
+
+        tk.Button(frame, text='Obnovit', command=refresh_ports).pack(side='right', padx=6)
+
+        # --- BAUD ---
         tk.Label(dlg, text="Baud (rychlost) — výchozí 9600:").pack(anchor='w', padx=10, pady=(8,0))
         baud_var = tk.StringVar(value=str(self.usb_baud))
-        baud_entry = tk.Entry(dlg, textvariable=baud_var, width=10)
-        baud_entry.pack(padx=10, pady=4)
+        tk.Entry(dlg, textvariable=baud_var, width=10).pack(padx=10, pady=4)
 
+        # --- TIMEOUT ---
         tk.Label(dlg, text="Timeout (s) — výchozí 10.0:").pack(anchor='w', padx=10, pady=(8,0))
         to_var = tk.StringVar(value=str(self.usb_timeout))
-        to_entry = tk.Entry(dlg, textvariable=to_var, width=10)
-        to_entry.pack(padx=10, pady=4)
+        tk.Entry(dlg, textvariable=to_var, width=10).pack(padx=10, pady=4)
 
+        # --- OK HANDLER ---
         def on_ok():
             self.usb_port = port_var.get().strip()
+
             try:
                 self.usb_baud = int(baud_var.get())
-            except Exception:
+            except:
                 self.usb_baud = DEFAULT_USB_BAUD
+
             try:
                 self.usb_timeout = float(to_var.get())
-            except Exception:
+            except:
                 self.usb_timeout = DEFAULT_USB_TIMEOUT
-            # persist small settings file
+
+            # save settings
             try:
                 spath = os.path.join(os.path.expanduser('~'), '.playoff_settings.json')
                 data = {}
@@ -852,33 +957,42 @@ class PlayoffApp:
                     try:
                         with open(spath, 'r', encoding='utf-8') as f:
                             data = json.load(f)
-                    except Exception:
+                    except:
                         data = {}
+
                 data['usb_port'] = self.usb_port
                 data['usb_baud'] = self.usb_baud
                 data['usb_timeout'] = self.usb_timeout
+
                 with open(spath, 'w', encoding='utf-8') as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
-            except Exception:
+            except:
                 pass
-            # let usb manager validate
+
+            # validate port
             try:
                 if self.usb:
                     self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
-            except Exception:
-                pass
+                    self.update_usb_status(True)
+            except Exception as e:
+                messagebox.showwarning("USB", f"Port nastaven, ale spojení selhalo:\n{e}")
+                self.update_usb_status(False)
+
             dlg.destroy()
 
         def on_cancel():
             dlg.destroy()
 
-        btnf = tk.Frame(dlg); btnf.pack(pady=8)
-        tk.Button(btnf, text='OK', command=on_ok).pack(side='left', padx=6)
-        tk.Button(btnf, text='Zrušit', command=on_cancel).pack(side='left', padx=6)
+        # --- BUTTONS ---
+        btnf = tk.Frame(dlg)
+        btnf.pack(pady=8)
+        tk.Button(btnf, text='OK', width=10, command=on_ok).pack(side='left', padx=6)
+        tk.Button(btnf, text='Zrušit', width=10, command=on_cancel).pack(side='left', padx=6)
 
         dlg.bind('<Return>', lambda e: on_ok())
         dlg.bind('<Escape>', lambda e: on_cancel())
         self.root.wait_window(dlg)
+
 
     # --- bracket generation (exact number of teams) ---
     def generate_bracket_with_empty(self, n):
@@ -1565,20 +1679,19 @@ class PlayoffApp:
         dlg.bind("<Escape>", lambda e: dlg.destroy())
         self.root.wait_window(dlg)
 
-
     # --- fullscreen ---
     def toggle_projector(self):
-        self.projector_mode = not getattr(self, 'projector_mode', False)
-        if self.projector_mode:
-            self.root.attributes('-fullscreen', True)
-        else:
-            self.root.attributes('-fullscreen', False)
-        self.redraw()
+        self.projector_mode = self.fullscreen_var.get()
+        # aktivace fullscreen
+        self.root.attributes('-fullscreen', self.projector_mode)
+        # počkáme, až se okno opravdu překreslí (fullscreen potřebuje jeden event loop)
+        self.root.after(50, self.redraw)
 
     def exit_fullscreen(self):
         self.projector_mode = False
+        self.fullscreen_var.set(False)
         self.root.attributes('-fullscreen', False)
-        self.redraw()
+        self.root.after(50, self.redraw)
 
     def build_team_lookup_from_round1(self):
         """Z Kola 1 vytvoří seřazený seznam (id, name) podle self.team_names."""
@@ -1622,6 +1735,20 @@ class PlayoffApp:
         self.title_items.clear()
         self.line_items.clear()
 
+        # --- BACKGROUND IMAGE ---
+        if self.bg_image and PIL_AVAILABLE:
+            try:
+                cw = self.canvas.winfo_width()
+                ch = self.canvas.winfo_height()
+
+                if cw > 1 and ch > 1:
+                    # scale image to canvas size
+                    img = self.bg_image.resize((cw, ch), Image.LANCZOS)
+                    self.bg_tk = ImageTk.PhotoImage(img)
+                    self.canvas.create_image(0, 0, image=self.bg_tk, anchor="nw")
+            except Exception as e:
+                print("BACKGROUND ERROR:", e)
+
         if not self.bracket:
             return
 
@@ -1642,10 +1769,15 @@ class PlayoffApp:
         else:
             cell_font_size = 14
 
-        from tkinter import font as tkfont
         cell_font = tkfont.Font(family="Arial", size=cell_font_size)
 
-        title_font_size = 33 if self.projector_mode or self.font_scale == 'large' else (20 if self.font_scale == 'medium' else 12)
+        if self.font_scale == 'large':
+            title_font_size = 28
+        elif self.font_scale == 'medium':
+            title_font_size = 20
+        else:
+            title_font_size = 12
+
         title_font = ("Arial", title_font_size, "bold")
 
         # --- column widths ---
@@ -1909,19 +2041,6 @@ class PlayoffApp:
 
     # --- PDF export ---
     def export_pdf(self):
-        try:
-            from reportlab.pdfgen import canvas as rl_canvas
-            from reportlab.lib.pagesizes import A4, landscape
-            from reportlab.lib.colors import HexColor, black
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-        except ImportError:
-            messagebox.showerror(
-                "Chyba",
-                "Pro vektorový PDF export je potřeba knihovna reportlab:\n\npip install reportlab"
-            )
-            return
-
         if not self.bracket:
             messagebox.showerror("Chyba", "Nejprve vytvoř pavouka.")
             return
@@ -1959,7 +2078,6 @@ class PlayoffApp:
         else:
             cell_font_size = 14
 
-        from tkinter import font as tkfont
         cell_font = tkfont.Font(family="Arial", size=cell_font_size)
 
         title_font_size = (
@@ -2321,5 +2439,41 @@ if __name__ == '__main__':
         print("Icon load error:", e)
 
     app = PlayoffApp(root)
-    root.geometry('1920x1080')
+
+    # --- Nastavení výchozí velikosti okna ---
+    win_w = 1920
+    win_h = 1080
+
+    # Nastavíme velikost obsahu okna
+    root.geometry(f"{win_w}x{win_h}")
+
+    # Necháme okno fyzicky vytvořit
+    root.update_idletasks()
+
+    # Zjistíme skutečný frame okna
+    # left, top, right, bottom border sizes
+    try:
+        geom = root.wm_geometry()  # např. "1920x1080+10+10"
+        # zkusíme zjistit frame okna
+        f = root.wm_frame()  # (left, top, right, bottom)
+        frame_left, frame_top, frame_right, frame_bottom = f
+    except:
+        # fallback, pokud wm_frame není dostupné (ale ve Windows je)
+        frame_left = frame_top = frame_right = frame_bottom = 8
+
+    # Skutečná VNEJŠÍ velikost okna
+    outer_w = win_w + frame_left + frame_right
+    outer_h = win_h + frame_top + frame_bottom
+
+    # Rozměry obrazovky
+    scr_w = root.winfo_screenwidth()
+    scr_h = root.winfo_screenheight()
+
+    # Výpočet pozice pro absolutní centrování
+    pos_x = (scr_w - outer_w) // 2
+    pos_y = (scr_h - outer_h) // 2
+
+    # Nastavení finální pozice okna
+    root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
+
     root.mainloop()

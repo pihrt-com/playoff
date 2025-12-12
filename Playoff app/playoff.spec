@@ -12,8 +12,9 @@ a = Analysis(
     pathex=[project_dir],
     binaries=[],
     datas=[
-        ('playoff.ico', '.'),     # IKONA = povinné
-        ('usb_module.py', '.'),   # tvůj USB modul
+        ('playoff.ico', '.'),     # IKONA aplikace
+        ('settings.ico', '.'),    # IKONA nastavení
+        ('usb_module.py', '.'),   # USB modul
     ],
     hiddenimports=['PIL', 'PIL.Image', 'serial'],
     hookspath=[],
