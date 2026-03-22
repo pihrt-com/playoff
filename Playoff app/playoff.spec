@@ -15,6 +15,7 @@ a = Analysis(
         ('playoff.ico', '.'),     # IKONA aplikace
         ('settings.ico', '.'),    # IKONA nastavení
         ('usb_module.py', '.'),   # USB modul
+        ('DejaVuSans.ttf, '.'),   # PDF font
     ],
     hiddenimports=['PIL', 'PIL.Image', 'serial'],
     hookspath=[],

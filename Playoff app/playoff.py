@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.7"                                         # current version of the application
-APP_date          = "21.02.2026-20:50"                              # current version date  
+APP_current       = "1.0.8"                                         # current version of the application
+APP_date          = "22.03.2026-14:50"                              # current version date  
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -63,7 +63,8 @@ DEFAULT_BOX_W = 180
 DEFAULT_BOX_H = 30
 DEFAULT_H_GAP = 200
 DEFAULT_V_GAP = 10
-LINE_COLOR = "#0b6bd6"
+LINE_COLOR = "#0b6bd6"              # blue color
+THIRD_PLACE_LINE_COLOR = "#d62828"  # red color
 BOX_FILL = "#ffffff"
 BOX_OUTLINE = "#000000"
 TITLE_COLOR = "#000000"
@@ -179,6 +180,8 @@ class PlayoffApp:
         self.timer_start_mode = "ok"  # "start" | "ok"  
         self.team_names = []          # Team naming database
         self.pre_round_enabled = True
+        self.third_place_enabled = True
+        self.third_place_title = "3. místo"
 
         self.font_scale_var = tk.StringVar(value=self.font_scale)
         self.odd_behavior_var = tk.StringVar(value=self.odd_behavior)
@@ -186,6 +189,9 @@ class PlayoffApp:
         self.timer_menu_var = tk.BooleanVar(value=self.enable_timer)
         self.timer_start_mode_var = tk.StringVar(value=self.timer_start_mode)
         self.pre_round_var = tk.BooleanVar(value=self.pre_round_enabled)
+        self.third_place_var = tk.BooleanVar(value=self.third_place_enabled)
+
+        self.third_place = {"a": "", "b": "", "winner": ""}        
 
         # USB manager (from usb_module)
         if USB_AVAILABLE:
@@ -271,9 +277,10 @@ class PlayoffApp:
         self.settings_menu.add_command(label='Počet týmů', command=self.ask_team_count)
         self.settings_menu.add_command(label='Generovat týmy', command=self.generate_from_entry)
         self.settings_menu.add_command(label='Pojmenování týmů', command=self.open_team_naming_dialog)
-        self.settings_menu.add_command(label='Smazat obsah', command=self.reset_values)
-        self.settings_menu.add_command(label='Vymazat vše', command=self.clear_all)
+        self.settings_menu.add_command(label='Smazat jen obsah', command=self.reset_values)
+        self.settings_menu.add_command(label='Vymazat všechno', command=self.clear_all)
         self.settings_menu.add_checkbutton(label='Používat předkolo', variable=self.pre_round_var, command=self.toggle_pre_round)
+        self.settings_menu.add_checkbutton(label='Zobrazit 3. místo', variable=self.third_place_var, command=self.toggle_third_place)
 
         # odd behavior
         odd_menu = tk.Menu(self.settings_menu, tearoff=0)
@@ -478,6 +485,45 @@ class PlayoffApp:
                     self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
         except Exception:
             pass
+
+    def update_third_place_from_semifinal(self):
+        if not self.bracket or not self.third_place_enabled:
+            return
+
+        rounds = self.bracket.rounds
+
+        if len(rounds) < 3:
+            return
+
+        semifinal_round = len(rounds) - 3
+        final_round = len(rounds) - 2
+
+        semifinal_matches = rounds[semifinal_round]
+        final_match = rounds[final_round][0]
+
+        losers = []
+
+        for m_idx, match in enumerate(semifinal_matches):
+            a = match.a.text.strip()
+            b = match.b.text.strip()
+
+            finalist_a = final_match.a.text.strip()
+            finalist_b = final_match.b.text.strip()
+
+            if a == finalist_a or a == finalist_b:
+                loser = b
+            elif b == finalist_a or b == finalist_b:
+                loser = a
+            else:
+                loser = ""
+
+            if loser:
+                losers.append(loser)
+
+        if len(losers) >= 2:
+            self.third_place["a"] = losers[0]
+            self.third_place["b"] = losers[1]
+
 
     def toggle_pre_round(self):
         self.pre_round_enabled = self.pre_round_var.get()
@@ -946,6 +992,10 @@ class PlayoffApp:
         self.timer_start_mode = mode
         self.timer_start_mode_var.set(mode)
 
+    def toggle_third_place(self):
+        self.third_place_enabled = self.third_place_var.get()
+        self.redraw()        
+
     # --- USB wrapper ---
     def open_usb_dialog(self):
         dlg = tk.Toplevel(self.root)
@@ -1124,6 +1174,10 @@ class PlayoffApp:
             'usb_timeout': self.usb_timeout,
             # TEAMS names
             'team_names': self.team_names,
+            # THIRD place
+            'third_place_enabled': self.third_place_enabled,
+            'third_place': self.third_place,
+            'third_place_title': self.third_place_title,
             # PRE ROUNDS
             'pre_titles': self.bracket.pre_titles,
             'pre_rounds': [
@@ -1170,6 +1224,10 @@ class PlayoffApp:
         self.team_names = data.get('team_names', [])
         self.pre_round_enabled = data.get('pre_round_enabled', True)
         self.pre_round_var.set(self.pre_round_enabled)
+        self.third_place_enabled = data.get('third_place_enabled', False)
+        self.third_place_var.set(self.third_place_enabled)
+        self.third_place = data.get('third_place', {"a": "", "b": "", "winner": ""})
+        self.third_place_title = data.get('third_place_title', "3. místo")
         self.generate_bracket_with_empty(n)
 
         # --- LOAD PRE ROUND ---
@@ -1561,6 +1619,7 @@ class PlayoffApp:
             winner_match.b.text = ""
 
             self.current_winner = new_val
+            self.update_third_place_from_semifinal()
             dlg.destroy()
             self.redraw()
 
@@ -1597,6 +1656,7 @@ class PlayoffApp:
                     return
 
             target.text = winner
+            self.update_third_place_from_semifinal()
             self.redraw()
             return
 
@@ -1606,20 +1666,61 @@ class PlayoffApp:
         winner_match.a.text = winner
         winner_match.b.text = ""  
 
+        self.update_third_place_from_semifinal()
         self.redraw()
         return
 
+    def promote_third_place(self, side):
+        val = self.third_place[side].strip()
+        if not val:
+            return
+
+        if self.third_place["winner"]:
+            if not messagebox.askyesno("Přepsat?", "Vítěz pro 3. místo už existuje. Přepsat?"):
+                return
+
+        self.third_place["winner"] = val
+        self.redraw()    
+
+    def edit_third_place_title(self):
+        if self.lock_edit:
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Nadpis 3. místa")
+
+        ent = tk.Entry(dlg, width=30)
+        ent.pack(padx=10, pady=10)
+        ent.insert(0, self.third_place_title)
+        ent.focus()
+
+        def ok():
+            self.third_place_title = ent.get()
+            dlg.destroy()
+            self.redraw()
+
+        tk.Button(dlg, text="OK", command=ok).pack(pady=5)
+        dlg.bind("<Return>", lambda e: ok())            
 
     # --- reset vs clear ---
     def reset_values(self):
-        # reset leaves bracket structure intact but clears all texts and titles
         if not self.bracket:
             return
+        # --- NORMAL ROUNDS ---
         for r in self.bracket.rounds:
             for m in r:
                 m.a.text = ''
                 m.b.text = ''
-        # keep titles as they are
+        # --- PRE ROUND ---
+        if self.pre_round_enabled and self.bracket.pre_rounds:
+            for r in self.bracket.pre_rounds:
+                for m in r:
+                    m.a.text = ''
+                    m.b.text = ''
+        # --- WINNER ---
+        self.current_winner = ""
+        # --- THIRD PLACE ---
+        self.third_place = {"a": "", "b": "", "winner": ""}
         self.redraw()
 
     def clear_all(self):
@@ -1933,6 +2034,7 @@ class PlayoffApp:
             x += w + h_gap
 
         final_centers = []
+        semi_losers_centers = []
 
         if self.pre_round_enabled and self.bracket.pre_rounds:
 
@@ -2039,6 +2141,18 @@ class PlayoffApp:
             start_y = max(margin_y + title_font_size + 10,
                           (height - total_col_h) // 2)
 
+            finalists = set()
+
+            try:
+                final_match = rounds[final_real_round + 1][0]
+                fa = final_match.a.text.strip()
+                fb = final_match.b.text.strip()
+
+                if fa and fb:
+                    finalists = {fa, fb}
+            except:
+                pass
+
             for m_idx, match in enumerate(matches):
 
                 if r_idx == last_round and len(matches) == 1:
@@ -2106,6 +2220,17 @@ class PlayoffApp:
 
                 if r_idx == final_real_round:
                     final_centers.append(((a_x2), (a_y1 + b_y2) / 2))
+
+                if r_idx == last_round - 2:
+                    final_match = rounds[last_round - 1][0]
+                    if m_idx == 0:
+                        finalist = final_match.a.text.strip()
+                    else:
+                        finalist = final_match.b.text.strip()
+                    if match.a.text.strip() and match.a.text.strip() != finalist:
+                        semi_losers_centers.append((a_x2, (a_y1 + a_y2) / 2))
+                    if match.b.text.strip() and match.b.text.strip() != finalist:
+                        semi_losers_centers.append((b_x2, (b_y1 + b_y2) / 2))
 
         # --- Winner box ---
         winner_match = rounds[last_round][0]
@@ -2251,27 +2376,192 @@ class PlayoffApp:
         except Exception as e:
             print("TEAM TABLE ERROR:", e)
 
+        # === 3RD PLACE ===
+        if self.third_place_enabled:
+            semi_col_index = final_real_round + offset
+            semi_col_x = col_x_positions[semi_col_index]
+            base_x = semi_col_x
+
+            third_offset_y = 100
+            base_y = win_y2 + third_offset_y
+
+            # small boxes A/B
+            box_w = col_widths[final_real_round] if col_widths else 120
+            box_h_small = box_h
+            gap = 6
+
+            # --- BIG WINNER BOX ---
+            winner_text_tp = self.third_place["winner"]
+            text_width_tp = cell_font.measure(winner_text_tp) if winner_text_tp else 0
+
+            winner_w = max(text_width_tp + 60, col_widths[last_round] + 40)
+            winner_h = box_h * 2
+
+            win_x = win_x1
+
+            # TITLE
+            title_id = self.canvas.create_text(
+                base_x + 60,
+                base_y - 25,
+                text=self.third_place_title,
+                font=title_font
+            )
+
+            if not self.lock_edit:
+                self.canvas.tag_bind(title_id, "<Button-1>", lambda e: self.edit_third_place_title())
+
+            # --- LEFT MATCH ---
+            a_y1 = base_y
+            b_y1 = a_y1 + box_h_small + gap
+
+            # box A
+            self.canvas.create_rectangle(
+                base_x, a_y1, base_x + box_w, a_y1 + box_h_small,
+                fill=BOX_FILL, outline=BOX_OUTLINE, width=self.line_width
+            )
+
+            self.canvas.create_text(
+                base_x + box_w/2,
+                a_y1 + box_h_small/2,
+                text=self.third_place["a"],
+                font=("Arial", cell_font_size)
+            )
+
+            # box B
+            self.canvas.create_rectangle(
+                base_x, b_y1, base_x + box_w, b_y1 + box_h_small,
+                fill=BOX_FILL, outline=BOX_OUTLINE, width=self.line_width
+            )
+
+            self.canvas.create_text(
+                base_x + box_w/2,
+                b_y1 + box_h_small/2,
+                text=self.third_place["b"],
+                font=("Arial", cell_font_size)
+            )
+
+            # --- WINNER BOX ---
+            win_y1 = a_y1
+
+            self.canvas.create_rectangle(
+                win_x, win_y1,
+                win_x + winner_w, win_y1 + winner_h,
+                fill=BOX_FILL, outline=BOX_OUTLINE, width=self.line_width
+            )
+
+            self.canvas.create_text(
+                win_x + winner_w/2,
+                win_y1 + winner_h/2,
+                text=self.third_place["winner"],
+                font=("Arial", cell_font_size*2, "bold")
+            )
+
+            # highlight clear fields
+            if not self.third_place["a"].strip():
+                self.canvas.create_rectangle(
+                    base_x, a_y1, base_x + box_w, a_y1 + box_h_small,
+                    fill=WINNER_FILL, outline="", width=0
+                )
+
+            if not self.third_place["b"].strip():
+                self.canvas.create_rectangle(
+                    base_x, b_y1, base_x + box_w, b_y1 + box_h_small,
+                    fill=WINNER_FILL, outline="", width=0
+                )
+
+            # --- LINE ---
+            self.canvas.create_line(
+                base_x + box_w,
+                a_y1 + box_h_small,
+                win_x,
+                win_y1 + winner_h/2,
+                fill=THIRD_PLACE_LINE_COLOR,
+                width=self.line_width
+            )
+
+            # --- LINES from semifinal to 3. place ---
+            if len(semi_losers_centers) >= 2:
+
+                p1 = semi_losers_centers[0]
+                p2 = semi_losers_centers[1]
+
+                target_x = base_x
+
+                self.canvas.create_line(
+                    p1[0], p1[1],
+                    target_x,
+                    a_y1 + box_h_small / 2,
+                    fill=THIRD_PLACE_LINE_COLOR,
+                    width=self.line_width,
+                    smooth=True
+                )
+
+                self.canvas.create_line(
+                    p2[0], p2[1],
+                    target_x,
+                    b_y1 + box_h_small / 2,
+                    fill=THIRD_PLACE_LINE_COLOR,
+                    width=self.line_width,
+                    smooth=True
+                )
+
+            # --- HITBOXES ---
+            if not self.lock_edit:
+
+                def edit_tp(field):
+                    dlg = tk.Toplevel(self.root)
+                    dlg.title("3. místo")
+
+                    ent = tk.Entry(dlg, width=30)
+                    ent.pack(padx=10, pady=10)
+                    ent.insert(0, self.third_place[field])
+                    ent.focus()
+
+                    def ok():
+                        self.third_place[field] = ent.get()
+                        dlg.destroy()
+                        self.redraw()
+
+                    tk.Button(dlg, text="OK", command=ok).pack(pady=5)
+                    dlg.bind("<Return>", lambda e: ok())
+
+                self.canvas.create_rectangle(
+                    base_x, a_y1, base_x+box_w, a_y1+box_h_small,
+                    fill="", outline="", tags="tp_a"
+                )
+                self.canvas.tag_bind("tp_a", "<Button-1>", lambda e: edit_tp("a"))
+
+                self.canvas.create_rectangle(
+                    base_x, b_y1, base_x+box_w, b_y1+box_h_small,
+                    fill="", outline="", tags="tp_b"
+                )
+                self.canvas.tag_bind("tp_b", "<Button-1>", lambda e: edit_tp("b"))
+
+                self.canvas.create_rectangle(
+                    win_x, win_y1, win_x+winner_w, win_y1+winner_h,
+                    fill="", outline="", tags="tp_w"
+                )
+                self.canvas.tag_bind("tp_w", "<Button-1>", lambda e: edit_tp("winner"))
+
+                self.canvas.tag_bind("tp_a", "<Button-3>", lambda e: self.promote_third_place("a"))
+                self.canvas.tag_bind("tp_b", "<Button-3>", lambda e: self.promote_third_place("b"))         
+
         # --- TIMER OVERLAY ---
         try:
             if self.enable_timer:
+
                 self.timer_label.update_idletasks()
                 timer_w = self.timer_label.winfo_width()
                 timer_h = self.timer_label.winfo_height()
-                right_margin = 30
+
                 if table_drawn:
-                    # under table
-                    tx = min(
-                        table_right_x - timer_w / 2 - 50,
-                        width - timer_w / 2 - right_margin
-                    )
-                    ty = table_bottom_y + timer_h / 2 + 40
+                    left = win_x2 + 20
+                    right = table_x1 - 20
+                    tx = (left + right) / 2 - 240  # LEFT
                 else:
-                    # after winner
-                    tx = min(
-                        win_x2 + 60 + timer_w / 2,
-                        width - timer_w / 2 - right_margin
-                    )
-                    ty = win_y2 - timer_h / 2
+                    tx = win_x2 + 120
+
+                ty = margin_y + 120                # DOWN
 
                 self.timer_window = self.canvas.create_window(
                     tx,
@@ -2281,6 +2571,7 @@ class PlayoffApp:
                 )
 
                 self.canvas.itemconfigure(self.timer_window, state='normal')
+
             else:
                 if self.timer_window:
                     self.canvas.itemconfigure(self.timer_window, state='hidden')
@@ -2398,6 +2689,7 @@ class PlayoffApp:
         rects = []
         lines = []
         titles = []
+        semi_losers_centers = []        
 
         # We will save the ONLY point of the final
         final_center_x = None
@@ -2474,6 +2766,28 @@ class PlayoffApp:
                     final_center_x = a_x2
                     final_center_y = (a_y1 + b_y2) / 2
 
+                if r_idx == last_round - 2:
+                    final_match = rounds[last_round - 1][0]
+
+                    if m_idx == 0:
+                        finalist = final_match.a.text.strip()
+                    else:
+                        finalist = final_match.b.text.strip()
+
+                    # A slot
+                    if match.a.text.strip() and match.a.text.strip() != finalist:
+                        semi_losers_centers.append((
+                            a_x2,
+                            (a_y1 + a_y2) / 2
+                        ))
+
+                    # B slot
+                    if match.b.text.strip() and match.b.text.strip() != finalist:
+                        semi_losers_centers.append((
+                            b_x2,
+                            (b_y1 + b_y2) / 2
+                        ))
+
         # --- Drawing of the winner ---
         winner_match = rounds[last_round][0]
         winner_text = (winner_match.a.text.strip()
@@ -2501,6 +2815,72 @@ class PlayoffApp:
             lines.append((final_center_x, final_center_y,
                           win_x1, (win_y1 + win_y2) / 2,
                           self.line_width, LINE_COLOR))
+
+        # 3. place winner
+        if self.third_place_enabled:
+
+            semi_col_index = final_real_round
+            base_x = col_x_positions[semi_col_index]
+
+            third_offset_y = 100
+            base_y = win_y2 + third_offset_y
+
+            box_w = col_widths[final_real_round]
+            box_h_small = box_h
+            gap = 6
+
+            a_y1 = base_y
+            b_y1 = a_y1 + box_h_small + gap
+
+            rects.append((base_x, a_y1, base_x + box_w, a_y1 + box_h_small,
+                          self.line_width, BOX_FILL, BOX_OUTLINE,
+                          self.third_place["a"], cell_font_size, False))
+
+            rects.append((base_x, b_y1, base_x + box_w, b_y1 + box_h_small,
+                          self.line_width, BOX_FILL, BOX_OUTLINE,
+                          self.third_place["b"], cell_font_size, False))
+
+            winner_tp = self.third_place["winner"]
+            text_width_tp = cell_font.measure(winner_tp) if winner_tp else 0
+
+            winner_w = max(text_width_tp + 60, col_widths[last_round] + 40)
+            winner_h = box_h * 2
+
+            win3_x = win_x1
+            win3_y = a_y1
+
+            rects.append((win3_x, win3_y, win3_x + winner_w, win3_y + winner_h,
+                          self.line_width, BOX_FILL, BOX_OUTLINE,
+                          winner_tp, cell_font_size * 2, True))
+
+            lines.append((
+                base_x + box_w,
+                a_y1 + box_h_small,
+                win3_x,
+                win3_y + winner_h / 2,
+                self.line_width,
+                THIRD_PLACE_LINE_COLOR
+            ))
+
+            if len(semi_losers_centers) >= 2:
+                p1 = semi_losers_centers[0]
+                p2 = semi_losers_centers[1]
+
+                lines.append((
+                    p1[0], p1[1],
+                    base_x,
+                    a_y1 + box_h_small / 2,
+                    self.line_width,
+                    THIRD_PLACE_LINE_COLOR
+                ))
+
+                lines.append((
+                    p2[0], p2[1],
+                    base_x,
+                    b_y1 + box_h_small / 2,
+                    self.line_width,
+                    THIRD_PLACE_LINE_COLOR
+                ))            
 
         # --- Bounding box calculation ---
         minx, miny = float('inf'), float('inf')
@@ -2702,40 +3082,32 @@ if __name__ == '__main__':
 
     app = PlayoffApp(root)
 
-    # --- Nastavení výchozí velikosti okna ---
+    # --- APP Windows ---
     win_w = 1920
     win_h = 1080
 
-    # Nastavíme velikost obsahu okna
     root.geometry(f"{win_w}x{win_h}")
 
-    # Necháme okno fyzicky vytvořit
     root.update_idletasks()
 
-    # Zjistíme skutečný frame okna
-    # left, top, right, bottom border sizes
     try:
-        geom = root.wm_geometry()  # např. "1920x1080+10+10"
-        # zkusíme zjistit frame okna
+        geom = root.wm_geometry()  # ex. "1920x1080+10+10"
         f = root.wm_frame()  # (left, top, right, bottom)
         frame_left, frame_top, frame_right, frame_bottom = f
     except:
-        # fallback, pokud wm_frame není dostupné (ale ve Windows je)
+        # fallback, if wm_frame not available
         frame_left = frame_top = frame_right = frame_bottom = 8
 
-    # Skutečná VNEJŠÍ velikost okna
     outer_w = win_w + frame_left + frame_right
     outer_h = win_h + frame_top + frame_bottom
 
-    # Rozměry obrazovky
+    # screen size
     scr_w = root.winfo_screenwidth()
     scr_h = root.winfo_screenheight()
 
-    # Výpočet pozice pro absolutní centrování
     pos_x = (scr_w - outer_w) // 2
     pos_y = (scr_h - outer_h) // 2
 
-    # Nastavení finální pozice okna
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
 
     root.mainloop()
