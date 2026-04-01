@@ -22,14 +22,17 @@ Semafory se skládají ze základny (jedna s elektronikou a jedna bez) a držák
 
 ## ROBO 2026
 > Ukázka použití ze soutěže ROBO 2026 **Techmania a SOUE Plzeň** 
-[![](https://github.com/pihrt-com/playoff/blob/main/Example/fin1.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/fin1.png)
-[![](https://github.com/pihrt-com/playoff/blob/main/Example/fin2.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/fin2.png)
-[![](https://github.com/pihrt-com/playoff/blob/main/Example/fin3.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/fin3.png)
-[![](https://github.com/pihrt-com/playoff/blob/main/Example/fin4.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/fin4.png)
+[![](https://github.com/pihrt-com/playoff/blob/main/Example/fin1.jpg?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/jpg1.png)
+[![](https://github.com/pihrt-com/playoff/blob/main/Example/fin2.jpg?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/jpg2.png)
+[![](https://github.com/pihrt-com/playoff/blob/main/Example/fin3.jpg?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/jpg3.png)
+[![](https://github.com/pihrt-com/playoff/blob/main/Example/fin4.jpg?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/jpg4.png)
 
 
 ## Kredity
 - Arduino.cc -> deska mega (samozřejmě by to zvládla i deska uno nebo jiná)
 - Python -> pro běh aplikace
 - Tkinter -> jako Python interface (grafika)
-- Martin Pihrt (app, firmware) a David Netušil (hw, 3D)
+- Martin Pihrt (APP, FW) a David Netušil (HW, 3D)
+
+## Printables
+https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
