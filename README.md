@@ -36,3 +36,6 @@ Semafory se skládají ze základny (jedna s elektronikou a jedna bez) a držák
 
 ## Printables
 https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
+
+## PIHRT.COM
+https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
