@@ -1,9 +1,10 @@
 #!/usr/bin/env python
+# playoff.py
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.8"                                         # current version of the application
-APP_date          = "22.03.2026-14:50"                              # current version date  
+APP_current       = "1.0.9"                                         # current version of the application
+APP_date          = "06.05.2026-18:10"                              # current version date  
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -182,7 +183,15 @@ class PlayoffApp:
         self.pre_round_enabled = True
         self.third_place_enabled = True
         self.third_place_title = "3. místo"
-
+        self.lap_timer_enabled = True
+        self.lap_timer_var = tk.BooleanVar(value=self.lap_timer_enabled)
+        self.lap_time_a = 0   # ms
+        self.lap_time_b = 0   # ms
+        self.lap_time_a_var = tk.StringVar(value="A 00:00:000")
+        self.lap_time_b_var = tk.StringVar(value="B 00:00:000")
+        self.lap_running_a = False
+        self.lap_running_b = False
+        self.lap_after_id = None        
         self.font_scale_var = tk.StringVar(value=self.font_scale)
         self.odd_behavior_var = tk.StringVar(value=self.odd_behavior)
         self.line_width_var = tk.IntVar(value=self.line_width)
@@ -381,6 +390,12 @@ class PlayoffApp:
             command=lambda: self.set_timer_start_mode('ok')
         )
 
+        self.settings_menu.add_checkbutton(
+            label='Měřit a zobrazit čas kola',
+            variable=self.lap_timer_var,
+            command=self.on_toggle_lap_timer
+        )
+
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label='USB nastavení', command=self.open_usb_dialog)
 
@@ -404,6 +419,14 @@ class PlayoffApp:
 
         spacer = tk.Label(toolbar, text='')
         spacer.pack(side='left', expand=True)
+
+        # ----- LAP TIMERS (A/B) -----
+        self.lap_label_a = tk.Label(toolbar, textvariable=self.lap_time_a_var, font=("Consolas", 22, "bold"), fg="#FF8C00")
+        self.lap_label_b = tk.Label(toolbar, textvariable=self.lap_time_b_var, font=("Consolas", 22, "bold"), fg="#CC7000")
+
+        # default hidden
+        self.lap_label_a.pack_forget()
+        self.lap_label_b.pack_forget()
 
         # ----- Live time and date -----
         self.datetime_var = tk.StringVar(value="")
@@ -466,8 +489,15 @@ class PlayoffApp:
 
         self.update_datetime()
 
+        self.on_toggle_lap_timer()
+
+        self.check_for_update()
+        
         # automatic USB check every 1.5 s
         self.root.after(1500, self.auto_check_usb)
+        
+        # automatic read USB every 0.1 s
+        self.root.after(100, self.auto_read_usb)
 
         root.bind('<Escape>', lambda e: self.exit_fullscreen())
 
@@ -482,7 +512,11 @@ class PlayoffApp:
                 self.usb_baud = s.get('usb_baud', self.usb_baud)
                 self.usb_timeout = s.get('usb_timeout', self.usb_timeout)
                 if self.usb:
-                    self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
+                    try:
+                        self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
+                        self.update_usb_status(True if self.usb_port else False)
+                    except Exception:
+                        self.update_usb_status(False)
         except Exception:
             pass
 
@@ -677,6 +711,71 @@ class PlayoffApp:
         self.datetime_var.set(now.strftime("%d.%m.%Y  %H:%M:%S"))
         self.root.after(1000, self.update_datetime)
 
+    def start_lap_timer(self):
+        self.lap_running_a = True
+        self.lap_running_b = True
+
+        if self.lap_after_id:
+            try:
+                self.root.after_cancel(self.lap_after_id)
+            except:
+                pass
+
+        import time
+        self.lap_last_time = time.time()
+
+        self.lap_loop()
+
+
+    def lap_loop(self):
+        import time
+
+        if not self.lap_running_a and not self.lap_running_b:
+            return
+
+        now = time.time()
+        delta = now - self.lap_last_time
+        self.lap_last_time = now
+
+        delta_ms = int(delta * 1000)
+
+        if self.lap_running_a:
+            self.lap_time_a += delta_ms
+
+        if self.lap_running_b:
+            self.lap_time_b += delta_ms
+
+        self.lap_time_a_var.set("A " + self.format_lap(self.lap_time_a))
+        self.lap_time_b_var.set("B " + self.format_lap(self.lap_time_b))
+
+        self.lap_after_id = self.root.after(50, self.lap_loop)
+
+
+    def format_lap(self, ms):
+        minutes = ms // 60000
+        seconds = (ms % 60000) // 1000
+        millis = ms % 1000
+        return f"{minutes:02d}:{seconds:02d}:{millis:03d}"
+
+
+    def finish_a(self):
+        if not self.lap_running_a:
+            return
+
+        print("FINISH A")
+        self.lap_running_a = False
+        self.lap_label_a.config(fg="green")
+
+
+    def finish_b(self):
+        if not self.lap_running_b:
+            return
+
+        print("FINISH B")
+        self.lap_running_b = False
+        self.lap_label_b.config(fg="green")
+
+
     # small helper to open the existing settings menu -> we will just show the menubar cascade
     def _open_menu_settings(self):
         # open ask_team_count as a representative settings entry
@@ -692,6 +791,24 @@ class PlayoffApp:
             self.usb_status_canvas.itemconfig(self.usb_status_id, fill=color, outline=color)
         except:
             pass
+
+
+    def auto_read_usb(self):
+        try:
+            if self.usb and self.usb.ser and self.usb.ser.in_waiting:
+                line = self.usb.ser.readline().decode(errors='ignore').strip()
+
+                if line == "finish_a":
+                    self.finish_a()
+
+                elif line == "finish_b":
+                    self.finish_b()
+
+        except Exception as e:
+            print("USB read error:", e)
+
+        self.root.after(50, self.auto_read_usb)
+
 
     def auto_check_usb(self):
         """Automatic USB port check."""
@@ -713,6 +830,8 @@ class PlayoffApp:
 
     # --- USB / toolbar actions ---
     def on_start(self):
+        self.lap_label_a.config(fg="#FF8C00")
+        self.lap_label_b.config(fg="#CC7000")
         # send 'start' via usb.manager asynchronously and update status label
         print("DEBUG USB PLAYOFF:",
               "usb_port=", self.usb_port,
@@ -742,6 +861,17 @@ class PlayoffApp:
                     self.status_label.config(fg='green')
                     if self.enable_timer and self.timer_start_mode == 'ok':
                         self.start_countdown()
+
+                        # --- RESET LAP TIMER ---
+                        self.lap_time_a = 0
+                        self.lap_time_b = 0
+                        self.lap_time_a_var.set("A 00:00:000")
+                        self.lap_time_b_var.set("B 00:00:000")
+
+                        # --- START LAP TIMER ---
+                        if self.lap_timer_enabled:
+                            self.start_lap_timer()
+
                     self.update_usb_status(ok)
                 else:
                     if reason == 'timeout':
@@ -772,6 +902,17 @@ class PlayoffApp:
 
                 if self.timer_start_mode == 'start':
                     self.start_countdown()
+
+                    # --- RESET LAP TIMER ---
+                    self.lap_time_a = 0
+                    self.lap_time_b = 0
+                    self.lap_time_a_var.set("A 00:00:000")
+                    self.lap_time_b_var.set("B 00:00:000")
+
+                    # --- START LAP TIMER ---
+                    if self.lap_timer_enabled:
+                        self.start_lap_timer()
+
                 else:
                     # In "ok" mode, only display the time, but DO NOT START the countdown.
                     self.timer_running = False
@@ -800,7 +941,7 @@ class PlayoffApp:
             self.start_btn.config(state='normal')
             if self.timer_start_mode == 'ok':
                 self.timer_running = False
-            self.app.update_usb_status(False)
+            self.update_usb_status(False)
 
     def open_team_naming_dialog(self):
         dlg = tk.Toplevel(self.root)
@@ -1184,6 +1325,7 @@ class PlayoffApp:
                 [{'a': m.a.text, 'b': m.b.text}
                  for m in self.bracket.pre_rounds[0]]
             ] if self.pre_round_enabled and self.bracket.pre_rounds else [],
+            'lap_timer_enabled': self.lap_timer_enabled,
         }
         for r in self.bracket.rounds:
             rd = []
@@ -1228,6 +1370,12 @@ class PlayoffApp:
         self.third_place_var.set(self.third_place_enabled)
         self.third_place = data.get('third_place', {"a": "", "b": "", "winner": ""})
         self.third_place_title = data.get('third_place_title', "3. místo")
+        self.lap_timer_enabled = data.get('lap_timer_enabled', False)
+        self.lap_timer_var.set(self.lap_timer_enabled)
+        # apply UI lap timer state
+        if self.lap_timer_enabled:
+            self.lap_label_a.pack(side='left', padx=(10, 5))
+            self.lap_label_b.pack(side='left', padx=(0, 20))                
         self.generate_bracket_with_empty(n)
 
         # --- LOAD PRE ROUND ---
@@ -1302,8 +1450,9 @@ class PlayoffApp:
         if self.usb:
             try:
                 self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
+                self.update_usb_status(True if self.usb_port else False)
             except Exception:
-                pass
+                self.update_usb_status(False)
 
         self.root.update_idletasks()
         self.root.after(50, self.redraw)
@@ -1330,6 +1479,37 @@ class PlayoffApp:
             pass
         try:
             self.update_timer_visibility()
+        except Exception:
+            pass
+
+    def on_toggle_lap_timer(self):
+        self.lap_timer_enabled = self.lap_timer_var.get()
+
+        # UI toggle
+        if self.lap_timer_enabled:
+            self.lap_label_a.pack(side='left', padx=(10, 5))
+            self.lap_label_b.pack(side='left', padx=(0, 20))
+        else:
+            self.lap_label_a.pack_forget()
+            self.lap_label_b.pack_forget()
+
+        # save to file
+        try:
+            spath = os.path.join(os.path.expanduser('~'), '.playoff_settings.json')
+            data = {}
+
+            if os.path.exists(spath):
+                try:
+                    with open(spath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except Exception:
+                    data = {}
+
+            data['lap_timer_enabled'] = self.lap_timer_enabled
+
+            with open(spath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
         except Exception:
             pass
 
@@ -1444,6 +1624,13 @@ class PlayoffApp:
                 return
             if self.current_seconds <= 0:
                 self.timer_running = False
+                self.lap_running_a = False
+                self.lap_running_b = False
+                if self.lap_after_id:
+                    try:
+                        self.root.after_cancel(self.lap_after_id)
+                    except:
+                        pass
                 self.start_blinking()
                 return
             self.current_seconds -= 1
