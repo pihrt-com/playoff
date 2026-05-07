@@ -1570,7 +1570,6 @@ class PlayoffApp:
             try:
                 self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
                 if self.usb_port:
-                    self.usb.start_reader(self.on_usb_line)
                     self.update_usb_status(True)
                 else:
                     self.update_usb_status(False)   
