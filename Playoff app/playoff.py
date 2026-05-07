@@ -4,7 +4,7 @@
 __author__ = 'Martin Pihrt'
 
 APP_current       = "1.0.9"                                         # current version of the application
-APP_date          = "06.05.2026-18:10"                              # current version date  
+APP_date          = "07.05.2026-08:21"                              # current version date  
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -421,8 +421,29 @@ class PlayoffApp:
         spacer.pack(side='left', expand=True)
 
         # ----- LAP TIMERS (A/B) -----
-        self.lap_label_a = tk.Label(toolbar, textvariable=self.lap_time_a_var, font=("Consolas", 22, "bold"), fg="#FF8C00")
-        self.lap_label_b = tk.Label(toolbar, textvariable=self.lap_time_b_var, font=("Consolas", 22, "bold"), fg="#CC7000")
+        self.lap_label_a = tk.Label(
+            toolbar,
+            textvariable=self.lap_time_a_var,
+            font=("Consolas", 22, "bold"),
+            fg="#FF8C00",
+            bg="black",
+            relief="ridge",
+            bd=3,
+            padx=12,
+            pady=4
+        )
+
+        self.lap_label_b = tk.Label(
+            toolbar,
+            textvariable=self.lap_time_b_var,
+            font=("Consolas", 22, "bold"),
+            fg="#FF8C00",
+            bg="black",
+            relief="ridge",
+            bd=3,
+            padx=12,
+            pady=4
+        )
 
         # default hidden
         self.lap_label_a.pack_forget()
@@ -488,37 +509,57 @@ class PlayoffApp:
             n = 16
 
         self.update_datetime()
-
         self.on_toggle_lap_timer()
-
         self.check_for_update()
         
         # automatic USB check every 1.5 s
         self.root.after(1500, self.auto_check_usb)
-        
-        # automatic read USB every 0.1 s
-        self.root.after(100, self.auto_read_usb)
 
         root.bind('<Escape>', lambda e: self.exit_fullscreen())
 
         # try load usb settings from previous setup file if available
-        # (this will be overwritten when loading a specific setup via load_setup)
         try:
-            settings_path = os.path.join(os.path.expanduser('~'), '.playoff_settings.json')
+            settings_path = os.path.join(
+                os.path.expanduser('~'),
+                '.playoff_settings.json'
+            )
+
             if os.path.exists(settings_path):
                 with open(settings_path, 'r', encoding='utf-8') as f:
                     s = json.load(f)
+
                 self.usb_port = s.get('usb_port', self.usb_port)
                 self.usb_baud = s.get('usb_baud', self.usb_baud)
                 self.usb_timeout = s.get('usb_timeout', self.usb_timeout)
-                if self.usb:
+
+                if self.usb and self.usb_port:
                     try:
-                        self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
-                        self.update_usb_status(True if self.usb_port else False)
-                    except Exception:
+                        self.usb.validate_and_set(
+                            self.usb_port,
+                            self.usb_baud,
+                            self.usb_timeout
+                        )
+
+                        # CONNECT
+                        self.usb.connect()
+
+                        # START RX THREAD
+                        self.usb.start_reader(self.on_usb_line)
+
+                        self.update_usb_status(True)
+
+                        print(
+                            "USB AUTO CONNECT:",
+                            self.usb_port,
+                            self.usb_baud
+                        )
+
+                    except Exception as e:
+                        print("USB AUTO CONNECT ERROR:", e)
                         self.update_usb_status(False)
-        except Exception:
-            pass
+
+        except Exception as e:
+            print("USB SETTINGS LOAD ERROR:", e)
 
     def update_third_place_from_semifinal(self):
         if not self.bracket or not self.third_place_enabled:
@@ -792,24 +833,6 @@ class PlayoffApp:
         except:
             pass
 
-
-    def auto_read_usb(self):
-        try:
-            if self.usb and self.usb.ser and self.usb.ser.in_waiting:
-                line = self.usb.ser.readline().decode(errors='ignore').strip()
-
-                if line == "finish_a":
-                    self.finish_a()
-
-                elif line == "finish_b":
-                    self.finish_b()
-
-        except Exception as e:
-            print("USB read error:", e)
-
-        self.root.after(50, self.auto_read_usb)
-
-
     def auto_check_usb(self):
         """Automatic USB port check."""
         try:
@@ -828,119 +851,214 @@ class PlayoffApp:
         # refresh for 1500 ms
         self.root.after(1500, self.auto_check_usb)
 
-    # --- USB / toolbar actions ---
-    def on_start(self):
-        self.lap_label_a.config(fg="#FF8C00")
-        self.lap_label_b.config(fg="#CC7000")
-        # send 'start' via usb.manager asynchronously and update status label
-        print("DEBUG USB PLAYOFF:",
-              "usb_port=", self.usb_port,
-              "usb_baud=", self.usb_baud,
-              "usb_timeout=", self.usb_timeout,
-              "usb obj existuje:", bool(self.usb),
-              "timer_start_mode=", self.timer_start_mode)
+    def on_usb_line(self, line):
 
-        # At each START, first stop any running countdown.
-        try:
-            self.timer_running = False
-            if getattr(self, 'countdown_after_id', None):
-                self.root.after_cancel(self.countdown_after_id)
-                self.countdown_after_id = None
-        except Exception:
-            pass
+        line = line.strip().lower()
 
-        self.start_btn.config(state='disabled')
-        self.status_var.set('Odesílám...')
-        self.status_label.config(fg='black')
+        print("USB RX:", repr(line))
 
-        def on_result(ok, reason):
-            # this callback runs in worker thread; marshal to mainloop
-            def cb():
-                if ok:
-                    self.status_var.set('Přijato')
-                    self.status_label.config(fg='green')
-                    if self.enable_timer and self.timer_start_mode == 'ok':
-                        self.start_countdown()
-
-                        # --- RESET LAP TIMER ---
-                        self.lap_time_a = 0
-                        self.lap_time_b = 0
-                        self.lap_time_a_var.set("A 00:00:000")
-                        self.lap_time_b_var.set("B 00:00:000")
-
-                        # --- START LAP TIMER ---
-                        if self.lap_timer_enabled:
-                            self.start_lap_timer()
-
-                    self.update_usb_status(ok)
-                else:
-                    if reason == 'timeout':
-                        self.status_var.set('Chyba spojení (timeout)')
-                    elif isinstance(reason, str) and reason.startswith('open_error'):
-                        self.status_var.set('Chyba spojení (otevření portu)')
-                    elif reason == 'pyserial_missing':
-                        self.status_var.set('pyserial není nainstalován')
-                    else:
-                        self.status_var.set('Chyba spojení (neznámá chyba)')
-
-                    self.status_label.config(fg='red')
-
-                    if self.timer_start_mode == 'ok':
-                        self.timer_running = False
-
-                self.start_btn.config(state='normal')
-            try:
-                self.root.after(0, cb)
-            except Exception:
-                pass
-
-        # The time is ALWAYS set, but the countdown only runs in "start" mode.
-        try:
-            if self.enable_timer:
-                self.current_seconds = self.time_to_seconds(self.timer_value)
-                self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
-
-                if self.timer_start_mode == 'start':
+        def gui():
+            if line == "ok":
+                self.status_var.set("Přijato OK")
+                self.status_label.config(fg="green")
+                if self.enable_timer and self.timer_start_mode == "ok":
                     self.start_countdown()
-
-                    # --- RESET LAP TIMER ---
                     self.lap_time_a = 0
                     self.lap_time_b = 0
                     self.lap_time_a_var.set("A 00:00:000")
                     self.lap_time_b_var.set("B 00:00:000")
+                    if self.lap_timer_enabled:
+                        self.start_lap_timer()
 
-                    # --- START LAP TIMER ---
+            elif line == "finish_a":
+                self.finish_a()
+
+            elif line == "finish_b":
+                self.finish_b()
+
+            elif line == "race_finished":
+                self.status_var.set("Závod dokončen")
+                self.status_label.config(fg="blue")
+                self.timer_running = False
+                self.lap_running_a = False
+                self.lap_running_b = False
+
+        self.root.after(0, gui)        
+
+    def on_start(self):
+
+        self.lap_label_a.config(fg="#FF8C00")
+        self.lap_label_b.config(fg="#FF8C00")
+
+        print(
+            "DEBUG USB PLAYOFF:",
+            "usb_port=", self.usb_port,
+            "usb_baud=", self.usb_baud,
+            "usb_timeout=", self.usb_timeout,
+            "usb obj existuje:", bool(self.usb),
+            "timer_start_mode=", self.timer_start_mode
+        )
+
+        # STOP old countdown
+        try:
+
+            self.timer_running = False
+
+            if getattr(self, 'countdown_after_id', None):
+
+                self.root.after_cancel(self.countdown_after_id)
+                self.countdown_after_id = None
+
+        except Exception:
+            pass
+
+        # STOP old lap timer
+        try:
+
+            self.lap_running_a = False
+            self.lap_running_b = False
+
+            if self.lap_after_id:
+
+                self.root.after_cancel(self.lap_after_id)
+                self.lap_after_id = None
+
+        except Exception:
+            pass
+
+        self.start_btn.config(state='disabled')
+
+        self.status_var.set('Odesílám...')
+        self.status_label.config(fg='black')
+
+        # ---------------------------------------------------------
+        # CALLBACK FROM USB MODULE
+        # ---------------------------------------------------------
+        def on_result(ok, reason):
+
+            def cb():
+
+                if ok:
+
+                    # START packet was successfully sent
+                    # WAITING FOR "ok" FROM ARDUINO
+
+                    self.status_var.set('START odeslán')
+                    self.status_label.config(fg='orange')
+
+                    self.update_usb_status(True)
+
+                else:
+
+                    if reason == 'timeout':
+
+                        self.status_var.set('Chyba spojení (timeout)')
+
+                    elif isinstance(reason, str) and reason.startswith('open_error'):
+
+                        self.status_var.set('Chyba spojení (otevření portu)')
+
+                    elif reason == 'pyserial_missing':
+
+                        self.status_var.set('pyserial není nainstalován')
+
+                    else:
+
+                        self.status_var.set('Chyba spojení (neznámá chyba)')
+
+                    self.status_label.config(fg='red')
+
+                    self.timer_running = False
+
+                    self.update_usb_status(False)
+
+                self.start_btn.config(state='normal')
+
+            try:
+                self.root.after(0, cb)
+
+            except Exception:
+                pass
+
+        # ---------------------------------------------------------
+        # PREPARE TIMER DISPLAY
+        # ---------------------------------------------------------
+        try:
+
+            if self.enable_timer:
+
+                self.current_seconds = self.time_to_seconds(self.timer_value)
+
+                self.timer_label.config(
+                    text=self.seconds_to_time(self.current_seconds)
+                )
+
+                # START MODE = start
+                if self.timer_start_mode == 'start':
+
+                    self.start_countdown()
+
+                    # reset lap timer
+                    self.lap_time_a = 0
+                    self.lap_time_b = 0
+
+                    self.lap_time_a_var.set("A 00:00:000")
+                    self.lap_time_b_var.set("B 00:00:000")
+
                     if self.lap_timer_enabled:
                         self.start_lap_timer()
 
                 else:
-                    # In "ok" mode, only display the time, but DO NOT START the countdown.
-                    self.timer_running = False
-        except Exception:
-            pass
 
-        # kick off send
-        try:
-            usb_available = bool(self.usb and self.usb_port)
-            if usb_available:
-                self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
-                self.usb.send_start_async(on_result)
-                self.update_usb_status(usb_available)
-            else:
-                # USB not available → error
-                self.status_var.set('Chyba spojení')
-                self.status_label.config(fg='red')
-                if self.timer_start_mode == 'ok':
-                    self.timer_running = False
+                    # MODE "ok"
+                    # only prepare display
+                    # countdown starts after RX "ok"
 
-            self.start_btn.config(state='normal')
+                    self.timer_running = False
 
         except Exception as e:
+
+            print("Timer prepare error:", e)
+
+        # ---------------------------------------------------------
+        # SEND START
+        # ---------------------------------------------------------
+        try:
+
+            usb_available = bool(self.usb and self.usb_port)
+
+            if usb_available:
+
+                self.usb.validate_and_set(
+                    self.usb_port,
+                    self.usb_baud,
+                    self.usb_timeout
+                )
+
+                self.usb.send_start_async(on_result)
+
+                self.update_usb_status(True)
+
+            else:
+
+                self.status_var.set('Chyba spojení')
+                self.status_label.config(fg='red')
+
+                self.timer_running = False
+
+                self.update_usb_status(False)
+
+                self.start_btn.config(state='normal')
+
+        except Exception as e:
+
             self.status_var.set(f'Chyba: {e}')
             self.status_label.config(fg='red')
+
+            self.timer_running = False
+
             self.start_btn.config(state='normal')
-            if self.timer_start_mode == 'ok':
-                self.timer_running = False
+
             self.update_usb_status(False)
 
     def open_team_naming_dialog(self):
@@ -1242,6 +1360,7 @@ class PlayoffApp:
             try:
                 if self.usb:
                     self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
+                    self.usb.start_reader(self.on_usb_line)
                     self.update_usb_status(True)
             except Exception as e:
                 messagebox.showwarning("USB", f"Port nastaven, ale spojení selhalo:\n{e}")
@@ -1450,7 +1569,11 @@ class PlayoffApp:
         if self.usb:
             try:
                 self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
-                self.update_usb_status(True if self.usb_port else False)
+                if self.usb_port:
+                    self.usb.start_reader(self.on_usb_line)
+                    self.update_usb_status(True)
+                else:
+                    self.update_usb_status(False)   
             except Exception:
                 self.update_usb_status(False)
 
