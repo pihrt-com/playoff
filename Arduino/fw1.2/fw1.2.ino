@@ -1,17 +1,42 @@
 /*
  Martin Pihrt
- FW: 1.3 07.05.2026
+ FW: 1.2 16.06.2026
  Dva semafory + laserové brány + false-start logic
  Přidaná podpora pro počítadla kol v app
  Odesílání:
    finish_a
    finish_b
 
+komunikace
 PYTHON ---> start ----> ARDUINO
 ARDUINO ---> ok ------------> PYTHON
 ARDUINO ---> finish_a ------> PYTHON
 ARDUINO ---> finish_b ------> PYTHON
 ARDUINO ---> race_finished -> PYTHON   
+
+START
+↓
+běží semafor
+
+1. přerušení během odpočtu
+↓
+FALSE START
+
+OK
+↓
+závod běží
+
+1. přerušení
+↓
+auto vyjelo ze startu
+↓
+ignorovat
+
+2. přerušení
+↓
+auto projelo cílem
+↓
+finish_a
 */
 
 // ============================================================================
@@ -44,8 +69,8 @@ int warnBeepOnMs   = 100;
 int warnBeepOffMs  = 100;
 int warnStepMs     = 120;
 
-bool laserActiveLow = true;
-bool laserActiveHigh = false;
+bool laserActiveLow = false;
+bool laserActiveHigh = true;
 bool useInternalPullup = true;
 
 const int BAUD  = 9600;
@@ -56,23 +81,22 @@ bool DEBUG = false;
 // GLOBALS
 // ============================================================================
 unsigned long now;
-
 bool okSent = false;
-
-// závod aktivní
+// race running flag
 bool raceRunning = false;
-
 // finish flags
 bool finishASent = false;
 bool finishBSent = false;
-
-// debounce finish bran
+// debounce finish gate
 unsigned long lastFinishA = 0;
 unsigned long lastFinishB = 0;
+const unsigned long finishDebounce = 3500;
+// counter for beam interrupt
+byte beamCountA = 0;
+byte beamCountB = 0;
+bool falseStartA = false;
+bool falseStartB = false;
 
-const unsigned long finishDebounce = 150;
-
-// forward
 void rs485Send(String msg);
 
 // ============================================================================
@@ -80,10 +104,8 @@ void rs485Send(String msg);
 // ============================================================================
 bool isBeamBrokenRaw(int pin) {
   int v = digitalRead(pin);
-
   if (laserActiveLow)  return (v == LOW);
   if (laserActiveHigh) return (v == HIGH);
-
   return false;
 }
 
@@ -95,21 +117,28 @@ void handleFinishA() {
   if (!raceRunning) return;
   if (finishASent) return;
 
-  if (isBeamBrokenRaw(beamA)) {
+  if (!isBeamBrokenRaw(beamA)) return;
 
-    if (now - lastFinishA < finishDebounce) return;
+  if (now - lastFinishA < finishDebounce) return;
 
-    lastFinishA = now;
+  lastFinishA = now;
 
-    finishASent = true;
+  beamCountA++;
 
-    Serial.println(F("finish_a"));
-    rs485Send("finish_a\n");
-
-    if (DEBUG) {
-      Serial.println(F("[RACE] FINISH A"));
-    }
+  if (DEBUG) {
+    Serial.print(F("[A] beam count = "));
+    Serial.println(beamCountA);
   }
+
+  byte requiredCount = falseStartA ? 3 : 2;
+  if (beamCountA < requiredCount)
+    return;
+
+  finishASent = true;
+
+  Serial.println(F("finish_a"));
+  rs485Send("finish_a\n");
+  falseStartA = false;
 }
 
 void handleFinishB() {
@@ -117,36 +146,38 @@ void handleFinishB() {
   if (!raceRunning) return;
   if (finishBSent) return;
 
-  if (isBeamBrokenRaw(beamB)) {
+  if (!isBeamBrokenRaw(beamB)) return;
 
-    if (now - lastFinishB < finishDebounce) return;
+  if (now - lastFinishB < finishDebounce) return;
 
-    lastFinishB = now;
+  lastFinishB = now;
 
-    finishBSent = true;
+  beamCountB++;
 
-    Serial.println(F("finish_b"));
-    rs485Send("finish_b\n");
-
-    if (DEBUG) {
-      Serial.println(F("[RACE] FINISH B"));
-    }
+  if (DEBUG) {
+    Serial.print(F("[B] beam count = "));
+    Serial.println(beamCountB);
   }
+
+  byte requiredCount = falseStartB ? 3 : 2;
+  if (beamCountB < requiredCount)
+    return;
+
+  finishBSent = true;
+
+  Serial.println(F("finish_b"));
+  rs485Send("finish_b\n");
+  falseStartB = false;
 }
 
-void handleRaceFinished() {
-
+void handleRaceFinished() { 
   if (!raceRunning) return;
-
   if (finishASent && finishBSent) {
-
     raceRunning = false;
-
     Serial.println(F("race_finished"));
     rs485Send("race_finished\n");
-
     if (DEBUG) {
-      Serial.println(F("[RACE] FINISHED"));
+      Serial.println(F("[RACE] FINISHED")); 
     }
   }
 }
@@ -155,12 +186,10 @@ void handleRaceFinished() {
 // TRAFFIC LIGHT CLASS
 // ============================================================================
 struct TrafficLight {
-
   const int* leds;
   int piezo;
   int beamPin;
   int id;
-
   enum State {
     IDLE,
     FADE_IN,
@@ -172,55 +201,40 @@ struct TrafficLight {
 
   unsigned long stateTimer;
   unsigned long fadeTimer;
-
   int fadeLevel;
   int currentLED;
-
   bool fadeBeepStarted;
-
   bool beepActive;
   unsigned long beepEnd;
-
   bool warnActive;
   unsigned long warnEnd;
   unsigned long warnTick;
   int warnPhase;
-
   bool completedLong;
-
   bool finishedForOk;
 
   void init(const int* l, int p, int b, int _id) {
-
     leds = l;
     piezo = p;
     beamPin = b;
     id = _id;
-
     state = IDLE;
-
     stateTimer = 0;
     fadeTimer = 0;
-
     fadeLevel = 0;
     currentLED = 0;
-
     fadeBeepStarted = false;
-
     beepActive = false;
     beepEnd = 0;
-
     warnActive = false;
     warnEnd = 0;
     warnTick = 0;
     warnPhase = 0;
-
     completedLong = false;
     finishedForOk = false;
   }
 
   void resetOutputs() {
-
     for (int i = 0; i < lightCount; i++) {
       analogWrite(leds[i], 0);
     }
@@ -229,22 +243,14 @@ struct TrafficLight {
   }
 
   void start() {
-
     if (state != IDLE) return;
-
     state = FADE_IN;
-
     currentLED = 0;
-
     fadeLevel = 0;
-
     fadeTimer = now;
-
     fadeBeepStarted = false;
-
     completedLong = false;
     finishedForOk = false;
-
     if (DEBUG) {
       Serial.print(F("[TL] start semafor "));
       Serial.println(id);
@@ -252,61 +258,42 @@ struct TrafficLight {
   }
 
   void triggerFalseStart() {
-
     finishedForOk = true;
-
     state = FALSE_START;
-
     warnActive = true;
-
     warnEnd = now + (unsigned long)warnDurationMs;
-
     warnTick = now;
-
     warnPhase = 0;
-
     beepActive = false;
-
     digitalWrite(piezo, LOW);
-
     for (int i = 0; i < lightCount; i++) {
       analogWrite(leds[i], 0);
     }
-
     if (DEBUG) {
       Serial.print(F("[TL] FALSE START semafor "));
       Serial.println(id);
     }
+    if (id == 0) falseStartA = true;
+    if (id == 1) falseStartB = true;
   }
 
   void startBeep(int duration) {
-
     digitalWrite(piezo, HIGH);
-
     beepActive = true;
-
     beepEnd = now + duration;
   }
 
   void stopBeep() {
-
     digitalWrite(piezo, LOW);
-
     beepActive = false;
   }
 
   void fadeInStep() {
-
     int interval = max(1, fadeInTime / 255);
-
     if (now - fadeTimer >= interval) {
-
       fadeTimer = now;
-
       analogWrite(leds[currentLED], fadeLevel);
-
       fadeLevel++;
-
       if (fadeLevel > 255) {
         fadeLevel = 255;
       }
@@ -318,19 +305,13 @@ struct TrafficLight {
   }
 
   void fadeOutAllStep() {
-
     int interval = max(1, fadeOutTime / 255);
-
     if (now - fadeTimer >= interval) {
-
       fadeTimer = now;
-
       fadeLevel--;
-
       if (fadeLevel < 0) {
         fadeLevel = 0;
       }
-
       for (int i = 0; i < lightCount; i++) {
         analogWrite(leds[i], fadeLevel);
       }
@@ -342,134 +323,85 @@ struct TrafficLight {
   }
 
   void update() {
-
     if (beepActive && now >= beepEnd) {
       stopBeep();
     }
-
     if (state != IDLE && state != FALSE_START) {
-
       if (!completedLong) {
-
         if (isBeamBrokenRaw(beamPin)) {
-
           triggerFalseStart();
-
           return;
         }
       }
     }
 
     switch (state) {
-
       case IDLE:
         break;
 
       case FADE_IN:
-
         if (!fadeBeepStarted) {
-
           if (currentLED == lightCount - 1) {
-
             startBeep(beepLong);
-
             completedLong = true;
-
             finishedForOk = true;
-
           } else {
-
             startBeep(beepShort);
           }
-
           fadeBeepStarted = true;
         }
-
         fadeInStep();
-
         if (fadeInDone()) {
-
           state = STEP_WAIT;
-
           stateTimer = now;
-
           fadeLevel = 0;
         }
-
         break;
 
       case STEP_WAIT:
-
         if (now - stateTimer >= (unsigned long)stepTime) {
-
           currentLED++;
-
           if (currentLED >= lightCount) {
-
             state = HOLD;
-
             stateTimer = now;
-
           } else {
-
             state = FADE_IN;
-
             fadeTimer = now;
-
             fadeBeepStarted = false;
           }
         }
-
         break;
 
       case HOLD:
-
         if (now - stateTimer >= (unsigned long)holdTime) {
-
           state = FADE_OUT;
-
           fadeLevel = 255;
-
           fadeTimer = now;
         }
-
         break;
 
       case FADE_OUT:
-
         fadeOutAllStep();
-
         if (fadeOutDone()) {
-
           state = IDLE;
-
           resetOutputs();
         }
-
         break;
 
       case FALSE_START:
-
         if (warnActive) {
-
           unsigned long t = (now - (warnEnd - warnDurationMs));
-
           unsigned long cycle = warnBeepOnMs + warnBeepOffMs;
-
           if ((t % cycle) < (unsigned long)warnBeepOnMs) {
             digitalWrite(piezo, HIGH);
           } else {
             digitalWrite(piezo, LOW);
           }
-
           unsigned long elapsedFromStart =
             (warnDurationMs - (warnEnd - now));
-
           int step =
             (elapsedFromStart / warnStepMs) % (lightCount + 1);
-
           for (int i = 0; i < lightCount; i++) {
-
             if (step < lightCount) {
               analogWrite(leds[i], (i == step) ? 255 : 0);
             } else {
@@ -478,29 +410,20 @@ struct TrafficLight {
           }
 
           if (now >= warnEnd) {
-
             warnActive = false;
-
             digitalWrite(piezo, LOW);
-
             for (int i = 0; i < lightCount; i++) {
               analogWrite(leds[i], 0);
             }
-
             state = IDLE;
           }
-
         } else {
-
           digitalWrite(piezo, LOW);
-
           for (int i = 0; i < lightCount; i++) {
             analogWrite(leds[i], 0);
           }
-
           state = IDLE;
         }
-
         break;
     }
   }
@@ -516,17 +439,11 @@ TrafficLight tlB;
 // RS485
 // ============================================================================
 void rs485Send(String msg) {
-
   digitalWrite(RS485_EN, HIGH);
-
   delayMicroseconds(40);
-
   Serial1.print(msg);
-
   Serial1.flush();
-
   delayMicroseconds(40);
-
   digitalWrite(RS485_EN, LOW);
 }
 
@@ -537,65 +454,41 @@ String rx0 = "";
 String rx1 = "";
 
 void startRace() {
-
   tlA.start();
   tlB.start();
-
   okSent = false;
-
   raceRunning = false;
-
   finishASent = false;
   finishBSent = false;
-
   lastFinishA = 0;
   lastFinishB = 0;
-
   if (DEBUG) {
     Serial.println(F("[RACE] START"));
   }
 }
 
 void handleUART() {
-
   while (Serial.available()) {
-
     char c = Serial.read();
-
     if (c == '\n') {
-
       rx0.trim();
-
       if (rx0.equalsIgnoreCase("start")) {
-
         startRace();
       }
-
       rx0 = "";
-
     } else {
-
       rx0 += c;
     }
   }
-
   while (Serial1.available()) {
-
     char c = Serial1.read();
-
     if (c == '\n') {
-
       rx1.trim();
-
       if (rx1.equalsIgnoreCase("start")) {
-
         startRace();
       }
-
       rx1 = "";
-
     } else {
-
       rx1 += c;
     }
   }
@@ -605,17 +498,12 @@ void handleUART() {
 // BUTTON
 // ============================================================================
 unsigned long lastButton = 0;
-
 const int debounce = 50;
 
 void handleSwitch() {
-
   if (digitalRead(button) == LOW) {
-
     if (now - lastButton > debounce) {
-
       startRace();
-
       lastButton = now;
     }
   }
@@ -625,40 +513,26 @@ void handleSwitch() {
 // SETUP
 // ============================================================================
 void setup() {
-
   Serial.begin(BAUD);
-
   Serial1.begin(BAUD);
-
   pinMode(RS485_EN, OUTPUT);
-
   digitalWrite(RS485_EN, LOW);
-
   pinMode(piezoA, OUTPUT);
   pinMode(piezoB, OUTPUT);
-
   pinMode(button, INPUT_PULLUP);
-
   if (useInternalPullup) {
-
     pinMode(beamA, INPUT_PULLUP);
     pinMode(beamB, INPUT_PULLUP);
-
   } else {
-
     pinMode(beamA, INPUT);
     pinMode(beamB, INPUT);
   }
-
   for (int i = 0; i < lightCount; i++) {
-
     analogWrite(lightsA[i], 0);
     analogWrite(lightsB[i], 0);
   }
-
   tlA.init(lightsA, piezoA, beamA, 0);
   tlB.init(lightsB, piezoB, beamB, 1);
-
   if (DEBUG) {
     Serial.println(F("[BOOT] READY"));
   }
@@ -668,36 +542,24 @@ void setup() {
 // LOOP
 // ============================================================================
 void loop() {
-
   now = millis();
-
   handleUART();
-
   tlA.update();
   tlB.update();
-
   handleSwitch();
-
   // OK po zelené
   if (!okSent && tlA.finishedForOk && tlB.finishedForOk) {
-
     okSent = true;
-
     raceRunning = true;
-
     rs485Send("ok\n");
-
     Serial.println(F("ok"));
-
     if (DEBUG) {
       Serial.println(F("[GLOBAL] OK"));
     }
   }
-
   // finish detekce
   handleFinishA();
   handleFinishB();
-
   // konec závodu
   handleRaceFinished();
 }
