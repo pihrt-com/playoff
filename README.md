@@ -17,6 +17,7 @@ k desce Arduino MEGA je připojen samovybuzující piezoelement na pin číslo 1
 ### FW 1.0 - výchozí verze (jeden semafor)
 ### FW 1.1 - dva semafory a dvě laserové brány
 ### FW 1.2 - odesílání průjezdu bránou (app nyní měří čas kola obou jezdců)
+### FW 1.3 - oprava chyb z FW 1.2, přidaný pásek LED RGB s WS28B12 (2x8LED na semafor)
 
 ## 3D
 Semafory se skládají ze základny (jedna s elektronikou a jedna bez) a držáků světel (3x průhledný prstenec).
