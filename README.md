@@ -129,7 +129,7 @@ Vyhodnocení cíle:
 - opravy false start logiky
 
 ### FW 1.4
-- dva RGB pásky (16 LED + 16 LED)
+- dva RGB pásky (16 LED + 16 LED) https://www.laskakit.cz/8x-inteligentni-rgb-led-neopixel-pasek--ws2812b--5050--5v/
 - piezo SUM
 - ochrana proti držení START tlačítka
 - rozšířená false start logika
