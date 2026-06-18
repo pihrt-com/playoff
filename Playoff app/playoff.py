@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.9"                                         # current version of the application
-APP_date          = "07.05.2026-08:21"                              # current version date  
+APP_current       = "1.0.10"                                         # current version of the application
+APP_date          = "18.06.2026-08:15"                               # current version date  
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -13,6 +13,7 @@ from tkinter import font as tkfont
 
 import math, json, os, sys
 import urllib.request
+import time
 
 try:
     from reportlab.pdfgen import canvas as rl_canvas
@@ -79,6 +80,9 @@ WINNER_TEXT_COLOR = "#000000"
 DEFAULT_USB_PORT = ""
 DEFAULT_USB_BAUD = 9600
 DEFAULT_USB_TIMEOUT = 10.0
+
+DEFAULT_USB_DISPLAY_A_BAUD = 115200
+DEFAULT_USB_DISPLAY_B_BAUD = 115200
 
 # --- Data classes ---
 class Slot:
@@ -215,6 +219,13 @@ class PlayoffApp:
         self.usb_baud = DEFAULT_USB_BAUD
         self.usb_timeout = DEFAULT_USB_TIMEOUT
 
+        # 7 seg LED display
+        self.display_port_a = ""
+        self.display_port_b = ""
+        self.display_baud_a = DEFAULT_USB_DISPLAY_A_BAUD
+        self.display_baud_b = DEFAULT_USB_DISPLAY_B_BAUD
+
+
         # Top toolbar: left settings (calls existing menu), right Start button and status label
         toolbar = tk.Frame(root)
         toolbar.pack(side='top', fill='x', padx=4, pady=4)
@@ -268,7 +279,62 @@ class PlayoffApp:
             self.usb_status_canvas.pack(side="left", padx=(10, 2))
 
             self.usb_status_label = tk.Label(toolbar, text="USB", fg="#333333", font=("Arial", 8, "bold"))
-            self.usb_status_label.pack(side="left", padx=(0, 10)) 
+            self.usb_status_label.pack(side="left", padx=(0, 10))
+
+            # --- DISPLAY ID-1 STATUS ---
+            self.disp1_status_canvas = tk.Canvas(
+                toolbar,
+                width=12,
+                height=12,
+                highlightthickness=0,
+                bd=0,
+                bg=toolbar.cget("bg")
+            )
+
+            self.disp1_status_id = self.disp1_status_canvas.create_oval(
+                2, 2, 10, 10,
+                fill="red",
+                outline="red"
+            )
+
+            self.disp1_status_canvas.pack(side="left", padx=(5, 2))
+
+            self.disp1_status_label = tk.Label(
+                toolbar,
+                text="ID1",
+                fg="#333333",
+                font=("Arial", 8, "bold")
+            )
+
+            self.disp1_status_label.pack(side="left", padx=(0, 10))
+
+
+            # --- DISPLAY ID-2 STATUS ---
+            self.disp2_status_canvas = tk.Canvas(
+                toolbar,
+                width=12,
+                height=12,
+                highlightthickness=0,
+                bd=0,
+                bg=toolbar.cget("bg")
+            )
+
+            self.disp2_status_id = self.disp2_status_canvas.create_oval(
+                2, 2, 10, 10,
+                fill="red",
+                outline="red"
+            )
+
+            self.disp2_status_canvas.pack(side="left", padx=(5, 2))
+
+            self.disp2_status_label = tk.Label(
+                toolbar,
+                text="ID2",
+                fg="#333333",
+                font=("Arial", 8, "bold")
+            )
+
+            self.disp2_status_label.pack(side="left", padx=(0, 10))            
 
         except Exception as e:
             print("Nelze načíst settings ikonu:", e)
@@ -531,6 +597,21 @@ class PlayoffApp:
                 self.usb_port = s.get('usb_port', self.usb_port)
                 self.usb_baud = s.get('usb_baud', self.usb_baud)
                 self.usb_timeout = s.get('usb_timeout', self.usb_timeout)
+                self.display_port_a = s.get('display_port_a', self.display_port_a)
+                self.display_port_b = s.get('display_port_b', self.display_port_b)
+                self.display_baud_a = s.get('display_baud_a', self.display_baud_a)
+                self.display_baud_b = s.get('display_baud_b', self.display_baud_b)
+
+                # LED panel status
+                if self.display_port_a:
+                    self.update_display_status(1, True)
+                else:
+                    self.update_display_status(1, False)
+
+                if self.display_port_b:
+                    self.update_display_status(2, True)
+                else:
+                    self.update_display_status(2, False)                
 
                 if self.usb and self.usb_port:
                     try:
@@ -545,6 +626,7 @@ class PlayoffApp:
 
                         # START RX THREAD
                         self.usb.start_reader(self.on_usb_line)
+                        self.usb.connect_displays()
 
                         self.update_usb_status(True)
 
@@ -560,6 +642,18 @@ class PlayoffApp:
 
         except Exception as e:
             print("USB SETTINGS LOAD ERROR:", e)
+
+    def _now(self):
+        return time.strftime("%H:%M:%S")
+
+    def _log(self, msg: str):
+        print(f"[playoff {self._now()}] {msg}", file=sys.stderr)
+
+    def on_close(self):
+        if self.usb:
+            self.usb.disconnect_displays()
+            self.usb.disconnect()
+        self.root.destroy()
 
     def update_third_place_from_semifinal(self):
         if not self.bracket or not self.third_place_enabled:
@@ -817,6 +911,17 @@ class PlayoffApp:
         self.lap_label_b.config(fg="green")
 
 
+    def format_display_time(self, ms):
+        total_seconds = ms / 1000.0
+        # 00.000 to 59.999
+        if total_seconds < 60:
+            return f"{total_seconds:06.3f}"
+        # 01.00.0 to 99.59.9
+        minutes = int(total_seconds // 60)
+        seconds = int(total_seconds % 60)
+        tenths = int((total_seconds * 10) % 10)
+        return f"{minutes:02d}.{seconds:02d}.{tenths}"
+
     # small helper to open the existing settings menu -> we will just show the menubar cascade
     def _open_menu_settings(self):
         # open ask_team_count as a representative settings entry
@@ -832,6 +937,41 @@ class PlayoffApp:
             self.usb_status_canvas.itemconfig(self.usb_status_id, fill=color, outline=color)
         except:
             pass
+
+    def update_display_status(self, disp_id, connected):
+        try:
+            color = "green" if connected else "red"
+            if disp_id == 1:
+                self.disp1_status_canvas.itemconfig(self.disp1_status_id, fill=color, outline=color)
+            elif disp_id == 2:
+                self.disp2_status_canvas.itemconfig(self.disp2_status_id, fill=color, outline=color)
+        except:
+            pass            
+
+    def auto_check_displays(self):
+        try:
+            ports = self.usb.list_ports() if self.usb else []
+            id1 = (
+                self.display_port_a
+                and self.display_port_a in ports
+                and self.usb.display_a
+                and self.usb.display_a.is_open
+            )
+        except:
+            id1 = False
+
+        try:
+            id2 = (
+                self.display_port_b
+                and self.display_port_b in ports
+                and self.usb.display_b
+                and self.usb.display_b.is_open
+            )
+        except:
+            id2 = False
+
+        self.update_display_status(1, id1)
+        self.update_display_status(2, id2)
 
     def auto_check_usb(self):
         """Automatic USB port check."""
@@ -850,18 +990,19 @@ class PlayoffApp:
 
         # refresh for 1500 ms
         self.root.after(1500, self.auto_check_usb)
+        self.root.after(1500, self.auto_check_displays)
 
     def on_usb_line(self, line):
-
         line = line.strip().lower()
-
-        print("USB RX:", repr(line))
+        self._log(f"USB RX: {repr(line)}")
 
         def gui():
             if line == "ok":
                 self.status_var.set("Přijato OK")
-                self.status_label.config(fg="green")
+                self.status_label.config(fg="green")   
                 if self.enable_timer and self.timer_start_mode == "ok":
+                    self.usb.send_display(1, "TXT:00.000")
+                    self.usb.send_display(2, "TXT:00.000")
                     self.start_countdown()
                     self.lap_time_a = 0
                     self.lap_time_b = 0
@@ -872,9 +1013,11 @@ class PlayoffApp:
 
             elif line == "finish_a":
                 self.finish_a()
+                self.usb.send_display(1, f"TXT:{self.format_display_time(self.lap_time_a)}")
 
             elif line == "finish_b":
                 self.finish_b()
+                self.usb.send_display(2, f"TXT:{self.format_display_time(self.lap_time_b)}")
 
             elif line == "race_finished":
                 self.status_var.set("Závod dokončen")
@@ -951,25 +1094,19 @@ class PlayoffApp:
                 else:
 
                     if reason == 'timeout':
-
                         self.status_var.set('Chyba spojení (timeout)')
 
                     elif isinstance(reason, str) and reason.startswith('open_error'):
-
                         self.status_var.set('Chyba spojení (otevření portu)')
 
                     elif reason == 'pyserial_missing':
-
                         self.status_var.set('pyserial není nainstalován')
 
                     else:
-
                         self.status_var.set('Chyba spojení (neznámá chyba)')
 
                     self.status_label.config(fg='red')
-
                     self.timer_running = False
-
                     self.update_usb_status(False)
 
                 self.start_btn.config(state='normal')
@@ -1261,14 +1398,9 @@ class PlayoffApp:
         dlg.title("USB spojení")
         dlg.transient(self.root)
         dlg.grab_set()
-        w = 420; h = 320
+        w = 500; h = 650
         x = (dlg.winfo_screenwidth()-w)//2; y = (dlg.winfo_screenheight()-h)//2
         dlg.geometry(f"{w}x{h}+{x}+{y}")
-
-        # --- PORT LABEL ---
-        tk.Label(dlg, text="Vyber COM/USB port:").pack(anchor='w', padx=10, pady=(10,4))
-
-        port_var = tk.StringVar(value=self.usb_port)
 
         # --- PORTS LIST ---
         if self.usb:
@@ -1276,18 +1408,35 @@ class PlayoffApp:
         else:
             ports = []
 
-        frame = tk.Frame(dlg)
-        frame.pack(fill='x', padx=10)
+        def test_display(id = 0):
+            try:
+                if self.usb:
+                    if id == 0:
+                        self.usb.send_display(1, "CLS")
+                        self.usb.send_display(2, "CLS")      
+                    if id == 1:
+                        self.usb.send_display(1, "TXT:ID-1")
+                    if id == 2:
+                        self.usb.send_display(2, "TXT:ID-2")                        
 
-        # --- COMBOBOX ---
+            except Exception as e:
+                self._log(f"Display error {e}")
+                messagebox.showerror("Displej chyba", str(e))
+
+        # --- GATE A/B device ---
+        tk.Label(dlg, text="Měřící brána", font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
+        port_var = tk.StringVar(value=self.usb_port)
         combo = ttk.Combobox(
-            frame,
+            dlg,
             textvariable=port_var,
             values=ports,
             state="readonly",
             width=20
         )
-        combo.pack(side='left', fill='x', expand=True)
+        combo.pack(padx=10, pady=4)
+
+        frame = tk.Frame(dlg)
+        frame.pack(fill='x', padx=10)
 
         # --- Preselect current port if available ---
         if self.usb_port in ports:
@@ -1300,9 +1449,11 @@ class PlayoffApp:
         # --- REFRESH BUTTON ---
         def refresh_ports():
             new = self.usb.list_ports() if self.usb else []
-            combo['values'] = new
 
-            # Re-apply selected port
+            combo["values"] = new
+            display_combo_a["values"] = new
+            display_combo_b["values"] = new
+
             if self.usb_port in new:
                 port_var.set(self.usb_port)
             elif new:
@@ -1322,14 +1473,106 @@ class PlayoffApp:
         to_var = tk.StringVar(value=str(self.usb_timeout))
         tk.Entry(dlg, textvariable=to_var, width=10).pack(padx=10, pady=4)
 
+        # --- LED PANEL A ---
+        ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=10, pady=8)
+        tk.Label(dlg, text="LED displej ID-1",font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
+        display_port_a_var = tk.StringVar(value=self.display_port_a)
+        display_combo_a = ttk.Combobox(
+            dlg,
+            textvariable=display_port_a_var,
+            values=ports,
+            state="readonly",
+            width=20
+        )
+        display_combo_a.pack(padx=10, pady=4)
+
+        # --- BAUD LED A ---
+        tk.Label(dlg, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
+        baud_var_A = tk.StringVar(
+            value=str(self.display_baud_a)
+        )
+
+        tk.Entry(
+            dlg,
+            textvariable=baud_var_A,
+            width=10
+        ).pack(padx=10, pady=4)
+
+        # --- LED PANEL B ---
+        ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=10, pady=8)        
+        tk.Label(dlg, text="LED displej ID-2",font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
+        display_port_b_var = tk.StringVar(value=self.display_port_b)
+        display_combo_b = ttk.Combobox(
+            dlg,
+            textvariable=display_port_b_var,
+            values=ports,
+            state="readonly",
+            width=20
+        )
+        display_combo_b.pack(padx=10, pady=4)
+
+        # --- BAUD LED B ---
+        tk.Label(dlg, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
+        baud_var_B = tk.StringVar(
+            value=str(self.display_baud_b)
+        )
+
+        tk.Entry(
+            dlg,
+            textvariable=baud_var_B,
+            width=10
+        ).pack(padx=10, pady=4)        
+
+        ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=10, pady=8)
+
+        # --- TEST BUTTONS ---
+        test_frame = tk.Frame(dlg)
+        test_frame.pack(pady=10)
+
+        tk.Button(
+            test_frame,
+            text="TEST ID-1",
+            width=12,
+            command=lambda: test_display(1)
+        ).pack(side="left", padx=5)
+
+        tk.Button(
+            test_frame,
+            text="TEST ID-2",
+            width=12,
+            command=lambda: test_display(2)
+        ).pack(side="left", padx=5) 
+
+        tk.Button(
+            test_frame,
+            text="SMAZAT",
+            width=12,
+            command=lambda: test_display(0)
+        ).pack(side="left", padx=5)                      
+
+        ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=10, pady=8)
         # --- OK HANDLER ---
         def on_ok():
             self.usb_port = port_var.get().strip()
+            self.display_port_a = (display_port_a_var.get().strip())
+            self.display_port_b = (display_port_b_var.get().strip())
+            self.update_display_status(1, bool(self.display_port_a))
+            self.update_display_status(2, bool(self.display_port_b))            
 
             try:
                 self.usb_baud = int(baud_var.get())
             except:
                 self.usb_baud = DEFAULT_USB_BAUD
+
+            try:
+                self.display_baud_a = int(baud_var_A.get())
+            except:
+                self.display_baud_a = DEFAULT_USB_DISPLAY_A_BAUD
+
+            try:
+                self.display_baud_b = int(baud_var_B.get())
+            except:
+                self.display_baud_b = DEFAULT_USB_DISPLAY_B_BAUD                               
 
             try:
                 self.usb_timeout = float(to_var.get())
@@ -1350,6 +1593,10 @@ class PlayoffApp:
                 data['usb_port'] = self.usb_port
                 data['usb_baud'] = self.usb_baud
                 data['usb_timeout'] = self.usb_timeout
+                data['display_port_a'] = self.display_port_a
+                data['display_port_b'] = self.display_port_b
+                data['display_baud_a'] = self.display_baud_a
+                data['display_baud_b'] = self.display_baud_b
 
                 with open(spath, 'w', encoding='utf-8') as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
@@ -1365,6 +1612,12 @@ class PlayoffApp:
             except Exception as e:
                 messagebox.showwarning("USB", f"Port nastaven, ale spojení selhalo:\n{e}")
                 self.update_usb_status(False)
+
+            try:
+                self.usb.disconnect_displays()
+                self.usb.connect_displays()
+            except:
+                pass                
 
             dlg.destroy()
 
@@ -1432,6 +1685,11 @@ class PlayoffApp:
             'usb_port': self.usb_port,
             'usb_baud': self.usb_baud,
             'usb_timeout': self.usb_timeout,
+            # USB LED panels fields
+            'display_port_a': self.display_port_a,
+            'display_port_b': self.display_port_b,
+            'display_baud_a': self.display_baud_a,
+            'display_baud_b': self.display_baud_b,
             # TEAMS names
             'team_names': self.team_names,
             # THIRD place
@@ -1491,6 +1749,10 @@ class PlayoffApp:
         self.third_place_title = data.get('third_place_title', "3. místo")
         self.lap_timer_enabled = data.get('lap_timer_enabled', False)
         self.lap_timer_var.set(self.lap_timer_enabled)
+        self.display_port_a = data.get('display_port_a', self.display_port_a)
+        self.display_port_b = data.get('display_port_b', self.display_port_b)
+        self.display_baud_a = data.get('display_baud_a', self.display_baud_a)
+        self.display_baud_b = data.get('display_baud_b', self.display_baud_b)
         # apply UI lap timer state
         if self.lap_timer_enabled:
             self.lap_label_a.pack(side='left', padx=(10, 5))
@@ -3418,5 +3680,7 @@ if __name__ == '__main__':
     pos_y = (scr_h - outer_h) // 2
 
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
-
+    
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
+    
     root.mainloop()

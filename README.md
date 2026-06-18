@@ -112,7 +112,7 @@ Vyhodnocení cíle:
 
 ---
 
-# Firmware
+# Firmware Brána (semafor mega)
 
 ### FW 1.0
 - jeden semafor
@@ -135,6 +135,11 @@ Vyhodnocení cíle:
 - rozšířená false start logika
 - stabilnější měření kol
 - debounce průjezdu bránou
+
+# Firmware 7 segmentový displej (nano)
+
+### FW 1.0
+- 7 segmentový LED displej ovládaný Arduino Nano, připojený segmenty přes posuvné registry 74HC
 
 ---
 
