@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.10"                                         # current version of the application
-APP_date          = "18.06.2026-08:15"                               # current version date  
+APP_current       = "1.0.11"                                         # current version of the application
+APP_date          = "23.06.2026-08:15"                               # current version date  
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -56,7 +56,7 @@ try:
     import usb_module   # C:\Playoff\usb_module.py
     USB_AVAILABLE = True
 except Exception as e:
-    print("USB module error:", e)
+    self._log("USB module error:", e)
     usb_module = None
     USB_AVAILABLE = False
 
@@ -77,9 +77,9 @@ WINNER_OUTLINE = "#cc9a00"
 WINNER_TEXT_COLOR = "#000000"
 
 # Default USB settings defaults (kept in setup file)
-DEFAULT_USB_PORT = ""
-DEFAULT_USB_BAUD = 9600
-DEFAULT_USB_TIMEOUT = 10.0
+DEFAULT_USB_PORT           = ""
+DEFAULT_USB_BAUD           = 115200
+DEFAULT_USB_TIMEOUT        = 10.0
 
 DEFAULT_USB_DISPLAY_A_BAUD = 115200
 DEFAULT_USB_DISPLAY_B_BAUD = 115200
@@ -173,7 +173,7 @@ class PlayoffApp:
         self.bg_tk = None
         self.canvas_bg = CANVAS_BG_DEFAULT
         self.line_width = 2           # normal/thick
-        self.font_scale = "medium"    # small/medium/large
+        self.font_scale = "large"     # small/medium/large
         self.odd_behavior = "manual"  # auto/manual/waiting
         self.lock_edit = False
         self.projector_mode = False
@@ -225,6 +225,15 @@ class PlayoffApp:
         self.display_baud_a = DEFAULT_USB_DISPLAY_A_BAUD
         self.display_baud_b = DEFAULT_USB_DISPLAY_B_BAUD
 
+        # view mode
+        self.view_mode = "playoff"
+        self.view_mode_var = tk.StringVar(value=self.view_mode)
+        
+        # laps mode data
+        self.laps_a = []
+        self.laps_b = []
+        self.lap_id_a = 1
+        self.lap_id_b = 1
 
         # Top toolbar: left settings (calls existing menu), right Start button and status label
         toolbar = tk.Frame(root)
@@ -334,10 +343,63 @@ class PlayoffApp:
                 font=("Arial", 8, "bold")
             )
 
-            self.disp2_status_label.pack(side="left", padx=(0, 10))            
+            self.disp2_status_label.pack(side="left", padx=(0, 10))
+
+            # --------------------------------------------------
+            # VIEW MODE
+            # --------------------------------------------------
+            self.mode_frame = tk.Frame(toolbar)
+
+            self.mode_frame.pack(
+                side="left",
+                padx=(20, 20)
+            )
+
+            self.mode_playoff_btn = tk.Label(
+                self.mode_frame,
+                text="PLAYOFF",
+                width=10,
+                relief="raised",
+                bd=2,
+                cursor="hand2",
+                padx=8,
+                pady=3
+            )
+
+            self.mode_playoff_btn.pack(
+                side="left",
+                padx=(0, 2)
+            )
+
+            self.mode_laps_btn = tk.Label(
+                self.mode_frame,
+                text="LAPS",
+                width=10,
+                relief="raised",
+                bd=2,
+                cursor="hand2",
+                padx=8,
+                pady=3
+            )
+
+            self.mode_laps_btn.pack(
+                side="left"
+            )
+
+            self.mode_playoff_btn.bind(
+                "<Button-1>",
+                lambda e: self.change_view_mode("playoff")
+            )
+
+            self.mode_laps_btn.bind(
+                "<Button-1>",
+                lambda e: self.change_view_mode("laps")
+            )
+
+            self.update_view_mode_buttons()
 
         except Exception as e:
-            print("Nelze načíst settings ikonu:", e)
+            self._log("Nelze načíst settings ikonu:", e)
             self.settings_btn = tk.Menubutton(toolbar, text="⚙", relief=tk.RAISED)
             self.settings_menu = tk.Menu(self.settings_btn, tearoff=0)
             self.settings_btn.config(menu=self.settings_menu)
@@ -602,6 +664,16 @@ class PlayoffApp:
                 self.display_baud_a = s.get('display_baud_a', self.display_baud_a)
                 self.display_baud_b = s.get('display_baud_b', self.display_baud_b)
 
+                self.view_mode = s.get('view_mode', 'playoff')
+                self.view_mode_var.set(self.view_mode)
+
+                self.root.after(100, self.update_view_mode_gui)
+
+                try:
+                    self.update_view_mode_buttons()
+                except:
+                    pass
+
                 # LED panel status
                 if self.display_port_a:
                     self.update_display_status(1, True)
@@ -627,27 +699,41 @@ class PlayoffApp:
                         # START RX THREAD
                         self.usb.start_reader(self.on_usb_line)
                         self.usb.connect_displays()
-
                         self.update_usb_status(True)
-
-                        print(
-                            "USB AUTO CONNECT:",
-                            self.usb_port,
-                            self.usb_baud
+                        self._log(f"USB AUTO CONNECT: port { self.usb_port} speed {self.usb_baud}")
+                        self.root.after(
+                            2500,
+                            lambda: self.usb.send_display(1, "TXT:ID-1")
                         )
+                        self.root.after(
+                            2600,
+                            lambda: self.usb.send_display(2, "TXT:ID-2")
+                        )                
+                        self.root.after(
+                            7000,
+                            lambda: self.usb.send_display(1, "TXT:-------")
+                        )
+                        self.root.after(
+                            7200,
+                            lambda: self.usb.send_display(2, "TXT:-------")
+                        )                        
+                        if self.view_mode == "laps":
+                            self.usb.handler.send(b"mode_laps\n")
+                        else:
+                            self.usb.handler.send(b"mode_playoff\n")
 
                     except Exception as e:
-                        print("USB AUTO CONNECT ERROR:", e)
+                        self._log("USB AUTO CONNECT ERROR:", e)
                         self.update_usb_status(False)
 
         except Exception as e:
-            print("USB SETTINGS LOAD ERROR:", e)
+            self._log("USB SETTINGS LOAD ERROR:", e)
 
     def _now(self):
         return time.strftime("%H:%M:%S")
 
-    def _log(self, msg: str):
-        print(f"[playoff {self._now()}] {msg}", file=sys.stderr)
+    def _log(self, msg: str, param=""):
+        print(f"[playoff {self._now()}] {msg} {param}", file=sys.stderr)
 
     def on_close(self):
         if self.usb:
@@ -861,7 +947,6 @@ class PlayoffApp:
 
         self.lap_loop()
 
-
     def lap_loop(self):
         import time
 
@@ -885,19 +970,49 @@ class PlayoffApp:
 
         self.lap_after_id = self.root.after(50, self.lap_loop)
 
-
     def format_lap(self, ms):
         minutes = ms // 60000
         seconds = (ms % 60000) // 1000
         millis = ms % 1000
         return f"{minutes:02d}:{seconds:02d}:{millis:03d}"
 
+    def start_laps_timer(self):
+        import time
+        if self.lap_after_id:
+            try:
+                self.root.after_cancel(self.lap_after_id)
+            except:
+                pass
+        self.lap_last_time = time.time()
+        self.lap_after_id = self.root.after(50, self.laps_loop)        
+
+    def laps_loop(self):
+        import time
+        if not self.lap_running_a and not self.lap_running_b:
+            self.lap_after_id = None
+            return
+
+        now = time.time()
+        delta = now - self.lap_last_time
+        self.lap_last_time = now
+        delta_ms = int(delta * 1000)
+        if self.lap_running_a:
+            self.lap_time_a += delta_ms
+        if self.lap_running_b:
+            self.lap_time_b += delta_ms
+        self.lap_time_a_var.set(
+            "A " + self.format_lap(self.lap_time_a)
+        )
+        self.lap_time_b_var.set(
+            "B " + self.format_lap(self.lap_time_b)
+        )
+        self.lap_after_id = self.root.after(50, self.laps_loop)
 
     def finish_a(self):
         if not self.lap_running_a:
             return
 
-        print("FINISH A")
+        self._log("FINISH A")
         self.lap_running_a = False
         self.lap_label_a.config(fg="green")
 
@@ -906,7 +1021,7 @@ class PlayoffApp:
         if not self.lap_running_b:
             return
 
-        print("FINISH B")
+        self._log("FINISH B")
         self.lap_running_b = False
         self.lap_label_b.config(fg="green")
 
@@ -937,6 +1052,100 @@ class PlayoffApp:
             self.usb_status_canvas.itemconfig(self.usb_status_id, fill=color, outline=color)
         except:
             pass
+
+    def on_view_mode_change(self):
+        new_mode = self.view_mode_var.get()
+        if new_mode == self.view_mode:
+            return
+
+        if not messagebox.askyesno(
+            "Změna režimu",
+            f"Opravdu přepnout do režimu "
+            f"{new_mode.upper()} ?"
+        ):
+            self.view_mode_var.set(self.view_mode)
+            return
+
+        self.view_mode = new_mode
+        self.update_view_mode_gui()
+        self._log(f"VIEW MODE = {self.view_mode}")
+        self.redraw()
+        try:
+            if self.usb:
+                if self.view_mode == "laps":
+                    self.usb.handler.send(b"mode_laps\n")
+                else:
+                    self.usb.handler.send(b"mode_playoff\n")
+        except Exception as e:
+            self._log(f"MODE SEND ERROR: {e}")        
+
+    def change_view_mode(self, new_mode):
+        if new_mode == self.view_mode:
+            return
+
+        if not messagebox.askyesno(
+            "Změna režimu",
+            f"Opravdu přepnout do režimu "
+            f"{new_mode.upper()} ?"
+        ):
+            return
+
+        self.lap_time_a = 0
+        self.lap_time_b = 0
+        self.lap_running_a = False
+        self.lap_running_b = False
+        self.lap_after_id = None
+        self.view_mode = new_mode
+        self.view_mode_var.set(new_mode)
+        self.update_view_mode_buttons()
+        self.update_view_mode_gui()
+        self._log(f"VIEW MODE = {self.view_mode}")
+        if new_mode == "laps":
+            self.status_var.set("")
+        self.root.update_idletasks()
+        self.canvas.update_idletasks()
+        self.redraw()
+        try:
+            if self.usb:
+                if self.view_mode == "laps":
+                    self._log("TX mode_laps")
+                    self.usb.handler.send(b"mode_laps\n")
+                else:
+                    self._log("TX mode_playoff")
+                    self.usb.handler.send(b"mode_playoff\n")
+        except Exception as e:
+            self._log(f"MODE SEND ERROR: {e}")        
+
+    def update_view_mode_buttons(self):
+        if self.view_mode == "playoff":
+            self.mode_playoff_btn.config(
+                bg="#4CAF50",
+                fg="white",
+                relief="sunken"
+            )
+
+            self.mode_laps_btn.config(
+                bg=self.root.cget("bg"),
+                fg="black",
+                relief="raised"
+            )
+        else:
+            self.mode_laps_btn.config(
+                bg="#4CAF50",
+                fg="white",
+                relief="sunken"
+            )
+
+            self.mode_playoff_btn.config(
+                bg=self.root.cget("bg"),
+                fg="black",
+                relief="raised"
+            )
+
+    def update_view_mode_gui(self):
+        self.start_btn.pack_forget()
+        if self.view_mode == "playoff":
+            self.start_btn.pack(side='right', padx=4)               
 
     def update_display_status(self, disp_id, connected):
         try:
@@ -1020,49 +1229,96 @@ class PlayoffApp:
                 self.usb.send_display(2, f"TXT:{self.format_display_time(self.lap_time_b)}")
 
             elif line == "race_finished":
-                self.status_var.set("Závod dokončen")
-                self.status_label.config(fg="blue")
+                if self.view_mode == "playoff":
+                    self.status_var.set("Závod dokončen")
+                    self.status_label.config(fg="blue")
+                else:
+                    self.status_var.set("")
                 self.timer_running = False
                 self.lap_running_a = False
                 self.lap_running_b = False
+                if self.lap_after_id:
+                    try:
+                        self.root.after_cancel(self.lap_after_id)
+                    except:
+                        pass
+                    self.lap_after_id = None
+
+            elif line == "start_a":
+                self._log("LAPS START A")
+                if self.view_mode == "laps":
+                    self.usb.send_display(1, "TXT:00.000")
+                    self.lap_label_a.config(fg="#FF8C00")
+                    self.lap_time_a = 0
+                    self.lap_running_a = True
+                    self._log(f"lap_after_id={self.lap_after_id}")
+                    self.start_laps_timer()
+
+            elif line == "start_b":
+                self._log("LAPS START B")
+                if self.view_mode == "laps":
+                    self.usb.send_display(2, "TXT:00.000")
+                    self.lap_label_b.config(fg="#FF8C00")
+                    self.lap_time_b = 0
+                    self.lap_running_b = True
+                    self._log(f"lap_after_id={self.lap_after_id}")
+                    self.start_laps_timer()
+
+            elif line == "stop_a":
+                self._log("LAPS STOP A")
+                self.lap_running_a = False
+                if self.view_mode == "laps":
+                    self.lap_label_a.config(fg="green")
+                    from datetime import datetime
+                    rec = {
+                        "id": self.lap_id_a,
+                        "date": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                        "time": self.format_lap(self.lap_time_a),
+                        "ms": self.lap_time_a
+                    }
+                    self.laps_a.insert(0, rec)
+                    self.lap_id_a += 1
+                    self.redraw()
+                    self.usb.send_display(1, f"TXT:{self.format_display_time(self.lap_time_a)}")
+
+            elif line == "stop_b":
+                self._log("LAPS STOP B")
+                self.lap_running_b = False
+                if self.view_mode == "laps":
+                    self.lap_label_b.config(fg="green")
+                    from datetime import datetime
+                    rec = {
+                        "id": self.lap_id_b,
+                        "date": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                        "time": self.format_lap(self.lap_time_b),
+                        "ms": self.lap_time_b
+                    }
+                    self.laps_b.insert(0, rec)
+                    self.lap_id_b += 1
+                    self.redraw() 
+                    self.usb.send_display(2, f"TXT:{self.format_display_time(self.lap_time_b)}")               
 
         self.root.after(0, gui)        
 
     def on_start(self):
-
         self.lap_label_a.config(fg="#FF8C00")
         self.lap_label_b.config(fg="#FF8C00")
-
-        print(
-            "DEBUG USB PLAYOFF:",
-            "usb_port=", self.usb_port,
-            "usb_baud=", self.usb_baud,
-            "usb_timeout=", self.usb_timeout,
-            "usb obj existuje:", bool(self.usb),
-            "timer_start_mode=", self.timer_start_mode
-        )
+        self._log(f"usb_port= {self.usb_port} usb_baud= {self.usb_baud} usb_timeout= {self.usb_timeout} usb obj existuje: {bool(self.usb)} timer_start_mode= {self.timer_start_mode}")
 
         # STOP old countdown
         try:
-
             self.timer_running = False
-
             if getattr(self, 'countdown_after_id', None):
-
                 self.root.after_cancel(self.countdown_after_id)
                 self.countdown_after_id = None
-
         except Exception:
             pass
 
         # STOP old lap timer
         try:
-
             self.lap_running_a = False
             self.lap_running_b = False
-
             if self.lap_after_id:
-
                 self.root.after_cancel(self.lap_after_id)
                 self.lap_after_id = None
 
@@ -1078,33 +1334,23 @@ class PlayoffApp:
         # CALLBACK FROM USB MODULE
         # ---------------------------------------------------------
         def on_result(ok, reason):
-
             def cb():
-
                 if ok:
-
                     # START packet was successfully sent
                     # WAITING FOR "ok" FROM ARDUINO
-
                     self.status_var.set('START odeslán')
                     self.status_label.config(fg='orange')
-
                     self.update_usb_status(True)
 
                 else:
-
                     if reason == 'timeout':
                         self.status_var.set('Chyba spojení (timeout)')
-
                     elif isinstance(reason, str) and reason.startswith('open_error'):
                         self.status_var.set('Chyba spojení (otevření portu)')
-
                     elif reason == 'pyserial_missing':
                         self.status_var.set('pyserial není nainstalován')
-
                     else:
                         self.status_var.set('Chyba spojení (neznámá chyba)')
-
                     self.status_label.config(fg='red')
                     self.timer_running = False
                     self.update_usb_status(False)
@@ -1154,8 +1400,7 @@ class PlayoffApp:
                     self.timer_running = False
 
         except Exception as e:
-
-            print("Timer prepare error:", e)
+            self._log("Timer prepare error:", e)
 
         # ---------------------------------------------------------
         # SEND START
@@ -1464,7 +1709,7 @@ class PlayoffApp:
         tk.Button(frame, text='Obnovit', command=refresh_ports).pack(side='right', padx=6)
 
         # --- BAUD ---
-        tk.Label(dlg, text="Baud (rychlost) — výchozí 9600:").pack(anchor='w', padx=10, pady=(8,0))
+        tk.Label(dlg, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
         baud_var = tk.StringVar(value=str(self.usb_baud))
         tk.Entry(dlg, textvariable=baud_var, width=10).pack(padx=10, pady=4)
 
@@ -1597,6 +1842,7 @@ class PlayoffApp:
                 data['display_port_b'] = self.display_port_b
                 data['display_baud_a'] = self.display_baud_a
                 data['display_baud_b'] = self.display_baud_b
+                data['view_mode'] = self.view_mode
 
                 with open(spath, 'w', encoding='utf-8') as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
@@ -1616,6 +1862,23 @@ class PlayoffApp:
             try:
                 self.usb.disconnect_displays()
                 self.usb.connect_displays()
+
+                self.root.after(
+                    2500,
+                    lambda: self.usb.send_display(1, "TXT:ID-1")
+                )
+                self.root.after(
+                    2600,
+                    lambda: self.usb.send_display(2, "TXT:ID-2")
+                )                
+                self.root.after(
+                    7000,
+                    lambda: self.usb.send_display(1, "TXT:-------")
+                )
+                self.root.after(
+                    7200,
+                    lambda: self.usb.send_display(2, "TXT:-------")
+                )
             except:
                 pass                
 
@@ -1643,7 +1906,7 @@ class PlayoffApp:
         if use_pre_round:
             pre_round_list = [""] * int(max(0, n))
         else:
-            pre_round_list = None    
+            pre_round_list = []   
         self.bracket = Bracket(team_list, pre_round_list=pre_round_list, use_pre_round=use_pre_round)
         # resolve automatic BYE if requested
         if self.odd_behavior == 'auto':
@@ -1661,20 +1924,30 @@ class PlayoffApp:
 
     # --- save / load setup ---
     def save_setup(self):
-        if not self.bracket:
-            return
+        self._log("SAVE_SETUP CALLED")
         fname = filedialog.asksaveasfilename(defaultextension='.setup', filetypes=[('Playoff setup', '.setup'), ('JSON', '.json')])
+
         if not fname:
             return
+
+        if self.bracket:
+            team_count = self.bracket.team_count
+            titles = self.bracket.titles
+            pre_titles = self.bracket.pre_titles
+        else:
+            team_count = 0
+            titles = []
+            pre_titles = []
+
         data = {
-            'team_count': self.bracket.team_count,
+            'team_count': team_count,
             'odd_behavior': self.odd_behavior,
             'font_scale': self.font_scale,
             'canvas_bg': self.canvas_bg,
             'line_width': self.line_width,
             'bg_path': self.bg_path,
             'lock_edit': self.lock_edit,
-            'titles': self.bracket.titles,
+            'titles': titles,
             'rounds': [],
             'winner': self.current_winner,
             'enable_timer': self.enable_timer,
@@ -1690,6 +1963,8 @@ class PlayoffApp:
             'display_port_b': self.display_port_b,
             'display_baud_a': self.display_baud_a,
             'display_baud_b': self.display_baud_b,
+            # mode (playoff/laps)
+            'view_mode': self.view_mode,
             # TEAMS names
             'team_names': self.team_names,
             # THIRD place
@@ -1697,18 +1972,26 @@ class PlayoffApp:
             'third_place': self.third_place,
             'third_place_title': self.third_place_title,
             # PRE ROUNDS
-            'pre_titles': self.bracket.pre_titles,
-            'pre_rounds': [
-                [{'a': m.a.text, 'b': m.b.text}
-                 for m in self.bracket.pre_rounds[0]]
-            ] if self.pre_round_enabled and self.bracket.pre_rounds else [],
+            'pre_titles': pre_titles,
+            'pre_rounds': [],
             'lap_timer_enabled': self.lap_timer_enabled,
         }
-        for r in self.bracket.rounds:
-            rd = []
-            for m in r:
-                rd.append({'a': m.a.text, 'b': m.b.text})
-            data['rounds'].append(rd)
+        if (self.bracket and self.pre_round_enabled and self.bracket.pre_rounds):
+            data['pre_rounds'] = [
+                [
+                    {
+                        'a': m.a.text,
+                        'b': m.b.text
+                    }
+                    for m in self.bracket.pre_rounds[0]
+                ]
+            ]
+        if self.bracket:
+            for r in self.bracket.rounds:
+                rd = []
+                for m in r:
+                    rd.append({'a': m.a.text, 'b': m.b.text})
+                data['rounds'].append(rd)
         try:
             with open(fname, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -1717,6 +2000,7 @@ class PlayoffApp:
             messagebox.showerror('Chyba', str(e))
 
     def load_setup(self):
+        self._log("LOAD setup.json")
         fname = filedialog.askopenfilename(filetypes=[('Playoff setup', '.setup .json')])
         if not fname:
             return
@@ -1725,6 +2009,7 @@ class PlayoffApp:
                 data = json.load(f)
         except Exception as e:
             messagebox.showerror('Chyba', f'Nepodařilo se načíst soubor: {e}')
+            self._log('Chyba', f'Nepodařilo se načíst soubor: {e}')
             return
         # rebuild bracket with exact count
         n = data.get('team_count', 0)
@@ -1753,6 +2038,10 @@ class PlayoffApp:
         self.display_port_b = data.get('display_port_b', self.display_port_b)
         self.display_baud_a = data.get('display_baud_a', self.display_baud_a)
         self.display_baud_b = data.get('display_baud_b', self.display_baud_b)
+        self.view_mode = data.get('view_mode', 'playoff')
+        self.view_mode_var.set(self.view_mode)
+        self.update_view_mode_gui()
+        self.update_view_mode_buttons()
         # apply UI lap timer state
         if self.lap_timer_enabled:
             self.lap_label_a.pack(side='left', padx=(10, 5))
@@ -1787,23 +2076,25 @@ class PlayoffApp:
 
         # rebuild rounds exactly as in setup
         rounds_in = data.get('rounds', [])
-        self.bracket.rounds = []  # reset completely
-
-        for rdata in rounds_in:
-            round_list = []
-            for m in rdata:
-                a = Slot(m.get('a', ''))
-                b = Slot(m.get('b', ''))
-                round_list.append(Match(a, b))
-            self.bracket.rounds.append(round_list)
+        if rounds_in:
+            self.bracket.rounds = []
+            for rdata in rounds_in:
+                round_list = []
+                for m in rdata:
+                    a = Slot(m.get('a', ''))
+                    b = Slot(m.get('b', ''))
+                    round_list.append(Match(a, b))
+                self.bracket.rounds.append(round_list)
 
         # load titles
         titles = data.get('titles', [])
         for i, t in enumerate(titles):
             if i < len(self.bracket.titles):
                 self.bracket.titles[i] = t
-        if len(self.bracket.rounds[-1]) > 1:
-            self.bracket.rounds[-1] = [self.bracket.rounds[-1][0]]
+        if self.bracket.rounds:
+            if len(self.bracket.rounds[-1]) > 1:
+                self.bracket.rounds[-1] = [self.bracket.rounds[-1][0]]
+
         # load rounds text
         rounds_in = data.get('rounds', [])
         for r_idx, rd in enumerate(rounds_in):
@@ -1815,6 +2106,7 @@ class PlayoffApp:
                     break
                 matches[m_idx].a.text = mdata.get('a', '')
                 matches[m_idx].b.text = mdata.get('b', '')
+
         # try load bg image if exists
         if self.bg_path and PIL_AVAILABLE and os.path.exists(self.bg_path):
             try:
@@ -1834,13 +2126,14 @@ class PlayoffApp:
                 if self.usb_port:
                     self.update_usb_status(True)
                 else:
-                    self.update_usb_status(False)   
+                    self.update_usb_status(False)
             except Exception:
                 self.update_usb_status(False)
 
         self.root.update_idletasks()
         self.root.after(50, self.redraw)
         messagebox.showinfo('Hotovo', 'Soubor byl načten')
+        self._log('Hotovo', 'Soubor byl načten')
 
     # --- Timer methods (MM:SS input, countdown, blinking) ---
     def on_toggle_timer(self):
@@ -1865,6 +2158,8 @@ class PlayoffApp:
             self.update_timer_visibility()
         except Exception:
             pass
+
+        self.redraw()
 
     def on_toggle_lap_timer(self):
         self.lap_timer_enabled = self.lap_timer_var.get()
@@ -2499,9 +2794,13 @@ class PlayoffApp:
         result.sort(key=sort_key)
         return result
 
-    # --- redraw ---
+    # --- playoff mode ---
     def redraw(self):
-        self.canvas.delete('all')
+        self.canvas.delete("all")
+        if self.view_mode == "laps":
+            self.draw_laps()
+            return
+
         self.rect_items.clear()
         self.text_items.clear()
         self.title_items.clear()
@@ -2519,7 +2818,7 @@ class PlayoffApp:
                     self.bg_tk = ImageTk.PhotoImage(img)
                     self.canvas.create_image(0, 0, image=self.bg_tk, anchor="nw")
             except Exception as e:
-                print("BACKGROUND ERROR:", e)
+                self._log("BACKGROUND ERROR:", e)
 
         if not self.bracket:
             return
@@ -2945,7 +3244,7 @@ class PlayoffApp:
                     table_right_x = table_x2
 
         except Exception as e:
-            print("TEAM TABLE ERROR:", e)
+            self._log("TEAM TABLE ERROR:", e)
 
         # === 3RD PLACE ===
         if self.third_place_enabled:
@@ -3148,7 +3447,324 @@ class PlayoffApp:
                     self.canvas.itemconfigure(self.timer_window, state='hidden')
 
         except Exception as e:
-            print("TIMER ERROR:", e)
+            self._log("TIMER ERROR:", e)
+
+    # --- laps mode ---
+    def draw_laps(self):
+        self.canvas.delete("all")
+        self.canvas.update_idletasks()
+
+        w = self.canvas.winfo_width()
+        h = self.canvas.winfo_height()
+        mid = w // 2
+
+        if self.font_scale == "small":
+            title_font = ("Arial", 14, "bold")
+            header_font = ("Arial", 9, "bold")
+            row_font = ("Consolas", 8)
+            row_height = 18
+
+        elif self.font_scale == "large":
+            title_font = ("Arial", 28, "bold")
+            header_font = ("Arial", 20, "bold")
+            row_font = ("Consolas", 19)
+            row_height = 34
+
+        else:
+            title_font = ("Arial", 19, "bold")
+            header_font = ("Arial", 13, "bold")
+            row_font = ("Consolas", 12)
+            row_height = 24
+
+        # --------------------------------------------------
+        # TABLE GEOMETRY
+        # --------------------------------------------------
+
+        left_x1 = 10
+        left_x2 = mid - 10
+
+        right_x1 = mid + 10
+        right_x2 = w - 10
+
+        top_y = 55
+
+        if self.projector_mode:
+            bottom_y = h - 10
+        else:
+            bottom_y = h - 80
+
+        header_h = 34
+
+        # outer borders
+        self.canvas.create_rectangle(
+            left_x1,
+            top_y,
+            left_x2,
+            bottom_y,
+            outline="#0b6bd6",
+            width=self.line_width
+        )
+
+        self.canvas.create_rectangle(
+            right_x1,
+            top_y,
+            right_x2,
+            bottom_y,
+            outline="#0b6bd6",
+            width=self.line_width
+        )
+
+        # --------------------------------------------------
+        # TITLES and buttons
+        # --------------------------------------------------
+
+        self.canvas.create_text(
+            mid // 2,
+            25,
+            text="A",
+            font=title_font
+        )
+
+        self.canvas.create_text(
+            mid + mid // 2,
+            25,
+            text="B",
+            font=title_font
+        )
+
+        # button DEL A
+        self.canvas.create_rectangle(
+            mid // 2 + 25, 10,
+            mid // 2 + 95, 40,
+            fill="#d62828",
+            outline="black",
+            tags="clear_a"
+        )
+
+        self.canvas.create_text(
+            mid // 2 + 60,
+            25,
+            text="SMAZAT",
+            fill="white",
+            font=("Arial", 9, "bold"),
+            tags="clear_a"
+        )
+
+        self.canvas.tag_bind(
+            "clear_a",
+            "<Button-1>",
+            lambda e: self.clear_laps_a()
+        )
+
+        # button DEL B
+        self.canvas.create_rectangle(
+            mid + mid // 2 + 25, 10,
+            mid + mid // 2 + 95, 40,
+            fill="#d62828",
+            outline="black",
+            tags="clear_b"
+        )
+
+        self.canvas.create_text(
+            mid + mid // 2 + 60,
+            25,
+            text="SMAZAT",
+            fill="white",
+            font=("Arial", 9, "bold"),
+            tags="clear_b"
+        )
+
+        self.canvas.tag_bind(
+            "clear_b",
+            "<Button-1>",
+            lambda e: self.clear_laps_b()
+        )        
+
+        # --------------------------------------------------
+        # BLUE HEADERS
+        # --------------------------------------------------
+
+        self.canvas.create_rectangle(
+            left_x1,
+            top_y,
+            left_x2,
+            top_y + header_h + 5,
+            fill="#0b6bd6",
+            outline="#0b6bd6"
+        )
+
+        self.canvas.create_rectangle(
+            right_x1,
+            top_y,
+            right_x2,
+            top_y + header_h + 5,
+            fill="#0b6bd6",
+            outline="#0b6bd6"
+        )
+
+        self.canvas.create_text(
+            left_x1 + 8,
+            top_y + 5 + header_h / 2,
+            anchor="w",
+            text="  ID      Vloženo                           Čas",
+            fill="white",
+            font=header_font
+        )
+
+        self.canvas.create_text(
+            right_x1 + 8,
+            top_y + 5 + header_h / 2,
+            anchor="w",
+            text="  ID      Vloženo                            Čas",
+            fill="white",
+            font=header_font
+        )
+
+        # --------------------------------------------------
+        # DYNAMIC ROW COUNT
+        # --------------------------------------------------
+        first_row_y = top_y + header_h + row_height // 2 + 4
+        visible_rows = max(1, int((bottom_y - first_row_y) / row_height) - 1)
+
+        # --------------------------------------------------
+        # LEFT TABLE
+        # --------------------------------------------------
+        valid_a = [
+            int(r.get("ms", 0))
+            for r in self.laps_a
+            if int(r.get("ms", 0)) >= 10000
+        ]
+
+        best_a = min(valid_a) if valid_a else None
+
+        y = first_row_y
+        for idx, rec in enumerate(self.laps_a[:visible_rows]):
+            row_top = y - row_height // 2
+            row_bottom = row_top + row_height
+            ms = int(rec.get("ms", 0))
+            invalid = ms < 10000
+            best = (best_a is not None and ms == best_a)
+            
+            if invalid:
+                bg = "#ffb3b3"      # red
+            elif best:
+                bg = "#b8ffb8"      # grn
+            elif idx % 2:
+                bg = "#f2f7ff"
+            else:
+                bg = None
+
+            self.canvas.create_rectangle(
+                left_x1 + 1,
+                row_top,
+                left_x2 - 1,
+                row_bottom,
+                fill=bg,
+                outline=""
+            )
+
+            txt = (
+                f"{rec['id']:>3}   "
+                f"{rec['date']}   "
+                f"{rec['time']}   "
+                f"({ms}ms)"
+            )
+
+            self.canvas.create_text(
+                left_x1 + 8,
+                y,
+                anchor="w",
+                text=txt,
+                font=row_font,
+                fill="black"
+            )
+
+            # separator line
+            self.canvas.create_line(
+                left_x1,
+                row_bottom,
+                left_x2,
+                row_bottom,
+                fill="#d8d8d8"
+            )
+
+            y += row_height
+
+        # --------------------------------------------------
+        # RIGHT TABLE
+        # --------------------------------------------------
+        valid_b = [
+            int(r.get("ms", 0))
+            for r in self.laps_b
+            if int(r.get("ms", 0)) >= 10000
+        ]
+
+        best_b = min(valid_b) if valid_b else None
+
+        y = first_row_y
+        for idx, rec in enumerate(self.laps_b[:visible_rows]):
+            row_top = y - row_height // 2
+            row_bottom = row_top + row_height
+            ms = int(rec.get("ms", 0))
+            invalid = ms < 10000
+            best = (best_b is not None and ms == best_b)
+
+            if invalid:
+                bg = "#ffb3b3"      # red
+            elif best:
+                bg = "#b8ffb8"      # grn
+            elif idx % 2:
+                bg = "#f2f7ff"
+            else:
+                bg = None
+
+            self.canvas.create_rectangle(
+                right_x1 + 1,
+                row_top,
+                right_x2 - 1,
+                row_bottom,
+                fill=bg,
+                outline=""
+            )
+
+            txt = (
+                f"{rec['id']:>3}   "
+                f"{rec['date']}   "
+                f"{rec['time']}   "
+                f"({ms}ms)"
+            )
+
+            self.canvas.create_text(
+                right_x1 + 8,
+                y,
+                anchor="w",
+                text=txt,
+                font=row_font,
+                fill="black"
+            )                
+
+            # separator line
+            self.canvas.create_line(
+                right_x1,
+                row_bottom,
+                right_x2,
+                row_bottom,
+                fill="#d8d8d8"
+            )
+
+            y += row_height
+
+    def clear_laps_a(self):
+        if messagebox.askyesno("Potvrzení", "Smazat všechny záznamy A?"):
+            self.laps_a.clear()
+            self.lap_id_a = 1
+            self.redraw()
+
+    def clear_laps_b(self):
+        if messagebox.askyesno("Potvrzení", "Smazat všechny záznamy B?"):
+            self.laps_b.clear()
+            self.lap_id_b = 1
+            self.redraw()
 
     # --- PDF export ---
     def export_pdf(self):
@@ -3588,7 +4204,6 @@ class PlayoffApp:
                 pdf.setFont("DejaVu", 11)
 
                 for tid, name in table_data:
-
                     # --- PAGE ---
                     if y - row_h < margin:
                         pdf.showPage()
@@ -3625,7 +4240,7 @@ class PlayoffApp:
                 )
 
         except Exception as e:
-            print("PDF TEAM TABLE ERROR:", e)
+            self._log("PDF TEAM TABLE ERROR:", e)
 
         # --- Save PDF ---
         try:
@@ -3649,7 +4264,7 @@ if __name__ == '__main__':
         root.iconbitmap(icon_path)
 
     except Exception as e:
-        print("Icon load error:", e)
+        self._log("Icon load error:", e)
 
     app = PlayoffApp(root)
 

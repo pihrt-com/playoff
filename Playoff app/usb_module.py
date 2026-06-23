@@ -21,8 +21,8 @@ except Exception:
 
 
 DEFAULT_SERIAL_PORT = ""
-DEFAULT_SERIAL_BAUD = 9600
-DEFAULT_SERIAL_TIMEOUT = 2.0
+DEFAULT_SERIAL_BAUD = 115200
+DEFAULT_SERIAL_TIMEOUT = 5.0
 
 
 def _now():
@@ -160,8 +160,10 @@ class SerialHandler:
 
     def send(self, payload: bytes):
         if not self.is_open():
+            self._log("PORT CLOSED -> OPEN")
             self.open()
 
+        self._log(f"TX {payload!r}")
         with self.write_lock:
             self.ser.write(payload)
             try:
@@ -278,6 +280,9 @@ class USBManager:
         self.port = DEFAULT_SERIAL_PORT
         self.baud = DEFAULT_SERIAL_BAUD
         self.timeout = DEFAULT_SERIAL_TIMEOUT
+        self.display_a = None
+        self.display_b = None
+        self.display_lock = threading.Lock()
 
     def _log(self, msg: str):
         if self.verbose:
@@ -328,6 +333,101 @@ class USBManager:
     def stop_reader(self):
         self.handler.stop_reader()
 
+    def connect_displays(self):
+        try:
+            if self.app.display_port_a and self.display_a is None:
+                self.display_a = serial.Serial(
+                    port=None,
+                    baudrate=int(self.app.display_baud_a),
+                    timeout=1
+                )
+                self.display_a.port = self.app.display_port_a
+                #self.display_a.dtr = False
+                #self.display_a.rts = False
+                self.display_a.open()
+                time.sleep(1)
+
+            if self.app.display_port_b and self.display_b is None:
+                self.display_b = serial.Serial(
+                    port=None,
+                    baudrate=int(self.app.display_baud_b),
+                    timeout=1
+                )
+                self.display_b.port = self.app.display_port_b
+                #self.display_b.dtr = False
+                #self.display_b.rts = False
+                self.display_b.open()
+                time.sleep(1)
+
+        except Exception as e:
+            self._log(f"Display connect error {e}")
+
+
+    def send_display(self, id, text):
+        self.connect_displays()
+
+        if id == 1:
+            ser = self.display_a
+        elif id == 2:
+            ser = self.display_b
+        else:
+            return False
+
+        if ser is None or not ser.is_open:
+            self.disconnect_displays()
+            self.connect_displays()
+
+            if id == 1:
+                ser = self.display_a
+            else:
+                ser = self.display_b
+
+        if ser is None:
+            return False
+
+        try:
+            msg = (str(text) + "\r\n").encode()
+            self._log(f"Display msg: {msg}")
+            with self.display_lock:
+                ser.write(msg)
+                ser.flush()
+            return True
+
+        except Exception as e:
+            self._log(f"Display error {e}")
+            try:
+                if id == 1 and self.display_a:
+                    self.display_a.close()
+
+                if id == 2 and self.display_b:
+                    self.display_b.close()
+            except:
+                pass
+
+            if id == 1:
+                self.display_a = None
+            if id == 2:
+                self.display_b = None
+            return False      
+
+
+    def disconnect_displays(self):
+        try:
+            if self.display_a:
+                self.display_a.close()
+        except:
+            pass
+
+        try:
+            if self.display_b:
+                self.display_b.close()
+        except:
+            pass
+
+        self.display_a = None
+        self.display_b = None
+
+
     def send_start_async(self, on_result):
         def worker():
             try:
@@ -345,6 +445,7 @@ class USBManager:
 
         t.start()
         return t
+
 
     def send_finish_async(self, on_result):
         def worker():

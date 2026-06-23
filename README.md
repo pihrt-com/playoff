@@ -2,7 +2,7 @@
 
 Zde naleznete aplikaci pro MS Windows (instalace i portable verze), dokumentaci hardware (zapojení, 3D modely, STL soubory) a firmware pro Arduino.
 
-V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadáváme číslo nebo název týmu, pravým tlačítkem postupujeme tým do dalšího kola. Výsledný pavouk lze uložit, načíst, exportovat do PDF a propojit se startovními semafory.
+V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadáváme číslo nebo název týmu, pravým tlačítkem postupujeme tým do dalšího kola. Výsledný pavouk lze uložit, načíst, exportovat do PDF a propojit se startovními semafory. Nebo se lze přepnout do řežimu měření časů jednotlivých kol. Pokud je kolo kratší než 10 vteřin je podbarvené pole červené. Nejkratší čas v kolech je podbarven zeleně.
 
 ## Aplikace
 
@@ -13,6 +13,8 @@ Magnetická tabule (takto to nemá vypadat)
 App (takto vypadá okno aplikace)
 
 [![](https://github.com/pihrt-com/playoff/blob/main/Example/ex1.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/ex1.png)
+
+[![](https://github.com/pihrt-com/playoff/blob/main/Example/ex9.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/ex9.png)
 
 ---
 
@@ -135,6 +137,9 @@ Vyhodnocení cíle:
 - rozšířená false start logika
 - stabilnější měření kol
 - debounce průjezdu bránou
+
+### FW 1.5
+- režim brány (playoff/laps) příkazy: mode_playoff a mode_laps
 
 # Firmware 7 segmentový displej (nano)
 
