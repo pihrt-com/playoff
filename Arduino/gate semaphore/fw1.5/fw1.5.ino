@@ -771,8 +771,10 @@ void handleUART() {
 unsigned long lastButton = 0;
 const int debounce = 50;
 
-void handleSwitch()
-{
+void handleSwitch(){
+  if (runMode != MODE_PLAYOFF)
+    return;
+    
   bool currentState = digitalRead(button);
   // reakce pouze na přechod HIGH -> LOW
   if (lastButtonState == HIGH && currentState == LOW)
