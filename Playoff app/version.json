@@ -1,5 +1,5 @@
 {
-  "version": "1.0.11",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.11/PlayoffSetup_1.0.11.exe",
-  "notes": "Added preround"
+  "version": "1.0.12",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.12/PlayoffSetup_1.0.12.exe",
+  "notes": "Volitelné průběžné zobrazování času kola na LED displejích s nastavitelným intervalem 0,1–1,0 s."
 }

@@ -283,6 +283,10 @@ class USBManager:
         self.display_a = None
         self.display_b = None
         self.display_lock = threading.Lock()
+        self.display_connect_lock = threading.Lock()
+        self.display_pending_lock = threading.Lock()
+        self.display_pending = {1: None, 2: None}
+        self.display_workers = {1: None, 2: None}
 
     def _log(self, msg: str):
         if self.verbose:
@@ -334,33 +338,40 @@ class USBManager:
         self.handler.stop_reader()
 
     def connect_displays(self):
-        try:
-            if self.app.display_port_a and self.display_a is None:
-                self.display_a = serial.Serial(
-                    port=None,
-                    baudrate=int(self.app.display_baud_a),
-                    timeout=1
-                )
-                self.display_a.port = self.app.display_port_a
-                #self.display_a.dtr = False
-                #self.display_a.rts = False
-                self.display_a.open()
-                time.sleep(1)
+        with self.display_connect_lock:
+            try:
+                if self.app.display_port_a and self.display_a is None:
+                    self.display_a = serial.Serial(
+                        port=None,
+                        baudrate=int(self.app.display_baud_a),
+                        timeout=1,
+                        write_timeout=1
+                    )
+                    self.display_a.port = self.app.display_port_a
+                    #self.display_a.dtr = False
+                    #self.display_a.rts = False
+                    self.display_a.open()
+                    time.sleep(1)
+                    self.display_a.reset_input_buffer()
+                    self.display_a.reset_output_buffer()
 
-            if self.app.display_port_b and self.display_b is None:
-                self.display_b = serial.Serial(
-                    port=None,
-                    baudrate=int(self.app.display_baud_b),
-                    timeout=1
-                )
-                self.display_b.port = self.app.display_port_b
-                #self.display_b.dtr = False
-                #self.display_b.rts = False
-                self.display_b.open()
-                time.sleep(1)
+                if self.app.display_port_b and self.display_b is None:
+                    self.display_b = serial.Serial(
+                        port=None,
+                        baudrate=int(self.app.display_baud_b),
+                        timeout=1,
+                        write_timeout=1
+                    )
+                    self.display_b.port = self.app.display_port_b
+                    #self.display_b.dtr = False
+                    #self.display_b.rts = False
+                    self.display_b.open()
+                    time.sleep(1)
+                    self.display_b.reset_input_buffer()
+                    self.display_b.reset_output_buffer()
 
-        except Exception as e:
-            self._log(f"Display connect error {e}")
+            except Exception as e:
+                self._log(f"Display connect error {e}")
 
 
     def send_display(self, id, text):
@@ -374,7 +385,7 @@ class USBManager:
             return False
 
         if ser is None or not ser.is_open:
-            self.disconnect_displays()
+            self.disconnect_display(id)
             self.connect_displays()
 
             if id == 1:
@@ -389,43 +400,79 @@ class USBManager:
             msg = (str(text) + "\r\n").encode()
             self._log(f"Display msg: {msg}")
             with self.display_lock:
+                try:
+                    waiting = ser.in_waiting
+                    if waiting:
+                        ser.read(waiting)
+                except Exception:
+                    pass
                 ser.write(msg)
                 ser.flush()
             return True
 
         except Exception as e:
             self._log(f"Display error {e}")
-            try:
-                if id == 1 and self.display_a:
-                    self.display_a.close()
+            self.disconnect_display(id)
+            return False
 
-                if id == 2 and self.display_b:
-                    self.display_b.close()
-            except:
-                pass
+    def send_display_latest(self, id, text):
+        """Queue at most the newest pending message for one display."""
+        if id not in self.display_pending:
+            return False
 
-            if id == 1:
-                self.display_a = None
-            if id == 2:
-                self.display_b = None
-            return False      
+        with self.display_pending_lock:
+            self.display_pending[id] = text
+            worker = self.display_workers[id]
+            if worker is not None and worker.is_alive():
+                return True
+
+            worker = threading.Thread(
+                target=self._display_latest_worker,
+                args=(id,),
+                daemon=True
+            )
+            self.display_workers[id] = worker
+            worker.start()
+        return True
+
+    def _display_latest_worker(self, id):
+        while True:
+            with self.display_pending_lock:
+                text = self.display_pending[id]
+                if text is None:
+                    self.display_workers[id] = None
+                    return
+                self.display_pending[id] = None
+
+            self.send_display(id, text)
+
+    def disconnect_display(self, id):
+        if id == 1:
+            display = self.display_a
+        elif id == 2:
+            display = self.display_b
+        else:
+            return
+
+        try:
+            if display:
+                display.close()
+        except Exception:
+            pass
+
+        if id == 1:
+            self.display_a = None
+        else:
+            self.display_b = None
 
 
     def disconnect_displays(self):
-        try:
-            if self.display_a:
-                self.display_a.close()
-        except:
-            pass
+        with self.display_pending_lock:
+            self.display_pending[1] = None
+            self.display_pending[2] = None
 
-        try:
-            if self.display_b:
-                self.display_b.close()
-        except:
-            pass
-
-        self.display_a = None
-        self.display_b = None
+        self.disconnect_display(1)
+        self.disconnect_display(2)
 
 
     def send_start_async(self, on_result):

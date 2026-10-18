@@ -1,24 +1,28 @@
-import subprocess
-import sys
-import os
+import json
+import unittest
+from pathlib import Path
 
-app_dir = os.path.dirname(os.path.abspath(__file__))
+import playoff
 
-updater_path = os.path.join(app_dir, "updater.exe")
-target_exe = os.path.join(app_dir, "Playoff.exe")
 
-download_url = "https://github.com/pihrt-com/playoff/releases/download/1.0.3/PlayoffSetup_1.0.3.exe"
+class UpdateManifestTests(unittest.TestCase):
+    def test_manifest_matches_release_version(self):
+        app_dir = Path(__file__).resolve().parent
+        manifest = json.loads(
+            (app_dir / "version.json").read_text(encoding="utf-8")
+        )
 
-print("Spouštím updater...")
-print("Updater:", updater_path)
-print("Cíl:", target_exe)
-print("URL:", download_url)
+        self.assertEqual(manifest["version"], "1.0.12")
+        self.assertEqual(playoff.APP_current, manifest["version"])
+        self.assertIn("/releases/download/1.0.12/", manifest["url"])
+        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.12.exe"))
 
-subprocess.Popen([
-    updater_path,
-    target_exe,
-    download_url
-])
+        installer = (app_dir / "installer_playoff.iss").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("AppVersion=1.0.12", installer)
+        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.12", installer)
 
-print("Updater spuštěn, aplikace se nyní ukončí.")
-sys.exit(0)
+
+if __name__ == "__main__":
+    unittest.main()

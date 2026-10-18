@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.11"                                         # current version of the application
-APP_date          = "23.06.2026-08:15"                               # current version date  
+APP_current       = "1.0.12"                                         # current version of the application
+APP_date          = "18.10.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -83,6 +83,21 @@ DEFAULT_USB_TIMEOUT        = 10.0
 
 DEFAULT_USB_DISPLAY_A_BAUD = 115200
 DEFAULT_USB_DISPLAY_B_BAUD = 115200
+
+LED_REFRESH_OPTIONS        = tuple(round(value / 10, 1) for value in range(1, 11))
+DEFAULT_LED_REFRESH        = 0.1
+
+
+def normalize_led_refresh(value):
+    """Return one of the supported LED refresh intervals."""
+    try:
+        interval = round(float(value), 1)
+    except (TypeError, ValueError):
+        return DEFAULT_LED_REFRESH
+
+    if interval in LED_REFRESH_OPTIONS:
+        return interval
+    return DEFAULT_LED_REFRESH
 
 # --- Data classes ---
 class Slot:
@@ -195,7 +210,12 @@ class PlayoffApp:
         self.lap_time_b_var = tk.StringVar(value="B 00:00:000")
         self.lap_running_a = False
         self.lap_running_b = False
-        self.lap_after_id = None        
+        self.lap_after_id = None
+        self.live_led_enabled = False
+        self.live_led_refresh = DEFAULT_LED_REFRESH
+        self.live_led_var = tk.BooleanVar(value=self.live_led_enabled)
+        self.live_led_refresh_var = tk.StringVar(value=f"{self.live_led_refresh:.1f}")
+        self.live_led_next_send = {1: 0.0, 2: 0.0}
         self.font_scale_var = tk.StringVar(value=self.font_scale)
         self.odd_behavior_var = tk.StringVar(value=self.odd_behavior)
         self.line_width_var = tk.IntVar(value=self.line_width)
@@ -524,6 +544,22 @@ class PlayoffApp:
             command=self.on_toggle_lap_timer
         )
 
+        self.settings_menu.add_checkbutton(
+            label='Odesílat na LED průběžný čas',
+            variable=self.live_led_var,
+            command=self.on_toggle_live_led
+        )
+
+        led_refresh_menu = tk.Menu(self.settings_menu, tearoff=0)
+        self.settings_menu.add_cascade(label='Rychlost obnovování', menu=led_refresh_menu)
+        for interval in LED_REFRESH_OPTIONS:
+            led_refresh_menu.add_radiobutton(
+                label=f"{interval:.1f} s",
+                variable=self.live_led_refresh_var,
+                value=f"{interval:.1f}",
+                command=self.on_set_live_led_refresh
+            )
+
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label='USB nastavení', command=self.open_usb_dialog)
 
@@ -637,7 +673,7 @@ class PlayoffApp:
             n = 16
 
         self.update_datetime()
-        self.on_toggle_lap_timer()
+        self.apply_lap_timer_visibility()
         self.check_for_update()
         
         # automatic USB check every 1.5 s
@@ -663,6 +699,15 @@ class PlayoffApp:
                 self.display_port_b = s.get('display_port_b', self.display_port_b)
                 self.display_baud_a = s.get('display_baud_a', self.display_baud_a)
                 self.display_baud_b = s.get('display_baud_b', self.display_baud_b)
+                self.lap_timer_enabled = bool(s.get('lap_timer_enabled', self.lap_timer_enabled))
+                self.lap_timer_var.set(self.lap_timer_enabled)
+                self.live_led_enabled = bool(s.get('live_led_enabled', self.live_led_enabled))
+                self.live_led_var.set(self.live_led_enabled)
+                self.live_led_refresh = normalize_led_refresh(
+                    s.get('live_led_refresh', self.live_led_refresh)
+                )
+                self.live_led_refresh_var.set(f"{self.live_led_refresh:.1f}")
+                self.apply_lap_timer_visibility()
 
                 self.view_mode = s.get('view_mode', 'playoff')
                 self.view_mode_var.set(self.view_mode)
@@ -944,6 +989,7 @@ class PlayoffApp:
 
         import time
         self.lap_last_time = time.time()
+        self.reset_live_led_schedule(1, 2)
 
         self.lap_loop()
 
@@ -967,6 +1013,8 @@ class PlayoffApp:
 
         self.lap_time_a_var.set("A " + self.format_lap(self.lap_time_a))
         self.lap_time_b_var.set("B " + self.format_lap(self.lap_time_b))
+
+        self.send_live_led_times()
 
         self.lap_after_id = self.root.after(50, self.lap_loop)
 
@@ -1006,6 +1054,7 @@ class PlayoffApp:
         self.lap_time_b_var.set(
             "B " + self.format_lap(self.lap_time_b)
         )
+        self.send_live_led_times()
         self.lap_after_id = self.root.after(50, self.laps_loop)
 
     def finish_a(self):
@@ -1036,6 +1085,45 @@ class PlayoffApp:
         seconds = int(total_seconds % 60)
         tenths = int((total_seconds * 10) % 10)
         return f"{minutes:02d}.{seconds:02d}.{tenths}"
+
+    def send_display_latest(self, display_id, text):
+        if not self.usb:
+            return False
+
+        sender = getattr(self.usb, 'send_display_latest', None)
+        if callable(sender):
+            return sender(display_id, text)
+        return self.usb.send_display(display_id, text)
+
+    def reset_live_led_schedule(self, *display_ids):
+        next_send = time.monotonic() + self.live_led_refresh
+        for display_id in display_ids or (1, 2):
+            self.live_led_next_send[display_id] = next_send
+
+    def reset_led_times(self, *display_ids):
+        ids = display_ids or (1, 2)
+        for display_id in ids:
+            self.send_display_latest(display_id, "TXT:00.000")
+        self.reset_live_led_schedule(*ids)
+
+    def send_live_led_times(self, now=None):
+        if not self.live_led_enabled or not self.usb:
+            return
+
+        current = time.monotonic() if now is None else now
+        displays = (
+            (1, self.lap_running_a, self.lap_time_a),
+            (2, self.lap_running_b, self.lap_time_b),
+        )
+
+        for display_id, running, elapsed_ms in displays:
+            if not running or current < self.live_led_next_send[display_id]:
+                continue
+            self.send_display_latest(
+                display_id,
+                f"TXT:{self.format_display_time(elapsed_ms)}"
+            )
+            self.live_led_next_send[display_id] = current + self.live_led_refresh
 
     # small helper to open the existing settings menu -> we will just show the menubar cascade
     def _open_menu_settings(self):
@@ -1210,8 +1298,7 @@ class PlayoffApp:
                 self.status_var.set("Přijato OK")
                 self.status_label.config(fg="green")   
                 if self.enable_timer and self.timer_start_mode == "ok":
-                    self.usb.send_display(1, "TXT:00.000")
-                    self.usb.send_display(2, "TXT:00.000")
+                    self.reset_led_times(1, 2)
                     self.start_countdown()
                     self.lap_time_a = 0
                     self.lap_time_b = 0
@@ -1222,11 +1309,11 @@ class PlayoffApp:
 
             elif line == "finish_a":
                 self.finish_a()
-                self.usb.send_display(1, f"TXT:{self.format_display_time(self.lap_time_a)}")
+                self.send_display_latest(1, f"TXT:{self.format_display_time(self.lap_time_a)}")
 
             elif line == "finish_b":
                 self.finish_b()
-                self.usb.send_display(2, f"TXT:{self.format_display_time(self.lap_time_b)}")
+                self.send_display_latest(2, f"TXT:{self.format_display_time(self.lap_time_b)}")
 
             elif line == "race_finished":
                 if self.view_mode == "playoff":
@@ -1247,7 +1334,7 @@ class PlayoffApp:
             elif line == "start_a":
                 self._log("LAPS START A")
                 if self.view_mode == "laps":
-                    self.usb.send_display(1, "TXT:00.000")
+                    self.reset_led_times(1)
                     self.lap_label_a.config(fg="#FF8C00")
                     self.lap_time_a = 0
                     self.lap_running_a = True
@@ -1257,7 +1344,7 @@ class PlayoffApp:
             elif line == "start_b":
                 self._log("LAPS START B")
                 if self.view_mode == "laps":
-                    self.usb.send_display(2, "TXT:00.000")
+                    self.reset_led_times(2)
                     self.lap_label_b.config(fg="#FF8C00")
                     self.lap_time_b = 0
                     self.lap_running_b = True
@@ -1279,7 +1366,7 @@ class PlayoffApp:
                     self.laps_a.insert(0, rec)
                     self.lap_id_a += 1
                     self.redraw()
-                    self.usb.send_display(1, f"TXT:{self.format_display_time(self.lap_time_a)}")
+                    self.send_display_latest(1, f"TXT:{self.format_display_time(self.lap_time_a)}")
 
             elif line == "stop_b":
                 self._log("LAPS STOP B")
@@ -1296,7 +1383,7 @@ class PlayoffApp:
                     self.laps_b.insert(0, rec)
                     self.lap_id_b += 1
                     self.redraw() 
-                    self.usb.send_display(2, f"TXT:{self.format_display_time(self.lap_time_b)}")               
+                    self.send_display_latest(2, f"TXT:{self.format_display_time(self.lap_time_b)}")
 
         self.root.after(0, gui)        
 
@@ -1387,6 +1474,7 @@ class PlayoffApp:
 
                     self.lap_time_a_var.set("A 00:00:000")
                     self.lap_time_b_var.set("B 00:00:000")
+                    self.reset_led_times(1, 2)
 
                     if self.lap_timer_enabled:
                         self.start_lap_timer()
@@ -1975,6 +2063,8 @@ class PlayoffApp:
             'pre_titles': pre_titles,
             'pre_rounds': [],
             'lap_timer_enabled': self.lap_timer_enabled,
+            'live_led_enabled': self.live_led_enabled,
+            'live_led_refresh': self.live_led_refresh,
         }
         if (self.bracket and self.pre_round_enabled and self.bracket.pre_rounds):
             data['pre_rounds'] = [
@@ -2034,6 +2124,13 @@ class PlayoffApp:
         self.third_place_title = data.get('third_place_title', "3. místo")
         self.lap_timer_enabled = data.get('lap_timer_enabled', False)
         self.lap_timer_var.set(self.lap_timer_enabled)
+        self.live_led_enabled = bool(data.get('live_led_enabled', False))
+        self.live_led_var.set(self.live_led_enabled)
+        self.live_led_refresh = normalize_led_refresh(
+            data.get('live_led_refresh', DEFAULT_LED_REFRESH)
+        )
+        self.live_led_refresh_var.set(f"{self.live_led_refresh:.1f}")
+        self.reset_live_led_schedule(1, 2)
         self.display_port_a = data.get('display_port_a', self.display_port_a)
         self.display_port_b = data.get('display_port_b', self.display_port_b)
         self.display_baud_a = data.get('display_baud_a', self.display_baud_a)
@@ -2043,9 +2140,7 @@ class PlayoffApp:
         self.update_view_mode_gui()
         self.update_view_mode_buttons()
         # apply UI lap timer state
-        if self.lap_timer_enabled:
-            self.lap_label_a.pack(side='left', padx=(10, 5))
-            self.lap_label_b.pack(side='left', padx=(0, 20))                
+        self.apply_lap_timer_visibility()
         self.generate_bracket_with_empty(n)
 
         # --- LOAD PRE ROUND ---
@@ -2164,7 +2259,14 @@ class PlayoffApp:
     def on_toggle_lap_timer(self):
         self.lap_timer_enabled = self.lap_timer_var.get()
 
-        # UI toggle
+        self.apply_lap_timer_visibility()
+
+        # save to file
+        self.persist_user_settings(
+            lap_timer_enabled=self.lap_timer_enabled
+        )
+
+    def apply_lap_timer_visibility(self):
         if self.lap_timer_enabled:
             self.lap_label_a.pack(side='left', padx=(10, 5))
             self.lap_label_b.pack(side='left', padx=(0, 20))
@@ -2172,7 +2274,26 @@ class PlayoffApp:
             self.lap_label_a.pack_forget()
             self.lap_label_b.pack_forget()
 
-        # save to file
+    def on_toggle_live_led(self):
+        self.live_led_enabled = bool(self.live_led_var.get())
+        self.reset_live_led_schedule(1, 2)
+        self.persist_user_settings(
+            live_led_enabled=self.live_led_enabled,
+            live_led_refresh=self.live_led_refresh
+        )
+
+    def on_set_live_led_refresh(self):
+        self.live_led_refresh = normalize_led_refresh(
+            self.live_led_refresh_var.get()
+        )
+        self.live_led_refresh_var.set(f"{self.live_led_refresh:.1f}")
+        self.reset_live_led_schedule(1, 2)
+        self.persist_user_settings(
+            live_led_enabled=self.live_led_enabled,
+            live_led_refresh=self.live_led_refresh
+        )
+
+    def persist_user_settings(self, **updates):
         try:
             spath = os.path.join(os.path.expanduser('~'), '.playoff_settings.json')
             data = {}
@@ -2184,7 +2305,7 @@ class PlayoffApp:
                 except Exception:
                     data = {}
 
-            data['lap_timer_enabled'] = self.lap_timer_enabled
+            data.update(updates)
 
             with open(spath, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -2701,7 +2822,7 @@ class PlayoffApp:
             "=== USB SEMAFOR ===\n"
             "Nastavení → USB nastavení\n"
             "- Výběr COM portu\n"
-            "- Nastavení Baud rate (výchozí 9600)\n"
+            "- Nastavení Baud rate (výchozí 115200)\n"
             "- Timeout odpovědi (výchozí 10 s)\n\n"
             "Tlačítko START:\n"
             "- Odešle text 'start' do zařízení\n"
@@ -2715,6 +2836,16 @@ class PlayoffApp:
             "Režim spuštění odpočtu:\n"
             "- Spustit odpočet ihned (po START)\n"
             "- Spustit odpočet až po semaforu (OK)\n\n"
+
+            "=== ČAS KOLA NA LED DISPLEJI ===\n"
+            "Nastavení → Měřit a zobrazit čas kola\n"
+            "- Zobrazí měřený čas drah A a B v aplikaci\n"
+            "Nastavení → Odesílat na LED průběžný čas\n"
+            "- Je-li volba zapnutá, během jízdy pravidelně aktualizuje příslušný LED displej\n"
+            "- Po dokončení dráhy zůstane na jejím displeji konečný čas\n"
+            "Nastavení → Rychlost obnovování\n"
+            "- Nabízí intervaly od 0,1 s do 1,0 s\n"
+            "- Kratší interval znamená plynulejší aktualizaci displeje\n\n"
 
             "=== PDF EXPORT ===\n"
             "Nastavení → Export do PDF\n"

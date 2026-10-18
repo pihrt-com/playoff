@@ -1,74 +1,124 @@
-# test.py – jednoduché testy pro usb_module.py
-import time
-from usb_module import USBManager, PY_SERIAL_AVAILABLE
+import threading
+import unittest
+from types import SimpleNamespace
 
-print("=== TEST USB MODULE ===")
-
-# 1) Kontrola zda je pyserial vůbec dostupný
-if not PY_SERIAL_AVAILABLE:
-    print("pyserial není dostupný – instaluj: pip install pyserial")
-    exit(1)
-
-# 2) Vytvoříme instanci USBManager
-um = USBManager(verbose=True, prevent_reset=True)
-
-# 3) Najdeme dostupné porty
-ports = um.list_ports()
-print(f"Dostupné porty: {ports}")
-
-if not ports:
-    print("ŽÁDNÉ PORTY NENALEZENY – připoj zařízení a spusť test znovu.")
-    exit(1)
-
-# Vybere druhý nalezený port
-port = ports[1]
-print(f"Použiji port: {port}")
-
-# Nastavíme port/baud/timeout
-um.validate_and_set(port, 9600, 2.0)
+from usb_module import USBManager
 
 
-# === TEST 1: Otevření portu a zavření ===
-print("\n--- TEST 1: OPEN/CLOSE ---")
-try:
-    um.handler.open(port=port)
-    print("OPEN OK")
-    um.handler.close()
-    print("CLOSE OK")
-except Exception as e:
-    print("OPEN/CLOSE FAIL:", e)
-    exit(1)
+class FakeSerial:
+    def __init__(self):
+        self.is_open = True
+        self.in_waiting = 4
+        self.read_sizes = []
+        self.writes = []
+        self.flushed = False
+        self.closed = False
+
+    def read(self, size):
+        self.read_sizes.append(size)
+        self.in_waiting = 0
+        return b"OK\r\n"
+
+    def write(self, payload):
+        self.writes.append(payload)
+
+    def flush(self):
+        self.flushed = True
+
+    def close(self):
+        self.closed = True
+        self.is_open = False
 
 
-# === TEST 2: SYNCHRONNÍ START ===
-print("\n--- TEST 2: send_start_sync ---")
-ok, reason = um.send_start_sync()
-print(f"Výsledek: ok={ok}, reason={reason}")
+def make_manager():
+    app = SimpleNamespace(
+        display_port_a="",
+        display_port_b="",
+        display_baud_a=115200,
+        display_baud_b=115200,
+    )
+    return USBManager(app=app, verbose=False)
 
 
-# === TEST 3: ASYNCHRONNÍ START ===
-print("\n--- TEST 3: send_start_async ---")
+class USBDisplayTests(unittest.TestCase):
+    def test_send_display_writes_command_and_drains_previous_reply(self):
+        manager = make_manager()
+        serial_port = FakeSerial()
+        manager.display_a = serial_port
 
-done = False
-result = None
+        self.assertTrue(manager.send_display(1, "TXT:12.345"))
 
-def on_result(ok, reason):
-    global done, result
-    print(f"[callback] Výsledek: ok={ok}, reason={reason}")
-    result = (ok, reason)
-    done = True
+        self.assertEqual(serial_port.read_sizes, [4])
+        self.assertEqual(serial_port.writes, [b"TXT:12.345\r\n"])
+        self.assertTrue(serial_port.flushed)
 
-thread = um.send_start_async(on_result)
+    def test_latest_queue_coalesces_slow_updates(self):
+        manager = make_manager()
+        first_started = threading.Event()
+        release_first = threading.Event()
+        sent = []
 
-# počkáme max 3 sekundy na callback
-timeout = time.time() + 3
-while not done and time.time() < timeout:
-    time.sleep(0.05)
+        def slow_send(display_id, text):
+            sent.append((display_id, text))
+            if len(sent) == 1:
+                first_started.set()
+                release_first.wait(timeout=2)
+            return True
 
-if not done:
-    print("ASYNCHRONNÍ TEST: TIMEOUT – callback se neozval.")
-else:
-    print("ASYNCHRONNÍ TEST proběhl.")
+        manager.send_display = slow_send
+
+        self.assertTrue(manager.send_display_latest(1, "TXT:00.100"))
+        self.assertTrue(first_started.wait(timeout=1))
+        manager.send_display_latest(1, "TXT:00.200")
+        manager.send_display_latest(1, "TXT:00.300")
+        manager.send_display_latest(1, "TXT:00.400")
+        release_first.set()
+
+        worker = manager.display_workers[1]
+        worker.join(timeout=2)
+
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(
+            sent,
+            [(1, "TXT:00.100"), (1, "TXT:00.400")]
+        )
+        self.assertIsNone(manager.display_pending[1])
+
+    def test_latest_queues_are_independent_for_both_displays(self):
+        manager = make_manager()
+        sent = []
+        manager.send_display = lambda display_id, text: sent.append(
+            (display_id, text)
+        ) or True
+
+        manager.send_display_latest(1, "TXT:01.000")
+        manager.send_display_latest(2, "TXT:02.000")
+
+        for display_id in (1, 2):
+            worker = manager.display_workers[display_id]
+            if worker is not None:
+                worker.join(timeout=1)
+
+        self.assertCountEqual(
+            sent,
+            [(1, "TXT:01.000"), (2, "TXT:02.000")]
+        )
+
+    def test_invalid_display_id_is_rejected(self):
+        manager = make_manager()
+        self.assertFalse(manager.send_display_latest(3, "TXT:00.000"))
+
+    def test_missing_second_display_does_not_disconnect_first_display(self):
+        manager = make_manager()
+        first_display = FakeSerial()
+        manager.display_a = first_display
+
+        self.assertFalse(manager.send_display(2, "TXT:00.000"))
+
+        self.assertIs(manager.display_a, first_display)
+        self.assertTrue(first_display.is_open)
+        self.assertFalse(first_display.closed)
 
 
-print("\n=== HOTOVO ===")
+if __name__ == "__main__":
+    unittest.main()

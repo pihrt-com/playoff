@@ -16,6 +16,14 @@ App (takto vypadá okno aplikace)
 
 [![](https://github.com/pihrt-com/playoff/blob/main/Example/ex9.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/ex9.png)
 
+## Průběžný čas na LED displejích
+
+V nabídce Nastavení lze volbou „Měřit a zobrazit čas kola“ zapnout měření drah A a B. Zatržítko „Odesílat na LED průběžný čas“ navíc zapne pravidelné odesílání běžícího času na příslušný LED displej.
+
+Položka „Rychlost obnovování“ nabízí intervaly od 0,1 s do 1,0 s. Každý displej se aktualizuje jen po dobu běhu své dráhy; po dojezdu se okamžitě odešle přesný konečný čas a druhá dráha může pokračovat. Průběžné odesílání je ve výchozím nastavení vypnuté.
+
+Nastavení se ukládá do uživatelského souboru `.playoff_settings.json` i do uloženého projektu `.setup`.
+
 ---
 
 # Hardware (Arduino MEGA)
@@ -193,3 +201,9 @@ https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
 # PIHRT.COM
 
 https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
+
+## Historie změn
+
+### 18. 10. 2026 – `C:\GitHub\playoff`
+
+Verze 1.0.12 doplňuje volitelné průběžné odesílání času na LED displeje s obnovováním 0,1–1,0 s, bezpečné slučování pomalých USB zápisů, vybírání odpovědí displeje, uložení nových voleb, testy a rozšířenou nápovědu.
