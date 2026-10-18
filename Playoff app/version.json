@@ -1,5 +1,7 @@
 {
-  "version": "1.0.12",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.12/PlayoffSetup_1.0.12.exe",
-  "notes": "Volitelné průběžné zobrazování času kola na LED displejích s nastavitelným intervalem 0,1–1,0 s."
+  "version": "1.0.13",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.13/PlayoffSetup_1.0.13.exe",
+  "sha256": "513a25cfddff62f929355b962a96f8b13c36bd81f63429785eedcd2fa1a99a30",
+  "size": 41884347,
+  "notes": "Grafický updater zobrazuje průběh stahování, stav aktualizace a srozumitelné chyby."
 }

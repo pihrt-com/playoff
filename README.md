@@ -1,5 +1,10 @@
 # Playoff
 
+[![Stable release](https://img.shields.io/github/v/release/pihrt-com/playoff?display_name=tag&sort=semver&label=stable)](https://github.com/pihrt-com/playoff/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/pihrt-com/playoff/total?label=downloads&logo=github)](https://github.com/pihrt-com/playoff/releases)
+[![Tests](https://img.shields.io/github/actions/workflow/status/pihrt-com/playoff/tests.yml?branch=main&event=push&label=tests&logo=githubactions)](https://github.com/pihrt-com/playoff/actions/workflows/tests.yml?query=branch%3Amain)
+[![License](https://img.shields.io/github/license/pihrt-com/playoff?label=license)](https://github.com/pihrt-com/playoff/blob/main/LICENSE)
+
 Zde naleznete aplikaci pro MS Windows (instalace i portable verze), dokumentaci hardware (zapojení, 3D modely, STL soubory) a firmware pro Arduino.
 
 V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadáváme číslo nebo název týmu, pravým tlačítkem postupujeme tým do dalšího kola. Výsledný pavouk lze uložit, načíst, exportovat do PDF a propojit se startovními semafory. Nebo se lze přepnout do řežimu měření časů jednotlivých kol. Pokud je kolo kratší než 10 vteřin je podbarvené pole červené. Nejkratší čas v kolech je podbarven zeleně.
@@ -23,6 +28,12 @@ V nabídce Nastavení lze volbou „Měřit a zobrazit čas kola“ zapnout mě�
 Položka „Rychlost obnovování“ nabízí intervaly od 0,1 s do 1,0 s. Každý displej se aktualizuje jen po dobu běhu své dráhy; po dojezdu se okamžitě odešle přesný konečný čas a druhá dráha může pokračovat. Průběžné odesílání je ve výchozím nastavení vypnuté.
 
 Nastavení se ukládá do uživatelského souboru `.playoff_settings.json` i do uloženého projektu `.setup`.
+
+## Aktualizace programu
+
+Po potvrzení nové verze se otevře samostatné okno „Aktualizace Playoff“. Zobrazuje připojení k serveru, průběh a velikost stahovaného instalačního souboru, jeho ověření a spuštění instalátoru.
+
+Instalátor se před spuštěním kontroluje podle velikosti a SHA-256 uvedeného v aktualizačním manifestu. Při chybě zůstane okno otevřené se srozumitelnou zprávou a technickými podrobnostmi; uživatel může stahování zopakovat, zavřít updater nebo znovu spustit původní Playoff.
 
 ---
 
@@ -204,6 +215,10 @@ https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
 
 ## Historie změn
 
-### 18. 10. 2026 – `C:\GitHub\playoff`
+### 18. 10. 2026 – GitHub/playoff – verze 1.0.13
+
+Verze 1.0.13 přidává grafický updater s ukazatelem průběhu a stažené velikosti, průběžnými stavovými zprávami, kontrolou velikosti a SHA-256, bezpečným dočasným souborem, opakováním po chybě a návratem do původní aplikace. README nově zobrazuje živé badge pro stabilní release, počet stažení, GitHub Actions testy a licenci.
+
+### 18. 10. 2026 – GitHub/playoff – verze 1.0.12
 
 Verze 1.0.12 doplňuje volitelné průběžné odesílání času na LED displeje s obnovováním 0,1–1,0 s, bezpečné slučování pomalých USB zápisů, vybírání odpovědí displeje, uložení nových voleb, testy a rozšířenou nápovědu.

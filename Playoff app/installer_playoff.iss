@@ -1,10 +1,10 @@
 [Setup]
 AppName=Playoff
-AppVersion=1.0.12
+AppVersion=1.0.13
 DefaultDirName={pf}\Playoff
 DefaultGroupName=Playoff
 OutputDir=output_installer
-OutputBaseFilename=PlayoffSetup_1.0.12
+OutputBaseFilename=PlayoffSetup_1.0.13
 Compression=lzma
 SolidCompression=yes
 AppPublisher=Martin Pihrt

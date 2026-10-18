@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.12"                                         # current version of the application
+APP_current       = "1.0.13"                                         # current version of the application
 APP_date          = "18.10.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -12,6 +12,7 @@ from tkinter import ttk, simpledialog, messagebox, filedialog, colorchooser
 from tkinter import font as tkfont
 
 import math, json, os, sys
+import subprocess
 import urllib.request
 import time
 
@@ -40,6 +41,30 @@ if getattr(sys, 'frozen', False):
     BASE_PATH = sys._MEIPASS
 else:
     BASE_PATH = os.path.abspath(os.path.dirname(__file__))
+
+
+def build_updater_command(updater_path, target_exe, update_info):
+    installer_url = str(update_info.get("url") or "").strip()
+    if not installer_url:
+        raise ValueError("V informacích o aktualizaci chybí URL instalátoru.")
+
+    command = [updater_path, target_exe, installer_url]
+    version = str(update_info.get("version") or "").strip()
+    if version:
+        command.extend(["--version", version])
+
+    sha256 = str(update_info.get("sha256") or "").strip().lower()
+    if sha256:
+        if len(sha256) != 64 or any(char not in "0123456789abcdef" for char in sha256):
+            raise ValueError("Aktualizační manifest obsahuje neplatný SHA-256 součet.")
+        command.extend(["--sha256", sha256])
+
+    size = int(update_info.get("size") or 0)
+    if size < 0:
+        raise ValueError("Aktualizační manifest obsahuje neplatnou velikost souboru.")
+    if size:
+        command.extend(["--size", str(size)])
+    return command
 
 # Pillow optional
 try:
@@ -866,9 +891,11 @@ class PlayoffApp:
 
                 updater = os.path.join(app_dir, "updater.exe")
 
-                import subprocess
                 try:
-                    subprocess.Popen([updater, exe_path, url], close_fds=True)
+                    if not os.path.isfile(updater):
+                        raise FileNotFoundError(f"Soubor nebyl nalezen: {updater}")
+                    updater_command = build_updater_command(updater, exe_path, info)
+                    subprocess.Popen(updater_command, close_fds=True)
                 except Exception as e:
                     messagebox.showerror("Updater chyba", f"Nelze spustit updater.exe:\n{e}")
                     return
@@ -2866,7 +2893,10 @@ class PlayoffApp:
 
             "=== AKTUALIZACE ===\n"
             "Nastavení → Kontrola aktualizace\n"
-            "- Ověří novou verzi programu na internetu\n\n"
+            "- Ověří novou verzi programu na internetu\n"
+            "- Samostatné okno ukazuje stav stahování, velikost a průběh v procentech\n"
+            "- Stažený instalátor se před spuštěním ověří podle velikosti a SHA-256\n"
+            "- Při chybě lze stahování zopakovat nebo znovu spustit původní Playoff\n\n"
 
             "=== ČAS A DATUM ===\n"
             "- V horní liště se zobrazuje aktuální datum a čas v reálném čase\n"
