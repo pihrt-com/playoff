@@ -227,7 +227,7 @@ https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
 
 ## Historie změn
 
-### 19. 10. 2026 – GitHub/playoff
+### 19. 10. 2026 – GitHub/playoff – verze 1.0.15
 
 Do horní lišty LAPS přibylo potvrzované červené tlačítko `SMAZAT A+B` pro vymazání záznamů obou drah. Opraveno bylo také USB připojování: LED displeje se nyní inicializují a opakovaně zkoušejí nezávisle a změna portu měřicí brány se použije ihned, bez nutnosti aplikaci zavírat a znovu spouštět.
 

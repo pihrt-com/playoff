@@ -45,14 +45,3 @@ exe = EXE(
     console=False,
     icon='playoff.ico'
 )
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    name='playoff'
-)

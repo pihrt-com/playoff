@@ -1,6 +1,6 @@
 # Historie změn
 
-## Nezveřejněno – 19. 10. 2026
+## 1.0.15 – 19. 10. 2026
 
 - Do horní lišty LAPS bylo mezi mazání A a B přidáno červené potvrzované tlačítko `SMAZAT A+B`, které smaže záznamy a obnoví číslování obou drah.
 - Inicializace LED displejů je nyní nezávislá pro A a B; neúspěšné nebo opožděné otevření jednoho portu neblokuje druhý a neúspěšný port zůstává připravený k dalšímu pokusu.

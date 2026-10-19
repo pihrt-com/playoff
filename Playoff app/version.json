@@ -1,7 +1,7 @@
 {
-  "version": "1.0.14",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.14/PlayoffSetup_1.0.14.exe",
-  "sha256": "56c1e3cc966f1ab79477cdc570f35755260842d484ac41dbdd6a79d9435ad906",
-  "size": 41883678,
-  "notes": "Režim LAPS přidává opakovaný odpočet s ručním resetem, automatickým dalším cyklem a varovným blikáním posledních 10 sekund."
+  "version": "1.0.15",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.15/PlayoffSetup_1.0.15.exe",
+  "sha256": "00de64c9f15a3aafbc0ae962b10eb3d387f39f48ee899a82babbb6da75dbc9de",
+  "size": 52243398,
+  "notes": "LAPS přidává společné mazání A+B a USB zařízení se po změně nastavení připojují hned bez restartu."
 }
