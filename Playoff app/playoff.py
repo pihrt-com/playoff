@@ -787,11 +787,8 @@ class PlayoffApp:
                             self.usb_timeout
                         )
 
-                        # CONNECT
-                        self.usb.connect()
-
-                        # START RX THREAD
-                        self.usb.start_reader(self.on_usb_line)
+                        # Apply the loaded port even when a prior initialization is active.
+                        self.usb.reconnect(self.on_usb_line)
                         self.usb.connect_displays()
                         self.update_usb_status(True)
                         self._log(f"USB AUTO CONNECT: port { self.usb_port} speed {self.usb_baud}")
@@ -1994,8 +1991,7 @@ class PlayoffApp:
             try:
                 if self.usb:
                     self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
-                    self.usb.start_reader(self.on_usb_line)
-                    self.update_usb_status(True)
+                    self.update_usb_status(self.usb.reconnect(self.on_usb_line))
             except Exception as e:
                 messagebox.showwarning("USB", f"Port nastaven, ale spojení selhalo:\n{e}")
                 self.update_usb_status(False)
@@ -3911,6 +3907,32 @@ class PlayoffApp:
             lambda e: self.clear_laps_a()
         )
 
+        # button DEL A+B
+        clear_all_x1 = mid - 55
+        clear_all_x2 = mid + 55
+        self.canvas.create_rectangle(
+            clear_all_x1, 10,
+            clear_all_x2, 40,
+            fill="#d62828",
+            outline="black",
+            tags="clear_all_laps"
+        )
+
+        self.canvas.create_text(
+            mid,
+            25,
+            text="SMAZAT A+B",
+            fill="white",
+            font=("Arial", 9, "bold"),
+            tags="clear_all_laps"
+        )
+
+        self.canvas.tag_bind(
+            "clear_all_laps",
+            "<Button-1>",
+            lambda e: self.clear_laps_all()
+        )
+
         # button DEL B
         self.canvas.create_rectangle(
             mid + mid // 2 + 25, 10,
@@ -4131,6 +4153,14 @@ class PlayoffApp:
     def clear_laps_b(self):
         if messagebox.askyesno("Potvrzení", "Smazat všechny záznamy B?"):
             self.laps_b.clear()
+            self.lap_id_b = 1
+            self.redraw()
+
+    def clear_laps_all(self):
+        if messagebox.askyesno("Potvrzení", "Smazat všechny záznamy A i B?"):
+            self.laps_a.clear()
+            self.laps_b.clear()
+            self.lap_id_a = 1
             self.lap_id_b = 1
             self.redraw()
 

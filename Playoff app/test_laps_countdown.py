@@ -66,6 +66,10 @@ def make_app(timer_value="05:00"):
     app.usb = None
     app.lap_running_a = False
     app.lap_running_b = False
+    app.laps_a = []
+    app.laps_b = []
+    app.lap_id_a = 1
+    app.lap_id_b = 1
     return app
 
 
@@ -243,6 +247,25 @@ class LapsCountdownTests(unittest.TestCase):
 
         self.assertEqual(x, 600)
         self.assertEqual(y, 708)
+
+    def test_clear_all_laps_clears_both_lanes_after_confirmation(self):
+        app = make_app()
+        app.laps_a = [{"ms": 10000}]
+        app.laps_b = [{"ms": 11000}]
+        app.lap_id_a = 2
+        app.lap_id_b = 2
+        redraw = mock.Mock()
+        app.redraw = redraw
+
+        with mock.patch.object(playoff.messagebox, "askyesno", return_value=True) as askyesno:
+            app.clear_laps_all()
+
+        askyesno.assert_called_once_with("Potvrzení", "Smazat všechny záznamy A i B?")
+        self.assertEqual(app.laps_a, [])
+        self.assertEqual(app.laps_b, [])
+        self.assertEqual(app.lap_id_a, 1)
+        self.assertEqual(app.lap_id_b, 1)
+        redraw.assert_called_once_with()
 
 
 if __name__ == "__main__":

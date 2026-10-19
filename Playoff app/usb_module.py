@@ -337,41 +337,87 @@ class USBManager:
     def stop_reader(self):
         self.handler.stop_reader()
 
+    def reconnect(self, callback=None):
+        """Apply the current gate settings even when a reader is already running."""
+        self.disconnect()
+        if not self.port:
+            return False
+        self.connect()
+        if callback is not None:
+            self.handler.start_reader(callback)
+        return True
+
+    def _connect_display(self, display_id):
+        if not PY_SERIAL_AVAILABLE:
+            self._log("Display connect skipped: pyserial is unavailable")
+            return False
+
+        if display_id == 1:
+            port = str(getattr(self.app, "display_port_a", "") or "").strip()
+            baud = getattr(self.app, "display_baud_a", DEFAULT_SERIAL_BAUD)
+            current = self.display_a
+        elif display_id == 2:
+            port = str(getattr(self.app, "display_port_b", "") or "").strip()
+            baud = getattr(self.app, "display_baud_b", DEFAULT_SERIAL_BAUD)
+            current = self.display_b
+        else:
+            return False
+
+        if not port:
+            return current is not None and current.is_open
+
+        try:
+            baud = int(baud)
+        except (TypeError, ValueError):
+            baud = DEFAULT_SERIAL_BAUD
+
+        if current is not None and current.is_open:
+            if current.port == port and current.baudrate == baud:
+                return True
+            self.disconnect_display(display_id)
+        elif current is not None:
+            self.disconnect_display(display_id)
+
+        display = None
+        try:
+            display = serial.Serial(
+                port=None,
+                baudrate=baud,
+                timeout=1,
+                write_timeout=1
+            )
+            display.port = port
+            if self.prevent_reset:
+                try:
+                    display.dtr = False
+                    display.rts = False
+                except Exception:
+                    pass
+            display.open()
+            time.sleep(1)
+            display.reset_input_buffer()
+            display.reset_output_buffer()
+        except Exception as e:
+            self._log(f"Display {display_id} connect error {e}")
+            try:
+                if display is not None:
+                    display.close()
+            except Exception:
+                pass
+            return False
+
+        if display_id == 1:
+            self.display_a = display
+        else:
+            self.display_b = display
+        return True
+
     def connect_displays(self):
         with self.display_connect_lock:
-            try:
-                if self.app.display_port_a and self.display_a is None:
-                    self.display_a = serial.Serial(
-                        port=None,
-                        baudrate=int(self.app.display_baud_a),
-                        timeout=1,
-                        write_timeout=1
-                    )
-                    self.display_a.port = self.app.display_port_a
-                    #self.display_a.dtr = False
-                    #self.display_a.rts = False
-                    self.display_a.open()
-                    time.sleep(1)
-                    self.display_a.reset_input_buffer()
-                    self.display_a.reset_output_buffer()
-
-                if self.app.display_port_b and self.display_b is None:
-                    self.display_b = serial.Serial(
-                        port=None,
-                        baudrate=int(self.app.display_baud_b),
-                        timeout=1,
-                        write_timeout=1
-                    )
-                    self.display_b.port = self.app.display_port_b
-                    #self.display_b.dtr = False
-                    #self.display_b.rts = False
-                    self.display_b.open()
-                    time.sleep(1)
-                    self.display_b.reset_input_buffer()
-                    self.display_b.reset_output_buffer()
-
-            except Exception as e:
-                self._log(f"Display connect error {e}")
+            return {
+                1: self._connect_display(1),
+                2: self._connect_display(2),
+            }
 
 
     def send_display(self, id, text):

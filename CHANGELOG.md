@@ -1,5 +1,11 @@
 # Historie změn
 
+## Nezveřejněno – 19. 10. 2026
+
+- Do horní lišty LAPS bylo mezi mazání A a B přidáno červené potvrzované tlačítko `SMAZAT A+B`, které smaže záznamy a obnoví číslování obou drah.
+- Inicializace LED displejů je nyní nezávislá pro A a B; neúspěšné nebo opožděné otevření jednoho portu neblokuje druhý a neúspěšný port zůstává připravený k dalšímu pokusu.
+- Uložení USB nastavení nyní vždy znovu připojí měřicí bránu, takže změna COM portu začne fungovat ihned bez restartu aplikace.
+
 ## 1.0.14 – 19. 10. 2026
 
 - Přidán opakovaný odpočet do režimu LAPS, umístěný dole uprostřed nad poli A a B.

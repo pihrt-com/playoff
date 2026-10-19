@@ -27,6 +27,8 @@ Volba „Povolit odpočet“ zobrazuje časovač také v režimu LAPS, kde je um
 
 Po dosažení nuly se nastavený interval automaticky obnoví a začne další cyklus. Během posledních 10 sekund se pozadí střídá mezi černou a červenou, zatímco text zůstává bílý. Vypnutí volby nebo přepnutí z režimu LAPS cyklus zastaví. Jednorázové spouštění odpočtu v režimu PLAYOFF přes START/OK zůstává beze změny.
 
+V horní liště LAPS jsou samostatná tlačítka `SMAZAT` pro A a B a mezi nimi červené tlačítko `SMAZAT A+B`. Společná akce po potvrzení smaže záznamy obou drah a obnoví jejich číslování od jedničky.
+
 ## Průběžný čas na LED displejích
 
 V nabídce Nastavení lze volbou „Měřit a zobrazit čas kola“ zapnout měření drah A a B. Zatržítko „Odesílat na LED průběžný čas“ navíc zapne pravidelné odesílání běžícího času na příslušný LED displej.
@@ -34,6 +36,10 @@ V nabídce Nastavení lze volbou „Měřit a zobrazit čas kola“ zapnout mě�
 Položka „Rychlost obnovování“ nabízí intervaly od 0,1 s do 1,0 s. Každý displej se aktualizuje jen po dobu běhu své dráhy; po dojezdu se okamžitě odešle přesný konečný čas a druhá dráha může pokračovat. Průběžné odesílání je ve výchozím nastavení vypnuté.
 
 Nastavení se ukládá do uživatelského souboru `.playoff_settings.json` i do uloženého projektu `.setup`.
+
+## Inicializace USB zařízení
+
+Brána a oba LED displeje se připojují nezávisle. Dočasně nedostupný nebo právě se probouzející displej proto neblokuje druhý displej a při dalším odeslání se zkusí znovu. Potvrzení změny USB nastavení vždy bezpečně odpojí a znovu připojí bránu, aby se okamžitě použil nově vybraný COM port bez nutnosti restartovat aplikaci.
 
 ## Aktualizace programu
 
@@ -220,6 +226,10 @@ https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
 https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
 
 ## Historie změn
+
+### 19. 10. 2026 – GitHub/playoff
+
+Do horní lišty LAPS přibylo potvrzované červené tlačítko `SMAZAT A+B` pro vymazání záznamů obou drah. Opraveno bylo také USB připojování: LED displeje se nyní inicializují a opakovaně zkoušejí nezávisle a změna portu měřicí brány se použije ihned, bez nutnosti aplikaci zavírat a znovu spouštět.
 
 ### 19. 10. 2026 – GitHub/playoff – verze 1.0.14
 

@@ -1,7 +1,9 @@
 import threading
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
+import usb_module
 from usb_module import USBManager
 
 
@@ -28,6 +30,31 @@ class FakeSerial:
     def close(self):
         self.closed = True
         self.is_open = False
+
+
+class OpeningSerial(FakeSerial):
+    def __init__(self, port=None, baudrate=115200, timeout=1, write_timeout=1):
+        super().__init__()
+        self.is_open = False
+        self.port = port
+        self.baudrate = baudrate
+        self.timeout = timeout
+        self.write_timeout = write_timeout
+        self.dtr = None
+        self.rts = None
+        self.input_reset = False
+        self.output_reset = False
+
+    def open(self):
+        if self.port == "COM1":
+            raise OSError(f"Cannot open {self.port}")
+        self.is_open = True
+
+    def reset_input_buffer(self):
+        self.input_reset = True
+
+    def reset_output_buffer(self):
+        self.output_reset = True
 
 
 def make_manager():
@@ -118,6 +145,45 @@ class USBDisplayTests(unittest.TestCase):
         self.assertIs(manager.display_a, first_display)
         self.assertTrue(first_display.is_open)
         self.assertFalse(first_display.closed)
+
+    def test_failed_first_display_does_not_prevent_second_display_initialization(self):
+        manager = make_manager()
+        manager.app.display_port_a = "COM1"
+        manager.app.display_port_b = "COM2"
+        created = []
+
+        def make_serial(**kwargs):
+            serial_port = OpeningSerial(**kwargs)
+            created.append(serial_port)
+            return serial_port
+
+        with mock.patch.object(usb_module, "PY_SERIAL_AVAILABLE", True), \
+             mock.patch.object(usb_module, "serial", SimpleNamespace(Serial=make_serial)), \
+             mock.patch.object(usb_module.time, "sleep"):
+            connected = manager.connect_displays()
+
+        self.assertFalse(connected[1])
+        self.assertTrue(connected[2])
+        self.assertIsNone(manager.display_a)
+        self.assertIs(manager.display_b, created[1])
+        self.assertTrue(manager.display_b.is_open)
+        self.assertFalse(created[0].dtr)
+        self.assertFalse(created[0].rts)
+
+    def test_reconnect_replaces_a_running_gate_reader(self):
+        manager = make_manager()
+        manager.port = "COM8"
+        manager.handler.rx_running = True
+        manager.disconnect = mock.Mock()
+        manager.connect = mock.Mock()
+        manager.handler.start_reader = mock.Mock()
+        callback = mock.Mock()
+
+        self.assertTrue(manager.reconnect(callback))
+
+        manager.disconnect.assert_called_once_with()
+        manager.connect.assert_called_once_with()
+        manager.handler.start_reader.assert_called_once_with(callback)
 
 
 if __name__ == "__main__":
