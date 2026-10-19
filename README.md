@@ -21,6 +21,12 @@ App (takto vypadá okno aplikace)
 
 [![](https://github.com/pihrt-com/playoff/blob/main/Example/ex9.png?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/ex9.png)
 
+## Opakovaný odpočet v režimu LAPS
+
+Volba „Povolit odpočet“ zobrazuje časovač také v režimu LAPS, kde je umístěný dole uprostřed nad poli A a B. Pravým tlačítkem se nastavuje společný interval `MM:SS`; levým tlačítkem se odpočet spustí od maxima nebo se na maximum kdykoliv vrátí a znovu spustí.
+
+Po dosažení nuly se nastavený interval automaticky obnoví a začne další cyklus. Během posledních 10 sekund se pozadí střídá mezi černou a červenou, zatímco text zůstává bílý. Vypnutí volby nebo přepnutí z režimu LAPS cyklus zastaví. Jednorázové spouštění odpočtu v režimu PLAYOFF přes START/OK zůstává beze změny.
+
 ## Průběžný čas na LED displejích
 
 V nabídce Nastavení lze volbou „Měřit a zobrazit čas kola“ zapnout měření drah A a B. Zatržítko „Odesílat na LED průběžný čas“ navíc zapne pravidelné odesílání běžícího času na příslušný LED displej.
@@ -214,6 +220,10 @@ https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
 https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
 
 ## Historie změn
+
+### 19. 10. 2026 – GitHub/playoff – verze 1.0.14
+
+Verze 1.0.14 přidává do režimu LAPS opakovaný odpočet se společným nastavením `MM:SS`, spuštěním a resetem levým tlačítkem, automatickým obnovením dalšího cyklu a černo-červeným varovným blikáním během posledních 10 sekund. Režim PLAYOFF si zachovává původní jednorázové spouštění přes START nebo potvrzení semaforu.
 
 ### 18. 10. 2026 – GitHub/playoff – verze 1.0.13
 

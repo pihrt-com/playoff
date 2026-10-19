@@ -1,7 +1,7 @@
 {
-  "version": "1.0.13",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.13/PlayoffSetup_1.0.13.exe",
-  "sha256": "513a25cfddff62f929355b962a96f8b13c36bd81f63429785eedcd2fa1a99a30",
-  "size": 41884347,
-  "notes": "Grafický updater zobrazuje průběh stahování, stav aktualizace a srozumitelné chyby."
+  "version": "1.0.14",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.14/PlayoffSetup_1.0.14.exe",
+  "sha256": "56c1e3cc966f1ab79477cdc570f35755260842d484ac41dbdd6a79d9435ad906",
+  "size": 41883678,
+  "notes": "Režim LAPS přidává opakovaný odpočet s ručním resetem, automatickým dalším cyklem a varovným blikáním posledních 10 sekund."
 }

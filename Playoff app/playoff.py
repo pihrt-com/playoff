@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.13"                                         # current version of the application
-APP_date          = "18.10.2026"                                     # current version date
+APP_current       = "1.0.14"                                         # current version of the application
+APP_date          = "19.10.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -111,6 +111,8 @@ DEFAULT_USB_DISPLAY_B_BAUD = 115200
 
 LED_REFRESH_OPTIONS        = tuple(round(value / 10, 1) for value in range(1, 11))
 DEFAULT_LED_REFRESH        = 0.1
+LAPS_COUNTDOWN_WARNING     = 10
+LAPS_COUNTDOWN_BLINK_MS    = 500
 
 
 def normalize_led_refresh(value):
@@ -123,6 +125,15 @@ def normalize_led_refresh(value):
     if interval in LED_REFRESH_OPTIONS:
         return interval
     return DEFAULT_LED_REFRESH
+
+
+def laps_countdown_position(canvas_width, canvas_height, timer_height):
+    """Return the bottom-center canvas position for the LAPS countdown."""
+    timer_height = max(1, timer_height)
+    return (
+        canvas_width / 2,
+        max(timer_height / 2 + 10, canvas_height - timer_height / 2 - 20),
+    )
 
 # --- Data classes ---
 class Slot:
@@ -223,6 +234,11 @@ class PlayoffApp:
         self.timer_blink = False
         self.current_seconds = 0
         self.timer_start_mode = "ok"  # "start" | "ok"  
+        self.laps_countdown_running = False
+        self.laps_countdown_seconds = self.time_to_seconds(self.timer_value)
+        self.laps_countdown_after_id = None
+        self.laps_countdown_blink_after_id = None
+        self.laps_countdown_blink_state = False
         self.team_names = []          # Team naming database
         self.pre_round_enabled = True
         self.third_place_enabled = True
@@ -683,6 +699,7 @@ class PlayoffApp:
             padx=20,      # horizontal inner edge
             pady=10       # vertical inner edge
         ) 
+        self.timer_label.bind('<Button-1>', self.on_timer_left_click)
         self.timer_label.bind('<Button-3>', self.on_timer_right_click)
         self.timer_window = None
 
@@ -724,6 +741,13 @@ class PlayoffApp:
                 self.display_port_b = s.get('display_port_b', self.display_port_b)
                 self.display_baud_a = s.get('display_baud_a', self.display_baud_a)
                 self.display_baud_b = s.get('display_baud_b', self.display_baud_b)
+                self.enable_timer = bool(s.get('enable_timer', self.enable_timer))
+                self.timer_menu_var.set(self.enable_timer)
+                saved_timer_value = str(s.get('timer_value', self.timer_value))
+                if self.validate_time_format(saved_timer_value):
+                    self.timer_value = saved_timer_value
+                self.laps_countdown_seconds = self.time_to_seconds(self.timer_value)
+                self.timer_label.config(text=self.timer_value)
                 self.lap_timer_enabled = bool(s.get('lap_timer_enabled', self.lap_timer_enabled))
                 self.lap_timer_var.set(self.lap_timer_enabled)
                 self.live_led_enabled = bool(s.get('live_led_enabled', self.live_led_enabled))
@@ -1181,6 +1205,7 @@ class PlayoffApp:
             self.view_mode_var.set(self.view_mode)
             return
 
+        self.stop_countdowns_for_mode_change()
         self.view_mode = new_mode
         self.update_view_mode_gui()
         self._log(f"VIEW MODE = {self.view_mode}")
@@ -1205,6 +1230,7 @@ class PlayoffApp:
         ):
             return
 
+        self.stop_countdowns_for_mode_change()
         self.lap_time_a = 0
         self.lap_time_b = 0
         self.lap_running_a = False
@@ -2128,6 +2154,7 @@ class PlayoffApp:
             messagebox.showerror('Chyba', f'Nepodařilo se načíst soubor: {e}')
             self._log('Chyba', f'Nepodařilo se načíst soubor: {e}')
             return
+        self.stop_countdowns_for_mode_change()
         # rebuild bracket with exact count
         n = data.get('team_count', 0)
         self.odd_behavior = data.get('odd_behavior', 'manual')
@@ -2140,6 +2167,10 @@ class PlayoffApp:
         self.canvas.config(bg=self.canvas_bg)
         self.enable_timer = data.get('enable_timer', getattr(self, 'enable_timer', True))
         self.timer_value = data.get('timer_value', getattr(self, 'timer_value', '05:00'))
+        if not self.validate_time_format(str(self.timer_value)):
+            self.timer_value = '05:00'
+        self.timer_value = str(self.timer_value)
+        self.laps_countdown_seconds = self.time_to_seconds(self.timer_value)
         self.timer_start_mode = data.get('timer_start_mode', 'start')
         self.timer_start_mode_var.set(self.timer_start_mode)
         self.team_names = data.get('team_names', [])
@@ -2258,6 +2289,18 @@ class PlayoffApp:
         self._log('Hotovo', 'Soubor byl načten')
 
     # --- Timer methods (MM:SS input, countdown, blinking) ---
+    def stop_countdowns_for_mode_change(self):
+        self.timer_running = False
+        countdown_after_id = getattr(self, 'countdown_after_id', None)
+        if countdown_after_id:
+            try:
+                self.root.after_cancel(countdown_after_id)
+            except Exception:
+                pass
+            self.countdown_after_id = None
+        self.stop_blinking()
+        self.stop_laps_countdown(reset=True)
+
     def on_toggle_timer(self):
         self.enable_timer = self.timer_menu_var.get()
         # persist small settings to user home file
@@ -2280,6 +2323,9 @@ class PlayoffApp:
             self.update_timer_visibility()
         except Exception:
             pass
+
+        if self.view_mode == "laps":
+            self.stop_laps_countdown(reset=True)
 
         self.redraw()
 
@@ -2363,6 +2409,12 @@ class PlayoffApp:
         except Exception:
             pass
 
+    def on_timer_left_click(self, event=None):
+        if self.view_mode != "laps" or not self.enable_timer:
+            return None
+        self.start_laps_countdown()
+        return "break"
+
     def on_timer_right_click(self, event=None):
         class WideEntryDialog(simpledialog._QueryString):
             def body(self, master):
@@ -2383,7 +2435,10 @@ class PlayoffApp:
         
         if self.validate_time_format(val):
             self.timer_value = val
-            self.timer_label.config(text=self.timer_value)
+            if self.view_mode == "laps":
+                self.stop_laps_countdown(reset=True)
+            else:
+                self.timer_label.config(text=self.timer_value)
             try:
                 spath = os.path.join(os.path.expanduser('~'), '.playoff_settings.json')
                 data = {}
@@ -2397,6 +2452,134 @@ class PlayoffApp:
                 pass
         else:
             messagebox.showerror('Chyba', 'Neplatný formát času. Použij MM:SS (např. 03:30).')
+
+    def start_laps_countdown(self):
+        if self.view_mode != "laps" or not self.enable_timer:
+            return False
+
+        maximum = self.time_to_seconds(self.timer_value)
+        if maximum <= 0:
+            self.stop_laps_countdown(reset=True)
+            messagebox.showerror(
+                'Chyba',
+                'Pro opakovaný odpočet nastav čas větší než 00:00.'
+            )
+            return False
+
+        self.stop_laps_countdown(reset=False)
+        self.laps_countdown_seconds = maximum
+        self.laps_countdown_running = True
+        self.timer_label.config(
+            text=self.seconds_to_time(self.laps_countdown_seconds),
+            bg='black',
+            fg='white'
+        )
+        self.laps_countdown_after_id = self.root.after(
+            1000,
+            self.laps_countdown_tick
+        )
+        return True
+
+    def laps_countdown_tick(self):
+        self.laps_countdown_after_id = None
+        if (
+            not self.laps_countdown_running
+            or self.view_mode != "laps"
+            or not self.enable_timer
+        ):
+            return
+
+        maximum = self.time_to_seconds(self.timer_value)
+        if maximum <= 0:
+            self.stop_laps_countdown(reset=True)
+            return
+
+        cycle_restarted = self.laps_countdown_seconds <= 1
+        if cycle_restarted:
+            self.laps_countdown_seconds = maximum
+            self.stop_laps_countdown_blink()
+        else:
+            self.laps_countdown_seconds -= 1
+
+        self.timer_label.config(
+            text=self.seconds_to_time(self.laps_countdown_seconds),
+            fg='white'
+        )
+        if not cycle_restarted:
+            self.update_laps_countdown_warning()
+        self.laps_countdown_after_id = self.root.after(
+            1000,
+            self.laps_countdown_tick
+        )
+
+    def update_laps_countdown_warning(self):
+        warning_active = (
+            self.laps_countdown_running
+            and 0 < self.laps_countdown_seconds <= LAPS_COUNTDOWN_WARNING
+        )
+        if warning_active:
+            if self.laps_countdown_blink_after_id is None:
+                self.laps_countdown_blink_state = False
+                self.laps_countdown_blink_step()
+        else:
+            self.stop_laps_countdown_blink()
+
+    def laps_countdown_blink_step(self):
+        self.laps_countdown_blink_after_id = None
+        if (
+            not self.laps_countdown_running
+            or self.view_mode != "laps"
+            or not self.enable_timer
+            or not (0 < self.laps_countdown_seconds <= LAPS_COUNTDOWN_WARNING)
+        ):
+            self.stop_laps_countdown_blink()
+            return
+
+        self.laps_countdown_blink_state = not self.laps_countdown_blink_state
+        self.timer_label.config(
+            bg='red' if self.laps_countdown_blink_state else 'black',
+            fg='white'
+        )
+        self.laps_countdown_blink_after_id = self.root.after(
+            LAPS_COUNTDOWN_BLINK_MS,
+            self.laps_countdown_blink_step
+        )
+
+    def stop_laps_countdown_blink(self):
+        blink_after_id = getattr(self, 'laps_countdown_blink_after_id', None)
+        if blink_after_id:
+            try:
+                self.root.after_cancel(blink_after_id)
+            except Exception:
+                pass
+        self.laps_countdown_blink_after_id = None
+        self.laps_countdown_blink_state = False
+        try:
+            self.timer_label.config(bg='black', fg='white')
+        except Exception:
+            pass
+
+    def stop_laps_countdown(self, reset=False):
+        self.laps_countdown_running = False
+        countdown_after_id = getattr(self, 'laps_countdown_after_id', None)
+        if countdown_after_id:
+            try:
+                self.root.after_cancel(countdown_after_id)
+            except Exception:
+                pass
+        self.laps_countdown_after_id = None
+        self.stop_laps_countdown_blink()
+
+        if reset:
+            self.laps_countdown_seconds = self.time_to_seconds(self.timer_value)
+            try:
+                self.timer_label.config(
+                    text=self.seconds_to_time(self.laps_countdown_seconds),
+                    bg='black',
+                    fg='white'
+                )
+            except Exception:
+                pass
 
     def validate_time_format(self, text):
         try:
@@ -2858,11 +3041,20 @@ class PlayoffApp:
 
             "=== ODPOČET ===\n"
             "Nastavení → Povolit odpočet\n"
-            "- Pod vítězem se zobrazí časovač MM:SS\n"
-            "- Pravým tlačítkem myši lze změnit čas\n\n"
+            "- Volba zobrazuje časovač MM:SS v režimech PLAYOFF i LAPS\n"
+            "- Pravým tlačítkem myši lze změnit společný nastavený čas\n\n"
+            "Režim PLAYOFF:\n"
+            "- Pod vítězem se zobrazí jednorázový odpočet\n"
             "Režim spuštění odpočtu:\n"
             "- Spustit odpočet ihned (po START)\n"
             "- Spustit odpočet až po semaforu (OK)\n\n"
+
+            "Režim LAPS:\n"
+            "- Odpočet je dole uprostřed nad poli A a B\n"
+            "- Levé tlačítko spustí odpočet od nastaveného maxima nebo jej kdykoliv resetuje\n"
+            "- Po vypršení se odpočet automaticky obnoví a pokračuje v dalším cyklu\n"
+            "- Posledních 10 sekund bliká pozadí černě a červeně, text zůstává bílý\n"
+            "- Vypnutí odpočtu nebo změna režimu cyklus zastaví\n\n"
 
             "=== ČAS KOLA NA LED DISPLEJI ===\n"
             "Nastavení → Měřit a zobrazit čas kola\n"
@@ -2958,6 +3150,7 @@ class PlayoffApp:
     # --- playoff mode ---
     def redraw(self):
         self.canvas.delete("all")
+        self.timer_window = None
         if self.view_mode == "laps":
             self.draw_laps()
             return
@@ -3613,6 +3806,7 @@ class PlayoffApp:
     # --- laps mode ---
     def draw_laps(self):
         self.canvas.delete("all")
+        self.timer_window = None
         self.canvas.update_idletasks()
 
         w = self.canvas.winfo_width()
@@ -3914,6 +4108,19 @@ class PlayoffApp:
             )
 
             y += row_height
+
+        # Repeating LAPS countdown is drawn last so it stays above both fields.
+        if self.enable_timer:
+            self.timer_label.update_idletasks()
+            timer_h = max(1, self.timer_label.winfo_reqheight())
+            timer_x, timer_y = laps_countdown_position(w, h, timer_h)
+            self.timer_window = self.canvas.create_window(
+                timer_x,
+                timer_y,
+                window=self.timer_label,
+                anchor='center'
+            )
+            self.canvas.itemconfigure(self.timer_window, state='normal')
 
     def clear_laps_a(self):
         if messagebox.askyesno("Potvrzení", "Smazat všechny záznamy A?"):

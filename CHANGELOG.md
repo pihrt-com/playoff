@@ -1,5 +1,15 @@
 # Historie změn
 
+## 1.0.14 – 19. 10. 2026
+
+- Přidán opakovaný odpočet do režimu LAPS, umístěný dole uprostřed nad poli A a B.
+- Levé tlačítko spustí cyklus od nastaveného maxima nebo běžící cyklus kdykoliv resetuje.
+- Po vypršení se nastavený interval automaticky obnoví a spustí další cyklus.
+- Posledních 10 sekund střídá odpočet černé a červené pozadí při zachování bílého textu.
+- Pravé tlačítko nadále nastavuje společný interval `MM:SS`, který se ukládá do uživatelského nastavení i projektu.
+- Vypnutí odpočtu nebo opuštění režimu LAPS cyklus zastaví a vrátí zobrazení na nastavené maximum.
+- Jednorázový odpočet režimu PLAYOFF a jeho spouštění přes START/OK zůstávají beze změny.
+
 ## 1.0.13 – 18. 10. 2026
 
 - Přidáno samostatné grafické okno updateru s průběhem stahování v procentech a zobrazením stažené velikosti.

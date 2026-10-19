@@ -12,10 +12,10 @@ class UpdateManifestTests(unittest.TestCase):
             (app_dir / "version.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(manifest["version"], "1.0.13")
+        self.assertEqual(manifest["version"], "1.0.14")
         self.assertEqual(playoff.APP_current, manifest["version"])
-        self.assertIn("/releases/download/1.0.13/", manifest["url"])
-        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.13.exe"))
+        self.assertIn("/releases/download/1.0.14/", manifest["url"])
+        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.14.exe"))
         self.assertEqual(len(manifest["sha256"]), 64)
         self.assertTrue(all(char in "0123456789abcdef" for char in manifest["sha256"]))
         self.assertGreater(manifest["size"], 0)
@@ -23,8 +23,8 @@ class UpdateManifestTests(unittest.TestCase):
         installer = (app_dir / "installer_playoff.iss").read_text(
             encoding="utf-8"
         )
-        self.assertIn("AppVersion=1.0.13", installer)
-        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.13", installer)
+        self.assertIn("AppVersion=1.0.14", installer)
+        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.14", installer)
 
     def test_updater_command_contains_manifest_integrity_data(self):
         info = {
