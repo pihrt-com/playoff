@@ -37,15 +37,25 @@ Položka „Rychlost obnovování“ nabízí intervaly od 0,1 s do 1,0 s. Každ
 
 Nastavení se ukládá do uživatelského souboru `.playoff_settings.json` i do uloženého projektu `.setup`.
 
+## Propagační text na LED displejích
+
+Položka „Nastavit propagační text“ v nabídce Nastavení uloží text o délce nejvýše 79 základních znaků bez diakritiky. Tlačítko `PROMO` v horní liště odešle text na všechny nastavené LED displeje, pokud právě neběží závod, odpočet ani měření času.
+
+K dispozici je plynulá rotace řízená aplikací, která funguje i s firmwarem displeje 1.0, nativní rolování panelu příkazem `SCR` a statický text příkazem `TXT`. Posuvník nastavuje rychlost od 1 do 20 znaků za sekundu; text, režim i rychlost se ukládají do uživatelského JSON i do souboru projektu. START nebo potvrzená změna režimu PLAYOFF/LAPS propagační text smaže a vrátí běžné chování displejů.
+
 ## Inicializace USB zařízení
 
-Brána a oba LED displeje se připojují nezávisle. Dočasně nedostupný nebo právě se probouzející displej proto neblokuje druhý displej a při dalším odeslání se zkusí znovu. Potvrzení změny USB nastavení vždy bezpečně odpojí a znovu připojí bránu, aby se okamžitě použil nově vybraný COM port bez nutnosti restartovat aplikaci.
+Brána a oba LED displeje se připojují nezávisle. Pro každé zařízení lze zvolit „Nepoužívat“, takže je možné provozovat nebo testovat samotný LED displej bez připojené brány. Aplikace odmítne přiřazení stejného COM portu více zařízením a zobrazí srozumitelnou chybu.
+
+Pravá část dialogu USB nastavení zobrazuje nalezenou bránu a LED displeje podle uloženého přiřazení a dostupných informací zařízení. Dočasně nedostupný nebo právě se probouzející displej neblokuje druhý displej a při dalším odeslání se zkusí znovu. Potvrzení změny nastavení zachová nezměněné spojení displeje a bránu podle potřeby odpojí nebo znovu připojí, takže není nutné odpojovat USB ani restartovat aplikaci.
 
 ## Aktualizace programu
 
 Po potvrzení nové verze se otevře samostatné okno „Aktualizace Playoff“. Zobrazuje připojení k serveru, průběh a velikost stahovaného instalačního souboru, jeho ověření a spuštění instalátoru.
 
 Instalátor se před spuštěním kontroluje podle velikosti a SHA-256 uvedeného v aktualizačním manifestu. Při chybě zůstane okno otevřené se srozumitelnou zprávou a technickými podrobnostmi; uživatel může stahování zopakovat, zavřít updater nebo znovu spustit původní Playoff.
+
+Aplikace nabídne instalaci pouze tehdy, když je číslo zveřejněné verze skutečně vyšší než číslo právě spuštěné verze; starší vydání proto nelze omylem nabídnout jako aktualizaci.
 
 ---
 
@@ -177,6 +187,11 @@ Vyhodnocení cíle:
 ### FW 1.0
 - 7 segmentový LED displej ovládaný Arduino Nano, připojený segmenty přes posuvné registry 74HC
 
+### FW 1.1
+- plynulá kruhová rotace textu bez prázdného restartu
+- zachování mezer v propagačním textu
+- ovládání rychlosti příkazem `SPD`
+
 ---
 
 # 3D tisk
@@ -226,6 +241,10 @@ https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
 https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
 
 ## Historie změn
+
+### 03. 11. 2026 – GitHub/playoff – verze 1.0.16
+
+Verze 1.0.16 umožňuje vypnout libovolný USB port volbou „Nepoužívat“, testovat LED displeje bez připojené brány, zabrání dvojímu použití stejného COM portu a v rozšířeném dialogu ukazuje nalezená zařízení. Nové tlačítko `PROMO` zobrazuje uložený propagační text na všech dostupných LED displejích ve třech režimech, včetně plynulé rotace kompatibilní s firmwarem 1.0 a nastavitelné rychlosti. Součástí zdrojů je také firmware displeje 1.1 s kruhovou rotací a kontrola aktualizací už nenabídne starší verzi.
 
 ### 19. 10. 2026 – GitHub/playoff – verze 1.0.15
 

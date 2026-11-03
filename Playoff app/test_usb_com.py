@@ -70,7 +70,9 @@ def make_manager():
 class USBDisplayTests(unittest.TestCase):
     def test_send_display_writes_command_and_drains_previous_reply(self):
         manager = make_manager()
-        serial_port = FakeSerial()
+        manager.app.display_port_a = "COM3"
+        serial_port = OpeningSerial(port="COM3", baudrate=115200)
+        serial_port.open()
         manager.display_a = serial_port
 
         self.assertTrue(manager.send_display(1, "TXT:12.345"))
@@ -184,6 +186,68 @@ class USBDisplayTests(unittest.TestCase):
         manager.disconnect.assert_called_once_with()
         manager.connect.assert_called_once_with()
         manager.handler.start_reader.assert_called_once_with(callback)
+
+    def test_dialog_test_uses_selected_display_port_without_gate(self):
+        manager = make_manager()
+        created = []
+
+        def make_serial(**kwargs):
+            serial_port = OpeningSerial(**kwargs)
+            created.append(serial_port)
+            return serial_port
+
+        with mock.patch.object(usb_module, "PY_SERIAL_AVAILABLE", True), \
+             mock.patch.object(usb_module, "serial", SimpleNamespace(Serial=make_serial)), \
+             mock.patch.object(usb_module.time, "sleep"):
+            sent = manager.send_display_to_port(1, "TXT:ID-1", "COM3", 115200)
+
+        self.assertTrue(sent)
+        self.assertEqual(len(created), 1)
+        self.assertEqual(created[0].port, "COM3")
+        self.assertEqual(created[0].writes, [b"TXT:ID-1\r\n"])
+        self.assertFalse(manager.handler.is_open())
+
+    def test_dialog_test_reports_open_error(self):
+        manager = make_manager()
+
+        def make_serial(**kwargs):
+            return OpeningSerial(**kwargs)
+
+        with mock.patch.object(usb_module, "PY_SERIAL_AVAILABLE", True), \
+             mock.patch.object(usb_module, "serial", SimpleNamespace(Serial=make_serial)), \
+             mock.patch.object(usb_module.time, "sleep"):
+            sent = manager.send_display_to_port(1, "TXT:ID-1", "COM1", 115200)
+
+        self.assertFalse(sent)
+        self.assertIn("Cannot open COM1", manager.display_error(1))
+
+    def test_reapplying_same_display_settings_keeps_open_connection(self):
+        manager = make_manager()
+        manager.app.display_port_a = "COM3"
+        current = OpeningSerial(port="COM3", baudrate=115200)
+        current.open()
+        manager.display_a = current
+
+        with mock.patch.object(usb_module, "serial") as serial_module:
+            connected = manager._connect_display(1)
+
+        self.assertTrue(connected)
+        self.assertIs(manager.display_a, current)
+        self.assertFalse(current.closed)
+        serial_module.Serial.assert_not_called()
+
+    def test_disabling_display_closes_existing_connection(self):
+        manager = make_manager()
+        current = OpeningSerial(port="COM3", baudrate=115200)
+        current.open()
+        manager.display_a = current
+
+        with mock.patch.object(usb_module.time, "sleep"):
+            connected = manager._connect_display(1)
+
+        self.assertFalse(connected)
+        self.assertTrue(current.closed)
+        self.assertIsNone(manager.display_a)
 
 
 if __name__ == "__main__":

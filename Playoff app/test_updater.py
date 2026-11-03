@@ -6,16 +6,23 @@ import playoff
 
 
 class UpdateManifestTests(unittest.TestCase):
+    def test_only_newer_versions_are_offered(self):
+        self.assertTrue(playoff.is_newer_version("1.0.17", "1.0.16"))
+        self.assertTrue(playoff.is_newer_version("1.1", "1.0.16"))
+        self.assertFalse(playoff.is_newer_version("1.0.16", "1.0.16"))
+        self.assertFalse(playoff.is_newer_version("1.0.15", "1.0.16"))
+        self.assertFalse(playoff.is_newer_version("invalid", "1.0.16"))
+
     def test_manifest_matches_release_version(self):
         app_dir = Path(__file__).resolve().parent
         manifest = json.loads(
             (app_dir / "version.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(manifest["version"], "1.0.15")
+        self.assertEqual(manifest["version"], "1.0.16")
         self.assertEqual(playoff.APP_current, manifest["version"])
-        self.assertIn("/releases/download/1.0.15/", manifest["url"])
-        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.15.exe"))
+        self.assertIn("/releases/download/1.0.16/", manifest["url"])
+        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.16.exe"))
         self.assertEqual(len(manifest["sha256"]), 64)
         self.assertTrue(all(char in "0123456789abcdef" for char in manifest["sha256"]))
         self.assertGreater(manifest["size"], 0)
@@ -23,8 +30,8 @@ class UpdateManifestTests(unittest.TestCase):
         installer = (app_dir / "installer_playoff.iss").read_text(
             encoding="utf-8"
         )
-        self.assertIn("AppVersion=1.0.15", installer)
-        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.15", installer)
+        self.assertIn("AppVersion=1.0.16", installer)
+        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.16", installer)
 
     def test_updater_command_contains_manifest_integrity_data(self):
         info = {

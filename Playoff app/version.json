@@ -1,7 +1,7 @@
 {
-  "version": "1.0.15",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.15/PlayoffSetup_1.0.15.exe",
-  "sha256": "00de64c9f15a3aafbc0ae962b10eb3d387f39f48ee899a82babbb6da75dbc9de",
-  "size": 52243398,
-  "notes": "LAPS přidává společné mazání A+B a USB zařízení se po změně nastavení připojují hned bez restartu."
+  "version": "1.0.16",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.16/PlayoffSetup_1.0.16.exe",
+  "sha256": "88aa85c20ec7bba0c32cfc68bd1b79e3dca212ceef19b7d3685c09d23fb0c9dc",
+  "size": 41897574,
+  "notes": "USB zařízení lze samostatně vypnout a otestovat bez brány. Nové PROMO zobrazuje uložený propagační text na LED displejích s volitelným režimem a rychlostí."
 }

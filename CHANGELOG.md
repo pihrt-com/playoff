@@ -1,5 +1,19 @@
 # Historie změn
 
+## 1.0.16 – 03. 11. 2026
+
+- Bránu i oba LED displeje lze v dialogu USB nastavení samostatně vypnout volbou „Nepoužívat“.
+- LED displeje lze připojit a otestovat bez přítomné měřicí brány.
+- Aplikace odmítne použití stejného COM portu pro více zařízení a zobrazí konkrétní chybovou zprávu.
+- Rozšířený dialog USB nastavení zobrazuje nalezenou bránu a LED displeje a zachová nezměněná spojení po uložení.
+- Do horní lišty bylo přidáno stejně velké tlačítko `PROMO` pro propagační text na všech dostupných LED displejích.
+- Propagační text nabízí plynulou rotaci kompatibilní s firmwarem 1.0, rolování řízené panelem a statické zobrazení.
+- Posuvník nastavuje rychlost propagačního textu od 1 do 20 znaků za sekundu.
+- Text, režim a rychlost se ukládají do uživatelského JSON i do souboru projektu.
+- START a potvrzená změna režimu PLAYOFF/LAPS zastaví propagaci a obnoví původní chování displejů.
+- Přidán firmware LED displeje 1.1 s plynulou kruhovou rotací a zachováním mezer.
+- Kontrola aktualizací porovnává číselné části verze a nikdy nenabídne starší vydání jako aktualizaci.
+
 ## 1.0.15 – 19. 10. 2026
 
 - Do horní lišty LAPS bylo mezi mazání A a B přidáno červené potvrzované tlačítko `SMAZAT A+B`, které smaže záznamy a obnoví číslování obou drah.

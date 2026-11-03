@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.15"                                         # current version of the application
-APP_date          = "19.10.2026"                                     # current version date
+APP_current       = "1.0.16"                                         # current version of the application
+APP_date          = "03.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -66,6 +66,20 @@ def build_updater_command(updater_path, target_exe, update_info):
         command.extend(["--size", str(size)])
     return command
 
+
+def is_newer_version(candidate, current):
+    """Return True only when a numeric dotted candidate version is newer."""
+    try:
+        candidate_parts = tuple(int(part) for part in str(candidate).strip().split("."))
+        current_parts = tuple(int(part) for part in str(current).strip().split("."))
+    except (TypeError, ValueError):
+        return False
+    length = max(len(candidate_parts), len(current_parts))
+    candidate_parts += (0,) * (length - len(candidate_parts))
+    current_parts += (0,) * (length - len(current_parts))
+    return candidate_parts > current_parts
+
+
 # Pillow optional
 try:
     from PIL import Image, ImageDraw, ImageFont, ImageTk
@@ -108,11 +122,23 @@ DEFAULT_USB_TIMEOUT        = 10.0
 
 DEFAULT_USB_DISPLAY_A_BAUD = 115200
 DEFAULT_USB_DISPLAY_B_BAUD = 115200
+USB_PORT_DISABLED_LABEL    = "Nepoužívat"
 
 LED_REFRESH_OPTIONS        = tuple(round(value / 10, 1) for value in range(1, 11))
 DEFAULT_LED_REFRESH        = 0.1
 LAPS_COUNTDOWN_WARNING     = 10
 LAPS_COUNTDOWN_BLINK_MS    = 500
+PROMO_TEXT_MAX_LENGTH      = 79
+PROMO_SCROLL_MIN_MS        = 50
+PROMO_SCROLL_MAX_MS        = 1000
+PROMO_SCROLL_STEP_MS       = 50
+DEFAULT_PROMO_SCROLL_MS    = 250
+DEFAULT_PROMO_MODE         = "continuous"
+PROMO_MODE_LABELS          = {
+    "continuous": "Plynulá rotace (FW 1.0)",
+    "firmware": "Rolování řízené panelem (SCR)",
+    "static": "Statický text (TXT)",
+}
 
 
 def normalize_led_refresh(value):
@@ -125,6 +151,130 @@ def normalize_led_refresh(value):
     if interval in LED_REFRESH_OPTIONS:
         return interval
     return DEFAULT_LED_REFRESH
+
+
+def validate_promo_text(value):
+    """Validate text supported by the seven-segment display firmware."""
+    text = str(value or "")
+    if not text.strip():
+        text = ""
+    if len(text) > PROMO_TEXT_MAX_LENGTH:
+        return False, text, f"Text může mít nejvýše {PROMO_TEXT_MAX_LENGTH} znaků."
+    if any(ord(char) < 32 or ord(char) > 126 for char in text):
+        return False, text, "Použijte pouze základní znaky bez diakritiky."
+    return True, text, ""
+
+
+def normalize_promo_mode(value):
+    mode = str(value or "").strip().lower()
+    if mode in PROMO_MODE_LABELS:
+        return mode
+    return DEFAULT_PROMO_MODE
+
+
+def normalize_promo_scroll_ms(value):
+    """Return a supported promo scroll interval in milliseconds."""
+    try:
+        interval = int(round(float(value)))
+    except (TypeError, ValueError):
+        return DEFAULT_PROMO_SCROLL_MS
+    interval = max(PROMO_SCROLL_MIN_MS, min(PROMO_SCROLL_MAX_MS, interval))
+    steps = round((interval - PROMO_SCROLL_MIN_MS) / PROMO_SCROLL_STEP_MS)
+    return PROMO_SCROLL_MIN_MS + steps * PROMO_SCROLL_STEP_MS
+
+
+def promo_display_window(text, position, width=7):
+    """Return a circular display window while preserving intentional spaces."""
+    text = str(text or "")
+    if not text or width <= 0:
+        return " " * max(0, width)
+    return "".join(text[(position + offset) % len(text)] for offset in range(width))
+
+
+def normalize_usb_port_choice(value):
+    """Convert the disabled UI choice to the empty persisted port value."""
+    port = str(value or "").strip()
+    if port == USB_PORT_DISABLED_LABEL:
+        return ""
+    return port
+
+
+def usb_port_choice(port):
+    """Return the value displayed in a USB port combobox."""
+    return str(port or "").strip() or USB_PORT_DISABLED_LABEL
+
+
+def find_usb_port_conflict(gate_port, display_port_a, display_port_b):
+    """Return the first duplicate active COM port assignment, if any."""
+    assignments = (
+        ("Měřící brána", normalize_usb_port_choice(gate_port)),
+        ("LED displej ID-1", normalize_usb_port_choice(display_port_a)),
+        ("LED displej ID-2", normalize_usb_port_choice(display_port_b)),
+    )
+    used = {}
+    for device_name, port in assignments:
+        if not port:
+            continue
+        key = port.casefold()
+        if key in used:
+            return port, used[key], device_name
+        used[key] = device_name
+    return None
+
+
+def classify_usb_devices(port_details, gate_port="", display_port_a="", display_port_b=""):
+    """Classify visible serial ports without opening or resetting the devices."""
+    details_by_port = {
+        str(item.get("device") or "").strip(): item
+        for item in port_details
+        if str(item.get("device") or "").strip()
+    }
+    assignments = {
+        "gate": normalize_usb_port_choice(gate_port),
+        "display_a": normalize_usb_port_choice(display_port_a),
+        "display_b": normalize_usb_port_choice(display_port_b),
+    }
+    claimed = {port.casefold() for port in assignments.values() if port}
+
+    detected_gates = []
+    detected_displays = []
+    for key in ("display_a", "display_b"):
+        port = assignments[key]
+        if port and port in details_by_port and port not in detected_displays:
+            detected_displays.append(port)
+    if assignments["gate"] and assignments["gate"] in details_by_port:
+        detected_gates.append(assignments["gate"])
+
+    for port, item in details_by_port.items():
+        if port.casefold() in claimed:
+            continue
+        identity = " ".join(
+            str(item.get(key) or "")
+            for key in ("description", "hwid")
+        ).casefold()
+        if not assignments["gate"] and "mega" in identity:
+            detected_gates.append(port)
+            claimed.add(port.casefold())
+            continue
+        if "nano" in identity:
+            detected_displays.append(port)
+            claimed.add(port.casefold())
+
+    result = {}
+    for key, port in assignments.items():
+        result[key] = {
+            "port": port,
+            "found": bool(port and port in details_by_port),
+            "details": details_by_port.get(port, {}),
+        }
+
+    result["unassigned"] = [
+        item for port, item in details_by_port.items()
+        if port.casefold() not in claimed
+    ]
+    result["detected_gates"] = detected_gates
+    result["detected_displays"] = detected_displays
+    return result
 
 
 def laps_countdown_position(canvas_width, canvas_height, timer_height):
@@ -231,6 +381,7 @@ class PlayoffApp:
         self.enable_timer = True
         self.timer_value = '05:00'
         self.timer_running = False
+        self.race_active = False
         self.timer_blink = False
         self.current_seconds = 0
         self.timer_start_mode = "ok"  # "start" | "ok"  
@@ -257,6 +408,12 @@ class PlayoffApp:
         self.live_led_var = tk.BooleanVar(value=self.live_led_enabled)
         self.live_led_refresh_var = tk.StringVar(value=f"{self.live_led_refresh:.1f}")
         self.live_led_next_send = {1: 0.0, 2: 0.0}
+        self.promo_text = ""
+        self.promo_mode = DEFAULT_PROMO_MODE
+        self.promo_scroll_ms = DEFAULT_PROMO_SCROLL_MS
+        self.promo_active = False
+        self.promo_scroll_position = 0
+        self.promo_after_id = None
         self.font_scale_var = tk.StringVar(value=self.font_scale)
         self.odd_behavior_var = tk.StringVar(value=self.odd_behavior)
         self.line_width_var = tk.IntVar(value=self.line_width)
@@ -416,15 +573,22 @@ class PlayoffApp:
                 padx=(20, 20)
             )
 
-            self.mode_playoff_btn = tk.Label(
+            mode_button_style = {
+                "width": 10,
+                "relief": "raised",
+                "bd": 2,
+                "cursor": "hand2",
+                "padx": 8,
+                "pady": 3,
+                "font": ("Arial", 9),
+                "highlightthickness": 0,
+            }
+
+            self.mode_playoff_btn = tk.Button(
                 self.mode_frame,
                 text="PLAYOFF",
-                width=10,
-                relief="raised",
-                bd=2,
-                cursor="hand2",
-                padx=8,
-                pady=3
+                command=lambda: self.change_view_mode("playoff"),
+                **mode_button_style,
             )
 
             self.mode_playoff_btn.pack(
@@ -432,30 +596,25 @@ class PlayoffApp:
                 padx=(0, 2)
             )
 
-            self.mode_laps_btn = tk.Label(
+            self.mode_laps_btn = tk.Button(
                 self.mode_frame,
                 text="LAPS",
-                width=10,
-                relief="raised",
-                bd=2,
-                cursor="hand2",
-                padx=8,
-                pady=3
+                command=lambda: self.change_view_mode("laps"),
+                **mode_button_style,
             )
 
             self.mode_laps_btn.pack(
                 side="left"
             )
 
-            self.mode_playoff_btn.bind(
-                "<Button-1>",
-                lambda e: self.change_view_mode("playoff")
+            self.promo_btn = tk.Button(
+                self.mode_frame,
+                text="PROMO",
+                command=self.toggle_promo,
+                state="disabled",
+                **mode_button_style,
             )
-
-            self.mode_laps_btn.bind(
-                "<Button-1>",
-                lambda e: self.change_view_mode("laps")
-            )
+            self.promo_btn.pack(side="left", padx=(2, 0))
 
             self.update_view_mode_buttons()
 
@@ -589,6 +748,10 @@ class PlayoffApp:
             label='Odesílat na LED průběžný čas',
             variable=self.live_led_var,
             command=self.on_toggle_live_led
+        )
+        self.settings_menu.add_command(
+            label='Nastavit propagační text',
+            command=self.open_promo_text_dialog
         )
 
         led_refresh_menu = tk.Menu(self.settings_menu, tearoff=0)
@@ -756,6 +919,16 @@ class PlayoffApp:
                     s.get('live_led_refresh', self.live_led_refresh)
                 )
                 self.live_led_refresh_var.set(f"{self.live_led_refresh:.1f}")
+                promo_valid, promo_text, _promo_error = validate_promo_text(
+                    s.get('promo_text', self.promo_text)
+                )
+                self.promo_text = promo_text if promo_valid else ""
+                self.promo_mode = normalize_promo_mode(
+                    s.get('promo_mode', self.promo_mode)
+                )
+                self.promo_scroll_ms = normalize_promo_scroll_ms(
+                    s.get('promo_scroll_ms', self.promo_scroll_ms)
+                )
                 self.apply_lap_timer_visibility()
 
                 self.view_mode = s.get('view_mode', 'playoff')
@@ -779,19 +952,25 @@ class PlayoffApp:
                 else:
                     self.update_display_status(2, False)                
 
-                if self.usb and self.usb_port:
+                if self.usb:
                     try:
-                        self.usb.validate_and_set(
-                            self.usb_port,
-                            self.usb_baud,
-                            self.usb_timeout
-                        )
+                        if self.usb_port:
+                            self.usb.validate_and_set(
+                                self.usb_port,
+                                self.usb_baud,
+                                self.usb_timeout
+                            )
 
-                        # Apply the loaded port even when a prior initialization is active.
-                        self.usb.reconnect(self.on_usb_line)
+                            # Apply the loaded port even when a prior initialization is active.
+                            self.usb.reconnect(self.on_usb_line)
+                            self.update_usb_status(True)
+                            self._log(f"USB AUTO CONNECT: port {self.usb_port} speed {self.usb_baud}")
+                        else:
+                            self.usb.disconnect()
+                            self.update_usb_status(False)
+
+                        # LED displays are independent of the measuring gate.
                         self.usb.connect_displays()
-                        self.update_usb_status(True)
-                        self._log(f"USB AUTO CONNECT: port { self.usb_port} speed {self.usb_baud}")
                         self.root.after(
                             2500,
                             lambda: self.usb.send_display(1, "TXT:ID-1")
@@ -808,10 +987,11 @@ class PlayoffApp:
                             7200,
                             lambda: self.usb.send_display(2, "TXT:-------")
                         )                        
-                        if self.view_mode == "laps":
-                            self.usb.handler.send(b"mode_laps\n")
-                        else:
-                            self.usb.handler.send(b"mode_playoff\n")
+                        if self.usb_port:
+                            if self.view_mode == "laps":
+                                self.usb.handler.send(b"mode_laps\n")
+                            else:
+                                self.usb.handler.send(b"mode_playoff\n")
 
                     except Exception as e:
                         self._log("USB AUTO CONNECT ERROR:", e)
@@ -819,6 +999,8 @@ class PlayoffApp:
 
         except Exception as e:
             self._log("USB SETTINGS LOAD ERROR:", e)
+
+        self.update_promo_button_state()
 
     def _now(self):
         return time.strftime("%H:%M:%S")
@@ -898,7 +1080,7 @@ class PlayoffApp:
         latest = info.get("version")
         url = info.get("url")
 
-        if latest != APP_current:
+        if is_newer_version(latest, APP_current):
             if messagebox.askyesno("Aktualizace programu", f"Dostupná verze {latest}. Aktualizovat?"):
                 # path to the file to be updated
                 if getattr(sys, 'frozen', False):
@@ -1026,8 +1208,10 @@ class PlayoffApp:
         self.root.after(1000, self.update_datetime)
 
     def start_lap_timer(self):
+        self.stop_promo()
         self.lap_running_a = True
         self.lap_running_b = True
+        self.update_promo_button_state()
 
         if self.lap_after_id:
             try:
@@ -1073,6 +1257,8 @@ class PlayoffApp:
         return f"{minutes:02d}:{seconds:02d}:{millis:03d}"
 
     def start_laps_timer(self):
+        self.stop_promo()
+        self.update_promo_button_state()
         import time
         if self.lap_after_id:
             try:
@@ -1112,6 +1298,7 @@ class PlayoffApp:
         self._log("FINISH A")
         self.lap_running_a = False
         self.lap_label_a.config(fg="green")
+        self.update_promo_button_state()
 
 
     def finish_b(self):
@@ -1121,6 +1308,7 @@ class PlayoffApp:
         self._log("FINISH B")
         self.lap_running_b = False
         self.lap_label_b.config(fg="green")
+        self.update_promo_button_state()
 
 
     def format_display_time(self, ms):
@@ -1202,13 +1390,15 @@ class PlayoffApp:
             self.view_mode_var.set(self.view_mode)
             return
 
+        self.stop_promo()
         self.stop_countdowns_for_mode_change()
+        self.race_active = False
         self.view_mode = new_mode
         self.update_view_mode_gui()
         self._log(f"VIEW MODE = {self.view_mode}")
         self.redraw()
         try:
-            if self.usb:
+            if self.usb and self.usb_port:
                 if self.view_mode == "laps":
                     self.usb.handler.send(b"mode_laps\n")
                 else:
@@ -1227,7 +1417,9 @@ class PlayoffApp:
         ):
             return
 
+        self.stop_promo()
         self.stop_countdowns_for_mode_change()
+        self.race_active = False
         self.lap_time_a = 0
         self.lap_time_b = 0
         self.lap_running_a = False
@@ -1244,7 +1436,7 @@ class PlayoffApp:
         self.canvas.update_idletasks()
         self.redraw()
         try:
-            if self.usb:
+            if self.usb and self.usb_port:
                 if self.view_mode == "laps":
                     self._log("TX mode_laps")
                     self.usb.handler.send(b"mode_laps\n")
@@ -1338,6 +1530,7 @@ class PlayoffApp:
         # refresh for 1500 ms
         self.root.after(1500, self.auto_check_usb)
         self.root.after(1500, self.auto_check_displays)
+        self.update_promo_button_state()
 
     def on_usb_line(self, line):
         line = line.strip().lower()
@@ -1374,6 +1567,8 @@ class PlayoffApp:
                 self.timer_running = False
                 self.lap_running_a = False
                 self.lap_running_b = False
+                self.race_active = False
+                self.update_promo_button_state()
                 if self.lap_after_id:
                     try:
                         self.root.after_cancel(self.lap_after_id)
@@ -1404,6 +1599,7 @@ class PlayoffApp:
             elif line == "stop_a":
                 self._log("LAPS STOP A")
                 self.lap_running_a = False
+                self.update_promo_button_state()
                 if self.view_mode == "laps":
                     self.lap_label_a.config(fg="green")
                     from datetime import datetime
@@ -1421,6 +1617,7 @@ class PlayoffApp:
             elif line == "stop_b":
                 self._log("LAPS STOP B")
                 self.lap_running_b = False
+                self.update_promo_button_state()
                 if self.view_mode == "laps":
                     self.lap_label_b.config(fg="green")
                     from datetime import datetime
@@ -1438,6 +1635,9 @@ class PlayoffApp:
         self.root.after(0, gui)        
 
     def on_start(self):
+        self.stop_promo()
+        self.race_active = True
+        self.update_promo_button_state()
         self.lap_label_a.config(fg="#FF8C00")
         self.lap_label_b.config(fg="#FF8C00")
         self._log(f"usb_port= {self.usb_port} usb_baud= {self.usb_baud} usb_timeout= {self.usb_timeout} usb obj existuje: {bool(self.usb)} timer_start_mode= {self.timer_start_mode}")
@@ -1490,7 +1690,9 @@ class PlayoffApp:
                         self.status_var.set('Chyba spojení (neznámá chyba)')
                     self.status_label.config(fg='red')
                     self.timer_running = False
+                    self.race_active = False
                     self.update_usb_status(False)
+                    self.update_promo_button_state()
 
                 self.start_btn.config(state='normal')
 
@@ -1565,10 +1767,12 @@ class PlayoffApp:
                 self.status_label.config(fg='red')
 
                 self.timer_running = False
+                self.race_active = False
 
                 self.update_usb_status(False)
 
                 self.start_btn.config(state='normal')
+                self.update_promo_button_state()
 
         except Exception as e:
 
@@ -1576,8 +1780,10 @@ class PlayoffApp:
             self.status_label.config(fg='red')
 
             self.timer_running = False
+            self.race_active = False
 
             self.start_btn.config(state='normal')
+            self.update_promo_button_state()
 
             self.update_usb_status(False)
 
@@ -1781,9 +1987,32 @@ class PlayoffApp:
         dlg.title("USB spojení")
         dlg.transient(self.root)
         dlg.grab_set()
-        w = 500; h = 650
+        w = 860; h = 650
         x = (dlg.winfo_screenwidth()-w)//2; y = (dlg.winfo_screenheight()-h)//2
         dlg.geometry(f"{w}x{h}+{x}+{y}")
+
+        content_frame = tk.Frame(dlg)
+        content_frame.pack(fill="both", expand=True)
+        settings_panel = tk.Frame(content_frame, width=520)
+        settings_panel.pack(side="left", fill="both", expand=True)
+        detected_panel = tk.LabelFrame(
+            content_frame,
+            text="Nalezená zařízení",
+            padx=12,
+            pady=10,
+            width=310,
+        )
+        detected_panel.pack(side="right", fill="y", padx=(0, 12), pady=12)
+        detected_panel.pack_propagate(False)
+        detected_rows = tk.Frame(detected_panel)
+        detected_rows.pack(fill="x")
+        tk.Label(
+            detected_panel,
+            text="Oba Nano panely jsou stejné. ID-1 a ID-2 určuje pouze přiřazení vlevo.",
+            justify="left",
+            wraplength=275,
+            fg="#555555",
+        ).pack(side="bottom", fill="x", pady=(12, 0))
 
         # --- PORTS LIST ---
         if self.usb:
@@ -1791,125 +2020,241 @@ class PlayoffApp:
         else:
             ports = []
 
-        def test_display(id = 0):
+        def selected_ports():
+            return (
+                normalize_usb_port_choice(port_var.get()),
+                normalize_usb_port_choice(display_port_a_var.get()),
+                normalize_usb_port_choice(display_port_b_var.get()),
+            )
+
+        def validate_port_assignments():
+            gate_port, display_a_port, display_b_port = selected_ports()
+            conflict = find_usb_port_conflict(
+                gate_port,
+                display_a_port,
+                display_b_port,
+            )
+            if conflict:
+                port, first_device, second_device = conflict
+                messagebox.showerror(
+                    "Port je již použitý",
+                    f"Port {port} je zvolený pro zařízení „{first_device}“ i „{second_device}“.\n\n"
+                    "Každé připojené zařízení musí mít vlastní COM port. U nepoužívaného zařízení zvolte „Nepoužívat“.",
+                    parent=dlg,
+                )
+                return None
+            return gate_port, display_a_port, display_b_port
+
+        def selected_display_baud(id):
+            value = baud_var_A.get() if id == 1 else baud_var_B.get()
             try:
-                if self.usb:
-                    if id == 0:
-                        self.usb.send_display(1, "CLS")
-                        self.usb.send_display(2, "CLS")      
-                    if id == 1:
-                        self.usb.send_display(1, "TXT:ID-1")
-                    if id == 2:
-                        self.usb.send_display(2, "TXT:ID-2")                        
+                return int(value)
+            except (TypeError, ValueError):
+                messagebox.showerror(
+                    "Neplatná rychlost",
+                    f"Rychlost LED displeje ID-{id} musí být celé číslo.",
+                    parent=dlg,
+                )
+                return None
+
+        def test_display(id=0):
+            try:
+                if not self.usb:
+                    raise RuntimeError("USB modul není dostupný.")
+
+                ports_for_devices = validate_port_assignments()
+                if ports_for_devices is None:
+                    return
+
+                display_ports = {1: ports_for_devices[1], 2: ports_for_devices[2]}
+                ids = (1, 2) if id == 0 else (id,)
+                for display_id in ids:
+                    port = display_ports[display_id]
+                    if not port:
+                        if id != 0:
+                            messagebox.showwarning(
+                                "Displej není používán",
+                                f"Pro LED displej ID-{display_id} je zvoleno „Nepoužívat“.",
+                                parent=dlg,
+                            )
+                        continue
+                    baud = selected_display_baud(display_id)
+                    if baud is None:
+                        return
+                    command = "CLS" if id == 0 else f"TXT:ID-{display_id}"
+                    if not self.usb.send_display_to_port(display_id, command, port, baud):
+                        detail = self.usb.display_error(display_id)
+                        raise RuntimeError(
+                            f"LED displej ID-{display_id} se nepodařilo otevřít na portu {port}."
+                            + (f"\n\n{detail}" if detail else "")
+                        )
 
             except Exception as e:
                 self._log(f"Display error {e}")
-                messagebox.showerror("Displej chyba", str(e))
+                messagebox.showerror("Displej chyba", str(e), parent=dlg)
 
         # --- GATE A/B device ---
-        tk.Label(dlg, text="Měřící brána", font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
+        tk.Label(settings_panel, text="Měřící brána", font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
         port_var = tk.StringVar(value=self.usb_port)
         combo = ttk.Combobox(
-            dlg,
+            settings_panel,
             textvariable=port_var,
-            values=ports,
+            values=[USB_PORT_DISABLED_LABEL, *ports],
             state="readonly",
             width=20
         )
         combo.pack(padx=10, pady=4)
 
-        frame = tk.Frame(dlg)
+        frame = tk.Frame(settings_panel)
         frame.pack(fill='x', padx=10)
 
         # --- Preselect current port if available ---
         if self.usb_port in ports:
             port_var.set(self.usb_port)
-        elif ports:
-            port_var.set(ports[0])
         else:
-            port_var.set("")
+            port_var.set(USB_PORT_DISABLED_LABEL)
 
         # --- REFRESH BUTTON ---
         def refresh_ports():
             new = self.usb.list_ports() if self.usb else []
 
-            combo["values"] = new
-            display_combo_a["values"] = new
-            display_combo_b["values"] = new
+            choices = [USB_PORT_DISABLED_LABEL, *new]
+            combo["values"] = choices
+            display_combo_a["values"] = choices
+            display_combo_b["values"] = choices
 
-            if self.usb_port in new:
-                port_var.set(self.usb_port)
-            elif new:
-                port_var.set(new[0])
-            else:
-                port_var.set("")
+            for variable in (port_var, display_port_a_var, display_port_b_var):
+                if normalize_usb_port_choice(variable.get()) not in new:
+                    variable.set(USB_PORT_DISABLED_LABEL)
+            update_detected_devices()
 
         tk.Button(frame, text='Obnovit', command=refresh_ports).pack(side='right', padx=6)
 
         # --- BAUD ---
-        tk.Label(dlg, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
+        tk.Label(settings_panel, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
         baud_var = tk.StringVar(value=str(self.usb_baud))
-        tk.Entry(dlg, textvariable=baud_var, width=10).pack(padx=10, pady=4)
+        tk.Entry(settings_panel, textvariable=baud_var, width=10).pack(padx=10, pady=4)
 
         # --- TIMEOUT ---
-        tk.Label(dlg, text="Timeout (s) — výchozí 10.0:").pack(anchor='w', padx=10, pady=(8,0))
+        tk.Label(settings_panel, text="Timeout (s) — výchozí 10.0:").pack(anchor='w', padx=10, pady=(8,0))
         to_var = tk.StringVar(value=str(self.usb_timeout))
-        tk.Entry(dlg, textvariable=to_var, width=10).pack(padx=10, pady=4)
+        tk.Entry(settings_panel, textvariable=to_var, width=10).pack(padx=10, pady=4)
 
         # --- LED PANEL A ---
-        ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=10, pady=8)
-        tk.Label(dlg, text="LED displej ID-1",font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
-        display_port_a_var = tk.StringVar(value=self.display_port_a)
+        ttk.Separator(settings_panel, orient="horizontal").pack(fill="x", padx=10, pady=8)
+        tk.Label(settings_panel, text="LED displej ID-1",font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
+        display_port_a_var = tk.StringVar(value=usb_port_choice(self.display_port_a))
         display_combo_a = ttk.Combobox(
-            dlg,
+            settings_panel,
             textvariable=display_port_a_var,
-            values=ports,
+            values=[USB_PORT_DISABLED_LABEL, *ports],
             state="readonly",
             width=20
         )
         display_combo_a.pack(padx=10, pady=4)
 
         # --- BAUD LED A ---
-        tk.Label(dlg, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
+        tk.Label(settings_panel, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
         baud_var_A = tk.StringVar(
             value=str(self.display_baud_a)
         )
 
         tk.Entry(
-            dlg,
+            settings_panel,
             textvariable=baud_var_A,
             width=10
         ).pack(padx=10, pady=4)
 
         # --- LED PANEL B ---
-        ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=10, pady=8)        
-        tk.Label(dlg, text="LED displej ID-2",font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
-        display_port_b_var = tk.StringVar(value=self.display_port_b)
+        ttk.Separator(settings_panel, orient="horizontal").pack(fill="x", padx=10, pady=8)
+        tk.Label(settings_panel, text="LED displej ID-2",font=("Arial",10,"bold")).pack(anchor='w', padx=10, pady=(12,0))
+        display_port_b_var = tk.StringVar(value=usb_port_choice(self.display_port_b))
         display_combo_b = ttk.Combobox(
-            dlg,
+            settings_panel,
             textvariable=display_port_b_var,
-            values=ports,
+            values=[USB_PORT_DISABLED_LABEL, *ports],
             state="readonly",
             width=20
         )
         display_combo_b.pack(padx=10, pady=4)
 
         # --- BAUD LED B ---
-        tk.Label(dlg, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
+        tk.Label(settings_panel, text="Baud (rychlost) — výchozí 115200:").pack(anchor='w', padx=10, pady=(8,0))
         baud_var_B = tk.StringVar(
             value=str(self.display_baud_b)
         )
 
         tk.Entry(
-            dlg,
+            settings_panel,
             textvariable=baud_var_B,
             width=10
         ).pack(padx=10, pady=4)        
 
-        ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=10, pady=8)
+        def update_detected_devices():
+            for child in detected_rows.winfo_children():
+                child.destroy()
+
+            details = self.usb.list_port_details() if self.usb else []
+            gate_port, display_a_port, display_b_port = selected_ports()
+            detected = classify_usb_devices(
+                details,
+                gate_port,
+                display_a_port,
+                display_b_port,
+            )
+
+            def add_row(text, color="#222222"):
+                tk.Label(
+                    detected_rows,
+                    text=text,
+                    justify="left",
+                    anchor="w",
+                    fg=color,
+                    wraplength=275,
+                ).pack(fill="x", pady=3)
+
+            configured_gate = detected["gate"]
+            if configured_gate["port"]:
+                status = "nalezeno" if configured_gate["found"] else "nenalezeno"
+                color = "#147a24" if configured_gate["found"] else "#b00020"
+                add_row(f"Brána: {configured_gate['port']} ({status})", color)
+            else:
+                for port in detected["detected_gates"]:
+                    add_row(f"Brána: {port} (Arduino Mega)", "#147a24")
+
+            for port in detected["detected_displays"]:
+                add_row(f"LED displej: {port}", "#147a24")
+
+            configured_display_ports = {
+                detected["display_a"]["port"],
+                detected["display_b"]["port"],
+            }
+            for key in ("display_a", "display_b"):
+                item = detected[key]
+                if item["port"] and not item["found"]:
+                    add_row(f"LED displej: {item['port']} (nenalezeno)", "#b00020")
+
+            for item in detected["unassigned"]:
+                port = str(item.get("device") or "")
+                description = str(item.get("description") or "Sériové zařízení")
+                if port in configured_display_ports:
+                    continue
+                add_row(f"Neurčeno: {port}\n{description}", "#555555")
+
+            if not detected_rows.winfo_children():
+                add_row("Nebylo nalezeno žádné sériové zařízení.", "#777777")
+
+        for port_combo in (combo, display_combo_a, display_combo_b):
+            port_combo.bind(
+                "<<ComboboxSelected>>",
+                lambda _event: update_detected_devices(),
+            )
+        update_detected_devices()
+
+        ttk.Separator(settings_panel, orient="horizontal").pack(fill="x", padx=10, pady=8)
 
         # --- TEST BUTTONS ---
-        test_frame = tk.Frame(dlg)
+        test_frame = tk.Frame(settings_panel)
         test_frame.pack(pady=10)
 
         tk.Button(
@@ -1933,12 +2278,14 @@ class PlayoffApp:
             command=lambda: test_display(0)
         ).pack(side="left", padx=5)                      
 
-        ttk.Separator(dlg, orient="horizontal").pack(fill="x", padx=10, pady=8)
+        ttk.Separator(settings_panel, orient="horizontal").pack(fill="x", padx=10, pady=8)
         # --- OK HANDLER ---
         def on_ok():
-            self.usb_port = port_var.get().strip()
-            self.display_port_a = (display_port_a_var.get().strip())
-            self.display_port_b = (display_port_b_var.get().strip())
+            ports_for_devices = validate_port_assignments()
+            if ports_for_devices is None:
+                return
+
+            self.usb_port, self.display_port_a, self.display_port_b = ports_for_devices
             self.update_display_status(1, bool(self.display_port_a))
             self.update_display_status(2, bool(self.display_port_b))            
 
@@ -1997,27 +2344,55 @@ class PlayoffApp:
                 self.update_usb_status(False)
 
             try:
-                self.usb.disconnect_displays()
-                self.usb.connect_displays()
+                display_results = self.usb.connect_displays()
+                display_ports = {
+                    1: self.display_port_a,
+                    2: self.display_port_b,
+                }
+                failures = []
+                for display_id, port in display_ports.items():
+                    if port and not display_results[display_id]:
+                        detail = self.usb.display_error(display_id)
+                        failures.append(
+                            f"LED displej ID-{display_id} ({port})"
+                            + (f": {detail}" if detail else "")
+                        )
 
-                self.root.after(
-                    2500,
-                    lambda: self.usb.send_display(1, "TXT:ID-1")
+                if failures:
+                    messagebox.showerror(
+                        "Displej se nepodařilo připojit",
+                        "Nastavení bylo uloženo, ale připojení selhalo:\n\n"
+                        + "\n".join(failures)
+                        + "\n\nZkontrolujte, zda port nepoužívá jiné zařízení nebo jiná spuštěná aplikace.",
+                        parent=dlg,
+                    )
+                    return
+
+                if self.display_port_a:
+                    self.root.after(
+                        2500,
+                        lambda: self.usb.send_display(1, "TXT:ID-1")
+                    )
+                    self.root.after(
+                        7000,
+                        lambda: self.usb.send_display(1, "TXT:-------")
+                    )
+                if self.display_port_b:
+                    self.root.after(
+                        2600,
+                        lambda: self.usb.send_display(2, "TXT:ID-2")
+                    )
+                    self.root.after(
+                        7200,
+                        lambda: self.usb.send_display(2, "TXT:-------")
+                    )
+            except Exception as e:
+                messagebox.showerror(
+                    "Displej chyba",
+                    f"Nastavení bylo uloženo, ale displeje se nepodařilo připojit:\n\n{e}",
+                    parent=dlg,
                 )
-                self.root.after(
-                    2600,
-                    lambda: self.usb.send_display(2, "TXT:ID-2")
-                )                
-                self.root.after(
-                    7000,
-                    lambda: self.usb.send_display(1, "TXT:-------")
-                )
-                self.root.after(
-                    7200,
-                    lambda: self.usb.send_display(2, "TXT:-------")
-                )
-            except:
-                pass                
+                return
 
             dlg.destroy()
 
@@ -2025,7 +2400,7 @@ class PlayoffApp:
             dlg.destroy()
 
         # --- BUTTONS ---
-        btnf = tk.Frame(dlg)
+        btnf = tk.Frame(settings_panel)
         btnf.pack(pady=8)
         tk.Button(btnf, text='OK', width=10, command=on_ok).pack(side='left', padx=6)
         tk.Button(btnf, text='Zrušit', width=10, command=on_cancel).pack(side='left', padx=6)
@@ -2114,6 +2489,9 @@ class PlayoffApp:
             'lap_timer_enabled': self.lap_timer_enabled,
             'live_led_enabled': self.live_led_enabled,
             'live_led_refresh': self.live_led_refresh,
+            'promo_text': self.promo_text,
+            'promo_mode': self.promo_mode,
+            'promo_scroll_ms': self.promo_scroll_ms,
         }
         if (self.bracket and self.pre_round_enabled and self.bracket.pre_rounds):
             data['pre_rounds'] = [
@@ -2185,6 +2563,19 @@ class PlayoffApp:
         )
         self.live_led_refresh_var.set(f"{self.live_led_refresh:.1f}")
         self.reset_live_led_schedule(1, 2)
+        promo_valid, promo_text, _promo_error = validate_promo_text(
+            data.get('promo_text', self.promo_text)
+        )
+        self.promo_text = promo_text if promo_valid else ""
+        self.promo_mode = normalize_promo_mode(
+            data.get('promo_mode', self.promo_mode)
+        )
+        self.promo_scroll_ms = normalize_promo_scroll_ms(
+            data.get('promo_scroll_ms', self.promo_scroll_ms)
+        )
+        self.promo_active = False
+        self.promo_scroll_position = 0
+        self.promo_after_id = None
         self.display_port_a = data.get('display_port_a', self.display_port_a)
         self.display_port_b = data.get('display_port_b', self.display_port_b)
         self.display_baud_a = data.get('display_baud_a', self.display_baud_a)
@@ -2193,6 +2584,7 @@ class PlayoffApp:
         self.view_mode_var.set(self.view_mode)
         self.update_view_mode_gui()
         self.update_view_mode_buttons()
+        self.update_promo_button_state()
         # apply UI lap timer state
         self.apply_lap_timer_visibility()
         self.generate_bracket_with_empty(n)
@@ -2296,6 +2688,7 @@ class PlayoffApp:
             self.countdown_after_id = None
         self.stop_blinking()
         self.stop_laps_countdown(reset=True)
+        self.update_promo_button_state()
 
     def on_toggle_timer(self):
         self.enable_timer = self.timer_menu_var.get()
@@ -2361,6 +2754,261 @@ class PlayoffApp:
             live_led_enabled=self.live_led_enabled,
             live_led_refresh=self.live_led_refresh
         )
+
+    def open_promo_text_dialog(self):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Propagační text")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        w, h = 620, 360
+        x = (dlg.winfo_screenwidth() - w) // 2
+        y = (dlg.winfo_screenheight() - h) // 2
+        dlg.geometry(f"{w}x{h}+{x}+{y}")
+
+        tk.Label(
+            dlg,
+            text="Vložte text pro propagaci:",
+            font=("Arial", 11, "bold"),
+        ).pack(anchor="w", padx=18, pady=(18, 5))
+        text_var = tk.StringVar(value=self.promo_text)
+        entry = tk.Entry(dlg, textvariable=text_var, width=58, font=("Arial", 11))
+        entry.pack(fill="x", padx=18)
+        entry.select_range(0, "end")
+        entry.focus_set()
+        tk.Label(
+            dlg,
+            text=f"Například ROBO2026. Nejvýše {PROMO_TEXT_MAX_LENGTH} znaků bez diakritiky; prázdný text PROMO vypne.",
+            fg="#555555",
+            wraplength=480,
+            justify="left",
+        ).pack(anchor="w", padx=18, pady=(6, 10))
+
+        tk.Label(
+            dlg,
+            text="Způsob zobrazení:",
+            font=("Arial", 10, "bold"),
+        ).pack(anchor="w", padx=18, pady=(2, 4))
+        mode_by_label = {label: mode for mode, label in PROMO_MODE_LABELS.items()}
+        mode_var = tk.StringVar(value=PROMO_MODE_LABELS[self.promo_mode])
+        mode_combo = ttk.Combobox(
+            dlg,
+            textvariable=mode_var,
+            values=list(mode_by_label),
+            state="readonly",
+            width=58,
+        )
+        mode_combo.pack(fill="x", padx=18)
+
+        speed_label_var = tk.StringVar()
+        speed_var = tk.IntVar(value=self.promo_scroll_ms)
+
+        def update_speed_label(*_args):
+            interval = normalize_promo_scroll_ms(speed_var.get())
+            speed_label_var.set(
+                f"Rychlost posuvu: {1000 / interval:.1f} znaků/s ({interval} ms)"
+                .replace(".", ",")
+            )
+
+        tk.Label(
+            dlg,
+            textvariable=speed_label_var,
+            font=("Arial", 10, "bold"),
+        ).pack(anchor="w", padx=18, pady=(12, 0))
+        speed_scale = tk.Scale(
+            dlg,
+            from_=PROMO_SCROLL_MAX_MS,
+            to=PROMO_SCROLL_MIN_MS,
+            resolution=PROMO_SCROLL_STEP_MS,
+            orient="horizontal",
+            variable=speed_var,
+            command=update_speed_label,
+            showvalue=False,
+            length=560,
+        )
+        speed_scale.pack(fill="x", padx=18)
+        speed_ends = tk.Frame(dlg)
+        speed_ends.pack(fill="x", padx=22)
+        tk.Label(speed_ends, text="Pomaleji", fg="#555555").pack(side="left")
+        tk.Label(speed_ends, text="Rychleji", fg="#555555").pack(side="right")
+        tk.Label(
+            dlg,
+            text="Rychlost platí pro plynulou rotaci i rolování řízené panelem.",
+            fg="#555555",
+        ).pack(anchor="w", padx=18, pady=(2, 4))
+        update_speed_label()
+
+        def save_text():
+            valid, promo_text, error = validate_promo_text(text_var.get())
+            if not valid:
+                messagebox.showerror("Neplatný propagační text", error, parent=dlg)
+                return
+            self.stop_promo()
+            self.promo_text = promo_text
+            self.promo_mode = mode_by_label.get(
+                mode_var.get(),
+                DEFAULT_PROMO_MODE,
+            )
+            self.promo_scroll_ms = normalize_promo_scroll_ms(speed_var.get())
+            self.persist_user_settings(
+                promo_text=self.promo_text,
+                promo_mode=self.promo_mode,
+                promo_scroll_ms=self.promo_scroll_ms,
+            )
+            self.update_promo_button_state()
+            dlg.destroy()
+
+        buttons = tk.Frame(dlg)
+        buttons.pack(pady=4)
+        tk.Button(buttons, text="Uložit", width=12, command=save_text).pack(side="left", padx=5)
+        tk.Button(buttons, text="Zrušit", width=12, command=dlg.destroy).pack(side="left", padx=5)
+        dlg.bind("<Return>", lambda _event: save_text())
+        dlg.bind("<Escape>", lambda _event: dlg.destroy())
+        self.root.wait_window(dlg)
+
+    def is_timing_active(self):
+        return any((
+            bool(getattr(self, "race_active", False)),
+            bool(getattr(self, "timer_running", False)),
+            bool(getattr(self, "laps_countdown_running", False)),
+            bool(getattr(self, "lap_running_a", False)),
+            bool(getattr(self, "lap_running_b", False)),
+        ))
+
+    def configured_display_ids(self):
+        result = []
+        if str(getattr(self, "display_port_a", "") or "").strip():
+            result.append(1)
+        if str(getattr(self, "display_port_b", "") or "").strip():
+            result.append(2)
+        return result
+
+    def update_promo_button_state(self):
+        button = getattr(self, "promo_btn", None)
+        if button is None:
+            return
+        active = bool(getattr(self, "promo_active", False))
+        enabled = bool(
+            active
+            or (
+                getattr(self, "promo_text", "")
+                and getattr(self, "usb", None)
+                and self.configured_display_ids()
+                and not self.is_timing_active()
+            )
+        )
+        button.config(
+            state="normal" if enabled else "disabled",
+            relief="sunken" if active else "raised",
+            bg="#FF9800" if active else self.root.cget("bg"),
+            fg="white" if active else "black",
+        )
+
+    def start_promo(self):
+        if self.is_timing_active():
+            messagebox.showwarning(
+                "PROMO není dostupné",
+                "Propagační text nelze spustit, dokud běží odpočet nebo měření času.",
+            )
+            self.update_promo_button_state()
+            return False
+        if not self.promo_text:
+            messagebox.showwarning(
+                "Chybí propagační text",
+                "Nejprve nastavte text v nabídce Nastavení → Nastavit propagační text.",
+            )
+            return False
+        if not self.usb:
+            messagebox.showerror("PROMO chyba", "USB modul není dostupný.")
+            return False
+
+        self.promo_mode = normalize_promo_mode(self.promo_mode)
+        self.promo_scroll_ms = normalize_promo_scroll_ms(self.promo_scroll_ms)
+        if self.promo_mode == "continuous":
+            initial_text = promo_display_window(self.promo_text, 0)
+            command = f"TXT:{initial_text}"
+        elif self.promo_mode == "static":
+            command = f"TXT:{self.promo_text[:7]}"
+        else:
+            command = f"SCR:{self.promo_text}"
+
+        sent_to = []
+        for display_id in self.configured_display_ids():
+            if self.promo_mode == "firmware":
+                self.usb.send_display(
+                    display_id,
+                    f"SPD:{self.promo_scroll_ms}",
+                )
+            if self.usb.send_display(display_id, command):
+                sent_to.append(display_id)
+        if not sent_to:
+            messagebox.showerror(
+                "PROMO chyba",
+                "Propagační text se nepodařilo odeslat na žádný LED displej.",
+            )
+            self.promo_active = False
+            self.update_promo_button_state()
+            return False
+
+        self.promo_active = True
+        self.promo_scroll_position = 1
+        if self.promo_mode == "continuous":
+            self.promo_after_id = self.root.after(
+                self.promo_scroll_ms,
+                self.promo_rotation_tick,
+            )
+        self.status_var.set("PROMO: " + self.promo_text)
+        self.status_label.config(fg="#d26900")
+        self.update_promo_button_state()
+        return True
+
+    def promo_rotation_tick(self):
+        self.promo_after_id = None
+        if (
+            not bool(getattr(self, "promo_active", False))
+            or normalize_promo_mode(getattr(self, "promo_mode", "")) != "continuous"
+        ):
+            return
+
+        window = promo_display_window(
+            self.promo_text,
+            self.promo_scroll_position,
+        )
+        for display_id in self.configured_display_ids():
+            self.send_display_latest(display_id, f"TXT:{window}")
+        self.promo_scroll_position = (
+            self.promo_scroll_position + 1
+        ) % len(self.promo_text)
+        self.promo_after_id = self.root.after(
+            self.promo_scroll_ms,
+            self.promo_rotation_tick,
+        )
+
+    def stop_promo(self):
+        promo_after_id = getattr(self, "promo_after_id", None)
+        if promo_after_id:
+            try:
+                self.root.after_cancel(promo_after_id)
+            except Exception:
+                pass
+        self.promo_after_id = None
+
+        if not bool(getattr(self, "promo_active", False)):
+            self.update_promo_button_state()
+            return False
+
+        for display_id in self.configured_display_ids():
+            self.send_display_latest(display_id, "CLS")
+        self.promo_active = False
+        status_var = getattr(self, "status_var", None)
+        if status_var is not None and str(status_var.get()).startswith("PROMO:"):
+            status_var.set("")
+        self.update_promo_button_state()
+        return True
+
+    def toggle_promo(self):
+        if self.promo_active:
+            return self.stop_promo()
+        return self.start_promo()
 
     def persist_user_settings(self, **updates):
         try:
@@ -2450,6 +3098,7 @@ class PlayoffApp:
             messagebox.showerror('Chyba', 'Neplatný formát času. Použij MM:SS (např. 03:30).')
 
     def start_laps_countdown(self):
+        self.stop_promo()
         if self.view_mode != "laps" or not self.enable_timer:
             return False
 
@@ -2465,6 +3114,7 @@ class PlayoffApp:
         self.stop_laps_countdown(reset=False)
         self.laps_countdown_seconds = maximum
         self.laps_countdown_running = True
+        self.update_promo_button_state()
         self.timer_label.config(
             text=self.seconds_to_time(self.laps_countdown_seconds),
             bg='black',
@@ -2565,6 +3215,7 @@ class PlayoffApp:
                 pass
         self.laps_countdown_after_id = None
         self.stop_laps_countdown_blink()
+        self.update_promo_button_state()
 
         if reset:
             self.laps_countdown_seconds = self.time_to_seconds(self.timer_value)
@@ -2601,6 +3252,7 @@ class PlayoffApp:
         return f"{m:02d}:{s:02d}"
 
     def start_countdown(self):
+        self.stop_promo()
         try:
             # stop blinking if active
             self.stop_blinking()
@@ -2619,6 +3271,7 @@ class PlayoffApp:
             self.current_seconds = self.time_to_seconds(self.timer_value)
             self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
             self.timer_running = True
+            self.update_promo_button_state()
             # schedule tick
             self.countdown_after_id = self.root.after(1000, self.countdown_tick)
         except Exception:
@@ -2632,6 +3285,7 @@ class PlayoffApp:
                 self.timer_running = False
                 self.lap_running_a = False
                 self.lap_running_b = False
+                self.update_promo_button_state()
                 if self.lap_after_id:
                     try:
                         self.root.after_cancel(self.lap_after_id)
@@ -3027,7 +3681,9 @@ class PlayoffApp:
 
             "=== USB SEMAFOR ===\n"
             "Nastavení → USB nastavení\n"
-            "- Výběr COM portu\n"
+            "- Bránu i každý LED displej lze samostatně vypnout volbou Nepoužívat\n"
+            "- Jeden COM port nelze současně přiřadit více zařízením\n"
+            "- Pravá část dialogu ukazuje nalezenou bránu a LED displeje\n"
             "- Nastavení Baud rate (výchozí 115200)\n"
             "- Timeout odpovědi (výchozí 10 s)\n\n"
             "Tlačítko START:\n"
@@ -3061,6 +3717,17 @@ class PlayoffApp:
             "Nastavení → Rychlost obnovování\n"
             "- Nabízí intervaly od 0,1 s do 1,0 s\n"
             "- Kratší interval znamená plynulejší aktualizaci displeje\n\n"
+
+            "=== PROPAGAČNÍ TEXT NA LED DISPLEJÍCH ===\n"
+            "Nastavení → Nastavit propagační text\n"
+            "- Uloží text o délce nejvýše 79 základních znaků bez diakritiky\n"
+            "- Plynulá rotace řízená aplikací funguje i se starším firmwarem panelu\n"
+            "- Další volby jsou nativní rolování panelu SCR a statický text TXT\n"
+            "- Posuvník nastavuje rychlost 1 až 20 znaků za sekundu\n"
+            "- Text, režim i rychlost se ukládají do uživatelského nastavení a projektu\n"
+            "- Tlačítko PROMO vedle režimu LAPS odešle text na všechny nastavené LED displeje\n"
+            "- PROMO je dostupné pouze tehdy, když neběží odpočet, závod ani měření času\n"
+            "- START nebo potvrzená změna režimu PLAYOFF/LAPS propagační text z displejů smaže\n\n"
 
             "=== PDF EXPORT ===\n"
             "Nastavení → Export do PDF\n"

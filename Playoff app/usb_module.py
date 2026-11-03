@@ -287,6 +287,7 @@ class USBManager:
         self.display_pending_lock = threading.Lock()
         self.display_pending = {1: None, 2: None}
         self.display_workers = {1: None, 2: None}
+        self.display_errors = {1: "", 2: ""}
 
     def _log(self, msg: str):
         if self.verbose:
@@ -294,6 +295,25 @@ class USBManager:
 
     def list_ports(self):
         return self.handler.list_ports()
+
+    def list_port_details(self):
+        if not PY_SERIAL_AVAILABLE:
+            return []
+
+        try:
+            return [
+                {
+                    "device": port.device,
+                    "description": port.description or "",
+                    "hwid": port.hwid or "",
+                    "vid": port.vid,
+                    "pid": port.pid,
+                    "serial_number": port.serial_number or "",
+                }
+                for port in list_ports.comports()
+            ]
+        except Exception:
+            return []
 
     def validate_and_set(
         self,
@@ -347,24 +367,44 @@ class USBManager:
             self.handler.start_reader(callback)
         return True
 
-    def _connect_display(self, display_id):
+    def _connect_display(self, display_id, port_override=None, baud_override=None):
+        if display_id not in (1, 2):
+            return False
+
         if not PY_SERIAL_AVAILABLE:
-            self._log("Display connect skipped: pyserial is unavailable")
+            error = "pyserial není nainstalován."
+            self.display_errors[display_id] = error
+            self._log(f"Display connect skipped: {error}")
             return False
 
         if display_id == 1:
-            port = str(getattr(self.app, "display_port_a", "") or "").strip()
-            baud = getattr(self.app, "display_baud_a", DEFAULT_SERIAL_BAUD)
+            port = str(
+                port_override if port_override is not None
+                else getattr(self.app, "display_port_a", "") or ""
+            ).strip()
+            baud = (
+                baud_override if baud_override is not None
+                else getattr(self.app, "display_baud_a", DEFAULT_SERIAL_BAUD)
+            )
             current = self.display_a
         elif display_id == 2:
-            port = str(getattr(self.app, "display_port_b", "") or "").strip()
-            baud = getattr(self.app, "display_baud_b", DEFAULT_SERIAL_BAUD)
+            port = str(
+                port_override if port_override is not None
+                else getattr(self.app, "display_port_b", "") or ""
+            ).strip()
+            baud = (
+                baud_override if baud_override is not None
+                else getattr(self.app, "display_baud_b", DEFAULT_SERIAL_BAUD)
+            )
             current = self.display_b
         else:
             return False
 
         if not port:
-            return current is not None and current.is_open
+            self.display_errors[display_id] = "Pro displej není zvolený COM port."
+            if current is not None:
+                self.disconnect_display(display_id)
+            return False
 
         try:
             baud = int(baud)
@@ -398,6 +438,7 @@ class USBManager:
             display.reset_input_buffer()
             display.reset_output_buffer()
         except Exception as e:
+            self.display_errors[display_id] = str(e)
             self._log(f"Display {display_id} connect error {e}")
             try:
                 if display is not None:
@@ -410,6 +451,7 @@ class USBManager:
             self.display_a = display
         else:
             self.display_b = display
+        self.display_errors[display_id] = ""
         return True
 
     def connect_displays(self):
@@ -421,7 +463,7 @@ class USBManager:
 
 
     def send_display(self, id, text):
-        self.connect_displays()
+        self._connect_display(id)
 
         if id == 1:
             ser = self.display_a
@@ -432,7 +474,7 @@ class USBManager:
 
         if ser is None or not ser.is_open:
             self.disconnect_display(id)
-            self.connect_displays()
+            self._connect_display(id)
 
             if id == 1:
                 ser = self.display_a
@@ -454,12 +496,49 @@ class USBManager:
                     pass
                 ser.write(msg)
                 ser.flush()
+            self.display_errors[id] = ""
             return True
 
         except Exception as e:
+            self.display_errors[id] = str(e)
             self._log(f"Display error {e}")
             self.disconnect_display(id)
             return False
+
+    def send_display_to_port(self, id, text, port, baud):
+        """Send a test command using the current values shown in the dialog."""
+        if not self._connect_display(id, port_override=port, baud_override=baud):
+            return False
+
+        if id == 1:
+            ser = self.display_a
+        elif id == 2:
+            ser = self.display_b
+        else:
+            return False
+
+        try:
+            msg = (str(text) + "\r\n").encode()
+            self._log(f"Display test msg: {msg}")
+            with self.display_lock:
+                try:
+                    waiting = ser.in_waiting
+                    if waiting:
+                        ser.read(waiting)
+                except Exception:
+                    pass
+                ser.write(msg)
+                ser.flush()
+            self.display_errors[id] = ""
+            return True
+        except Exception as e:
+            self.display_errors[id] = str(e)
+            self._log(f"Display test error {e}")
+            self.disconnect_display(id)
+            return False
+
+    def display_error(self, id):
+        return self.display_errors.get(id, "")
 
     def send_display_latest(self, id, text):
         """Queue at most the newest pending message for one display."""
@@ -500,11 +579,17 @@ class USBManager:
         else:
             return
 
+        was_open = False
         try:
             if display:
+                was_open = bool(display.is_open)
                 display.close()
         except Exception:
             pass
+
+        if was_open:
+            # Give Windows and common USB-serial drivers time to release the handle.
+            time.sleep(0.2)
 
         if id == 1:
             self.display_a = None
