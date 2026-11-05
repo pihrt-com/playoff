@@ -3,12 +3,12 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.16"                                         # current version of the application
-APP_date          = "03.11.2026"                                     # current version date
+APP_current       = "1.0.17"                                         # current version of the application
+APP_date          = "05.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
-from tkinter import ttk, simpledialog, messagebox, filedialog, colorchooser
+from tkinter import ttk, messagebox, filedialog, colorchooser
 from tkinter import font as tkfont
 
 import math, json, os, sys
@@ -78,6 +78,55 @@ def is_newer_version(candidate, current):
     candidate_parts += (0,) * (length - len(candidate_parts))
     current_parts += (0,) * (length - len(current_parts))
     return candidate_parts > current_parts
+
+
+TEAM_TABLE_DEFAULT_TITLE = "Účastníci soutěže"
+TEAM_TABLE_DEFAULT_HEADERS = ("ID", "Škola / adresa školy", "Jméno soutěžícího", "Nejlepší čas jízdy")
+TEAM_RECORD_FIELDS = ("id", "school", "participant", "best_time")
+
+
+def normalize_team_record(record):
+    """Return a backward-compatible team record with all display fields."""
+    record = record if isinstance(record, dict) else {}
+    school = record.get("school", record.get("desc", ""))
+    return {
+        "id": str(record.get("id", "") or ""),
+        "school": str(school or ""),
+        "participant": str(record.get("participant", "") or ""),
+        "best_time": str(record.get("best_time", "") or ""),
+    }
+
+
+def normalize_team_records(records):
+    return [normalize_team_record(record) for record in (records or [])]
+
+
+def team_record_from_excel_row(row):
+    """Read two to four optional Excel cells without discarding partial rows."""
+    values = list(row or ())[:len(TEAM_RECORD_FIELDS)]
+    values.extend([None] * (len(TEAM_RECORD_FIELDS) - len(values)))
+    return dict(zip(
+        TEAM_RECORD_FIELDS,
+        ("" if value is None else str(value) for value in values),
+    ))
+
+
+def normalize_team_table_headers(headers):
+    values = list(headers or ())[:len(TEAM_TABLE_DEFAULT_HEADERS)]
+    values.extend(TEAM_TABLE_DEFAULT_HEADERS[len(values):])
+    return [str(value or default) for value, default in zip(values, TEAM_TABLE_DEFAULT_HEADERS)]
+
+
+def lap_is_eligible_for_best(record):
+    try:
+        return not bool(record.get("invalid", False)) and int(record.get("ms", 0)) >= 10000
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+def best_valid_lap_ms(records):
+    valid_times = [int(record.get("ms", 0)) for record in records if lap_is_eligible_for_best(record)]
+    return min(valid_times) if valid_times else None
 
 
 # Pillow optional
@@ -391,6 +440,8 @@ class PlayoffApp:
         self.laps_countdown_blink_after_id = None
         self.laps_countdown_blink_state = False
         self.team_names = []          # Team naming database
+        self.team_table_title = TEAM_TABLE_DEFAULT_TITLE
+        self.team_table_headers = list(TEAM_TABLE_DEFAULT_HEADERS)
         self.pre_round_enabled = True
         self.third_place_enabled = True
         self.third_place_title = "3. místo"
@@ -1002,6 +1053,12 @@ class PlayoffApp:
 
         self.update_promo_button_state()
 
+    def set_playoff_icon(self, window):
+        try:
+            window.iconbitmap(os.path.join(BASE_PATH, "playoff.ico"))
+        except Exception:
+            pass
+
     def _now(self):
         return time.strftime("%H:%M:%S")
 
@@ -1116,6 +1173,7 @@ class PlayoffApp:
         current = self.bracket.pre_titles[0] if self.bracket.pre_titles else "Předkolo"
 
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("Změnit nadpis předkola")
         dlg.transient(self.root)
         dlg.grab_set()
@@ -1149,6 +1207,7 @@ class PlayoffApp:
         slot = match.a if side == 'a' else match.b
 
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("Zadej tým (Předkolo)")
         dlg.transient(self.root)
         dlg.grab_set()
@@ -1172,6 +1231,7 @@ class PlayoffApp:
 
     def ask_team_count(self):
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("Zadat počet týmů")
         dlg.transient(self.root)
         dlg.grab_set()
@@ -1607,7 +1667,8 @@ class PlayoffApp:
                         "id": self.lap_id_a,
                         "date": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
                         "time": self.format_lap(self.lap_time_a),
-                        "ms": self.lap_time_a
+                        "ms": self.lap_time_a,
+                        "invalid": False,
                     }
                     self.laps_a.insert(0, rec)
                     self.lap_id_a += 1
@@ -1625,7 +1686,8 @@ class PlayoffApp:
                         "id": self.lap_id_b,
                         "date": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
                         "time": self.format_lap(self.lap_time_b),
-                        "ms": self.lap_time_b
+                        "ms": self.lap_time_b,
+                        "invalid": False,
                     }
                     self.laps_b.insert(0, rec)
                     self.lap_id_b += 1
@@ -1789,14 +1851,17 @@ class PlayoffApp:
 
     def open_team_naming_dialog(self):
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("Pojmenování týmů")
         dlg.transient(self.root)
         dlg.grab_set()
-        dlg.geometry("700x500")
+        dlg.geometry("1200x620")
+        dlg.minsize(900, 420)
 
         # --- MAIN TEAM NAMES ---
         if not hasattr(self, "team_names"):
             self.team_names = []
+        self.team_names = normalize_team_records(self.team_names)
 
         # --- SCROLL ---
         container = tk.Frame(dlg)
@@ -1823,9 +1888,9 @@ class PlayoffApp:
         )
 
         # --- HEADS ---
-        tk.Label(scroll_frame, text="ID týmu", font=("Arial", 10, "bold")).grid(row=0, column=0, padx=5, pady=5)
-        tk.Label(scroll_frame, text="Popis týmu", font=("Arial", 10, "bold")).grid(row=0, column=1, padx=5, pady=5)
-        tk.Label(scroll_frame, text="Akce", font=("Arial", 10, "bold")).grid(row=0, column=2, padx=5, pady=5)
+        headers = ("ID týmu", "Škola / adresa školy", "Jméno soutěžícího", "Nejlepší čas jízdy", "Akce")
+        for column, header in enumerate(headers):
+            tk.Label(scroll_frame, text=header, font=("Arial", 10, "bold")).grid(row=0, column=column, padx=5, pady=5)
 
         row_widgets = []
 
@@ -1838,34 +1903,43 @@ class PlayoffApp:
 
             for i, item in enumerate(self.team_names):
                 id_var = tk.StringVar(value=item.get("id", ""))
-                desc_var = tk.StringVar(value=item.get("desc", ""))
+                school_var = tk.StringVar(value=item.get("school", ""))
+                participant_var = tk.StringVar(value=item.get("participant", ""))
+                best_time_var = tk.StringVar(value=item.get("best_time", ""))
 
                 e1 = tk.Entry(scroll_frame, textvariable=id_var, width=10)
-                e2 = tk.Entry(scroll_frame, textvariable=desc_var, width=40)
+                e2 = tk.Entry(scroll_frame, textvariable=school_var, width=52)
+                e3 = tk.Entry(scroll_frame, textvariable=participant_var, width=30)
+                e4 = tk.Entry(scroll_frame, textvariable=best_time_var, width=16)
 
                 e1.grid(row=i+1, column=0, padx=5, pady=2)
                 e2.grid(row=i+1, column=1, padx=5, pady=2)
+                e3.grid(row=i+1, column=2, padx=5, pady=2)
+                e4.grid(row=i+1, column=3, padx=5, pady=2)
 
                 def make_delete(idx):
                     return lambda: delete_row(idx)
 
                 btn_del = tk.Button(scroll_frame, text="Smazat", command=make_delete(i))
 
-                btn_del.grid(row=i+1, column=2, padx=5)
+                btn_del.grid(row=i+1, column=4, padx=5)
 
-                def make_trace(index, var_id, var_desc):
+                def make_trace(index, var_id, var_school, var_participant, var_best_time):
                     def tracer(*args):
                         self.team_names[index]["id"] = var_id.get()
-                        self.team_names[index]["desc"] = var_desc.get()
+                        self.team_names[index]["school"] = var_school.get()
+                        self.team_names[index]["participant"] = var_participant.get()
+                        self.team_names[index]["best_time"] = var_best_time.get()
                     return tracer
 
-                id_var.trace_add("write", make_trace(i, id_var, desc_var))
-                desc_var.trace_add("write", make_trace(i, id_var, desc_var))
+                trace = make_trace(i, id_var, school_var, participant_var, best_time_var)
+                for variable in (id_var, school_var, participant_var, best_time_var):
+                    variable.trace_add("write", trace)
 
-                row_widgets.append((e1, e2, btn_del))
+                row_widgets.append((e1, e2, e3, e4, btn_del))
 
         def add_row():
-            self.team_names.append({"id": "", "desc": ""})
+            self.team_names.append(normalize_team_record({}))
             refresh_table()
 
         def delete_row(index):
@@ -1896,10 +1970,11 @@ class PlayoffApp:
             ws = wb.active
             ws.title = "Pojmenování týmů"
 
-            ws.append(["ID týmu", "Popis týmu"])
+            ws.append(["ID týmu", "Škola / adresa školy", "Jméno soutěžícího", "Nejlepší čas jízdy"])
 
             for item in self.team_names:
-                ws.append([item.get("id", ""), item.get("desc", "")])
+                record = normalize_team_record(item)
+                ws.append([record[field] for field in TEAM_RECORD_FIELDS])
 
             wb.save(path)
             messagebox.showinfo("Hotovo", f"Export dokončen:\n{path}")
@@ -1917,12 +1992,9 @@ class PlayoffApp:
             self.team_names.clear()
 
             for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
-                if not row:
+                if not any(value is not None for value in row):
                     continue
-                self.team_names.append({
-                    "id": str(row[0]) if row[0] is not None else "",
-                    "desc": str(row[1]) if row[1] is not None else ""
-                })
+                self.team_names.append(team_record_from_excel_row(row))
 
             refresh_table()
 
@@ -1984,6 +2056,7 @@ class PlayoffApp:
     # --- USB wrapper ---
     def open_usb_dialog(self):
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("USB spojení")
         dlg.transient(self.root)
         dlg.grab_set()
@@ -2478,7 +2551,9 @@ class PlayoffApp:
             # mode (playoff/laps)
             'view_mode': self.view_mode,
             # TEAMS names
-            'team_names': self.team_names,
+            'team_names': normalize_team_records(self.team_names),
+            'team_table_title': self.team_table_title,
+            'team_table_headers': self.get_team_table_headers(),
             # THIRD place
             'third_place_enabled': self.third_place_enabled,
             'third_place': self.third_place,
@@ -2547,7 +2622,9 @@ class PlayoffApp:
         self.laps_countdown_seconds = self.time_to_seconds(self.timer_value)
         self.timer_start_mode = data.get('timer_start_mode', 'start')
         self.timer_start_mode_var.set(self.timer_start_mode)
-        self.team_names = data.get('team_names', [])
+        self.team_names = normalize_team_records(data.get('team_names', []))
+        self.team_table_title = str(data.get('team_table_title', TEAM_TABLE_DEFAULT_TITLE) or TEAM_TABLE_DEFAULT_TITLE)
+        self.team_table_headers = normalize_team_table_headers(data.get('team_table_headers'))
         self.pre_round_enabled = data.get('pre_round_enabled', True)
         self.pre_round_var.set(self.pre_round_enabled)
         self.third_place_enabled = data.get('third_place_enabled', False)
@@ -2757,6 +2834,7 @@ class PlayoffApp:
 
     def open_promo_text_dialog(self):
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("Propagační text")
         dlg.transient(self.root)
         dlg.grab_set()
@@ -3060,24 +3138,23 @@ class PlayoffApp:
         return "break"
 
     def on_timer_right_click(self, event=None):
-        class WideEntryDialog(simpledialog._QueryString):
-            def body(self, master):
-                super().body(master)
-                self.entry.config(width=15)
-                return self.entry
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title('Nastavení odpočtu')
+        dlg.transient(self.root)
+        dlg.grab_set()
 
-        d = WideEntryDialog(
-            title='Nastavení odpočtu',
-            prompt='Zadejte čas ve formátu MM:SS',
-            initialvalue=getattr(self, 'timer_value', '05:00'),
-            parent=self.root
-        )
+        tk.Label(dlg, text='Zadejte čas ve formátu MM:SS').pack(padx=14, pady=(14, 4))
+        value_var = tk.StringVar(value=getattr(self, 'timer_value', '05:00'))
+        entry = tk.Entry(dlg, textvariable=value_var, width=15)
+        entry.pack(padx=14, pady=4)
+        entry.focus_set()
 
-        val = d.result
-        if val is None:
-            return
-        
-        if self.validate_time_format(val):
+        def on_ok():
+            val = value_var.get().strip()
+            if not self.validate_time_format(val):
+                messagebox.showerror('Chyba', 'Neplatný formát času. Použij MM:SS (např. 03:30).', parent=dlg)
+                return
             self.timer_value = val
             if self.view_mode == "laps":
                 self.stop_laps_countdown(reset=True)
@@ -3094,8 +3171,15 @@ class PlayoffApp:
                     json.dump(data, f, ensure_ascii=False, indent=2)
             except Exception:
                 pass
-        else:
-            messagebox.showerror('Chyba', 'Neplatný formát času. Použij MM:SS (např. 03:30).')
+            dlg.destroy()
+
+        buttons = tk.Frame(dlg)
+        buttons.pack(pady=(6, 14))
+        tk.Button(buttons, text='OK', width=10, command=on_ok).pack(side='left', padx=6)
+        tk.Button(buttons, text='Zrušit', width=10, command=dlg.destroy).pack(side='left', padx=6)
+        dlg.bind('<Return>', lambda _event: on_ok())
+        dlg.bind('<Escape>', lambda _event: dlg.destroy())
+        self.root.wait_window(dlg)
 
     def start_laps_countdown(self):
         self.stop_promo()
@@ -3374,6 +3458,7 @@ class PlayoffApp:
             return
 
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title('Změnit nadpis')
         dlg.transient(self.root)
         dlg.grab_set()
@@ -3406,6 +3491,72 @@ class PlayoffApp:
 
         self.root.wait_window(dlg)
 
+    def edit_team_table_title(self):
+        if self.lock_edit:
+            return
+
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title("Změnit nadpis tabulky účastníků")
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        tk.Label(dlg, text="Nadpis:").pack(padx=10, pady=(10, 4))
+        ent = tk.Entry(dlg, width=40)
+        ent.insert(0, getattr(self, "team_table_title", TEAM_TABLE_DEFAULT_TITLE))
+        ent.pack(padx=10, pady=4)
+        ent.focus_set()
+
+        def on_ok():
+            self.team_table_title = ent.get().strip() or TEAM_TABLE_DEFAULT_TITLE
+            dlg.destroy()
+            self.redraw()
+
+        buttons = tk.Frame(dlg)
+        buttons.pack(pady=10)
+        tk.Button(buttons, text="OK", width=10, command=on_ok).pack(side="left", padx=6)
+        tk.Button(buttons, text="Zrušit", width=10, command=dlg.destroy).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda _event: on_ok())
+        dlg.bind("<Escape>", lambda _event: dlg.destroy())
+        self.root.wait_window(dlg)
+
+    def get_team_table_headers(self):
+        self.team_table_headers = normalize_team_table_headers(
+            getattr(self, "team_table_headers", TEAM_TABLE_DEFAULT_HEADERS)
+        )
+        return self.team_table_headers
+
+    def edit_team_table_header(self, index):
+        if self.lock_edit:
+            return
+
+        headers = self.get_team_table_headers()
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title("Změnit záhlaví tabulky účastníků")
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        tk.Label(dlg, text="Záhlaví:").pack(padx=10, pady=(10, 4))
+        ent = tk.Entry(dlg, width=40)
+        ent.insert(0, headers[index])
+        ent.pack(padx=10, pady=4)
+        ent.focus_set()
+
+        def on_ok():
+            headers[index] = ent.get().strip() or TEAM_TABLE_DEFAULT_HEADERS[index]
+            self.team_table_headers = headers
+            dlg.destroy()
+            self.redraw()
+
+        buttons = tk.Frame(dlg)
+        buttons.pack(pady=10)
+        tk.Button(buttons, text="OK", width=10, command=on_ok).pack(side="left", padx=6)
+        tk.Button(buttons, text="Zrušit", width=10, command=dlg.destroy).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda _event: on_ok())
+        dlg.bind("<Escape>", lambda _event: dlg.destroy())
+        self.root.wait_window(dlg)
+
 
     # --- editing UI (wide dialog) ---
     def edit_slot_dialog(self, r_idx, m_idx, side):
@@ -3415,6 +3566,7 @@ class PlayoffApp:
         slot = m.a if side == 'a' else m.b
         # create custom dialog
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title('Zadej tým')
         dlg.transient(self.root)
         dlg.grab_set()
@@ -3446,6 +3598,7 @@ class PlayoffApp:
         if self.lock_edit:
             return
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("Zadat vítěze")
         dlg.transient(self.root)
         dlg.grab_set()
@@ -3534,6 +3687,7 @@ class PlayoffApp:
             return
 
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("Nadpis 3. místa")
 
         ent = tk.Entry(dlg, width=30)
@@ -3610,6 +3764,7 @@ class PlayoffApp:
     # --- help ---
     def show_help(self):
         dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
         dlg.title("Nápověda – Playoff generátor")
         dlg.transient(self.root)
         dlg.grab_set()
@@ -3650,17 +3805,19 @@ class PlayoffApp:
 
             "=== POJMENOVÁNÍ TÝMŮ ===\n"
             "Nastavení → Pojmenování týmů\n"
-            "- Sloupce: ID týmu / Popis týmu\n"
+            "- Sloupce: ID týmu / škola nebo adresa / jméno soutěžícího / nejlepší čas jízdy\n"
             "- Neomezený počet řádků\n"
             "- Ruční editace\n"
-            "- Import z Excelu\n"
-            "- Export do Excelu\n"
+            "- Import z Excelu přijme i nevyplněné nové sloupce\n"
+            "- Export do Excelu obsahuje všechny čtyři sloupce\n"
             "- Tlačítko Smazat vše\n"
             "- Data se ukládají do souboru spolu s pavoukem\n\n"
 
             "=== TABULKA VPRAVO OD PAVOUKA ===\n"
-            "- Automaticky se generuje z Kola 1\n"
+            "- Při zapnutém předkole se automaticky generuje z předkola i Kola 1 bez duplicitních ID\n"
             "- Zobrazuje pouze ID, které existují v pojmenování týmů\n"
+            "- Zobrazuje ID, školu, soutěžícího a nejlepší čas jízdy\n"
+            "- Nadpis Účastníci soutěže lze kliknutím změnit\n"
             "- Řazení je číselně vzestupně\n"
             "- Velikost písma odpovídá nastavení velikosti pavouka\n\n"
 
@@ -3707,6 +3864,11 @@ class PlayoffApp:
             "- Po vypršení se odpočet automaticky obnoví a pokračuje v dalším cyklu\n"
             "- Posledních 10 sekund bliká pozadí černě a červeně, text zůstává bílý\n"
             "- Vypnutí odpočtu nebo změna režimu cyklus zastaví\n\n"
+
+            "=== PLATNOST KOL V LAPS ===\n"
+            "- U každého záznamu A i B tlačítko ZNEPLATNIT řádek přeškrtne, ale nesmaže jej ani nezmění jeho ID\n"
+            "- Neplatné záznamy se nezapočítávají do zeleně označeného nejrychlejšího kola\n"
+            "- Tlačítko OBNOVIT vrátí záznam mezi platná kola\n\n"
 
             "=== ČAS KOLA NA LED DISPLEJI ===\n"
             "Nastavení → Měřit a zobrazit čas kola\n"
@@ -3783,18 +3945,23 @@ class PlayoffApp:
         if not self.bracket or not self.bracket.rounds:
             return []
 
-        round_index = 0
-
         ids = []
-        for m in self.bracket.rounds[round_index]:
-            a = m.a.text.strip()
-            b = m.b.text.strip()
-            if a:
-                ids.append(a)
-            if b:
-                ids.append(b)
+        source_rounds = []
+        if self.pre_round_enabled and self.bracket.pre_rounds:
+            source_rounds.append(self.bracket.pre_rounds[0])
+        source_rounds.append(self.bracket.rounds[0])
 
-        lookup = {str(x.get("id", "")).strip(): x.get("desc", "") for x in self.team_names}
+        for source_round in source_rounds:
+            for match in source_round:
+                for slot in (match.a, match.b):
+                    team_id = slot.text.strip()
+                    if team_id and team_id not in ids:
+                        ids.append(team_id)
+
+        lookup = {
+            record["id"].strip(): record
+            for record in normalize_team_records(self.team_names)
+        }
 
         result = []
         for tid in ids:
@@ -4177,46 +4344,52 @@ class PlayoffApp:
                     table_font_size = min(cell_font_size - 1, 18)
                     row_h = max(26, table_font_size + 10)
 
-                    col1_w = 50
-                    col2_w = table_x2 - table_x1 - col1_w - 10
-
+                    table_title = getattr(self, "team_table_title", TEAM_TABLE_DEFAULT_TITLE)
+                    title_row_h = row_h
+                    title_id = self.canvas.create_text(
+                        (table_x1 + table_x2) / 2, table_y + title_row_h / 2,
+                        text=table_title, font=("Arial", min(16, table_font_size), "bold"),
+                    )
                     self.canvas.create_rectangle(
-                        table_x1, table_y,
-                        table_x2, table_y + row_h,
-                        fill="#dddddd", outline=BOX_OUTLINE, width=1
+                        table_x1, table_y, table_x2, table_y + title_row_h,
+                        fill="#dddddd", outline=BOX_OUTLINE, width=1,
                     )
+                    self.canvas.tag_raise(title_id)
+                    if not self.lock_edit:
+                        self.canvas.tag_bind(title_id, "<Button-1>", lambda _event: self.edit_team_table_title())
 
-                    self.canvas.create_text(
-                        table_x1 + col1_w/2, table_y + row_h/2,
-                        text="ID", font=("Arial", min(16, table_font_size), "bold")
+                    usable_width = table_x2 - table_x1
+                    column_widths = (50, usable_width * 0.46, usable_width * 0.31, usable_width * 0.23 - 50)
+                    column_headers = self.get_team_table_headers()
+                    header_y = table_y + title_row_h
+                    self.canvas.create_rectangle(
+                        table_x1, header_y, table_x2, header_y + row_h,
+                        fill="#dddddd", outline=BOX_OUTLINE, width=1,
                     )
+                    x = table_x1
+                    for header_index, (column_width, header) in enumerate(zip(column_widths, column_headers)):
+                        header_id = self.canvas.create_text(
+                            x + column_width / 2, header_y + row_h / 2,
+                            text=header, font=("Arial", min(14, table_font_size), "bold"),
+                            width=max(20, column_width - 8), justify="center",
+                        )
+                        if not self.lock_edit:
+                            self.canvas.tag_bind(
+                                header_id,
+                                "<Button-1>",
+                                lambda _event, index=header_index: self.edit_team_table_header(index),
+                            )
+                        x += column_width
+                        if x < table_x2:
+                            self.canvas.create_line(x, header_y, x, header_y + row_h, fill=BOX_OUTLINE, width=1)
 
-                    col_title = self.bracket.titles[0] if self.bracket.titles else "Popis"
-                    self.canvas.create_text(
-                        table_x1 + col1_w + col2_w/2 + 5, table_y + row_h/2,
-                        text=col_title, font=("Arial", min(16, table_font_size), "bold")
-                    )
+                    y = header_y + row_h
 
-                    y = table_y + row_h
-
-                    for row_index, (tid, name) in enumerate(table_data):
+                    for row_index, (tid, record) in enumerate(table_data):
                         if row_index % 2 == 0:
                             row_fill = "#ffffff"
                         else:
                             row_fill = "#f2f2f2"
-
-                        temp_id = self.canvas.create_text(
-                            0, 0,
-                            text=name,
-                            font=("Arial", table_font_size),
-                            width=col2_w - 16
-                        )
-
-                        bbox = self.canvas.bbox(temp_id)
-                        text_height = bbox[3] - bbox[1] if bbox else table_font_size
-                        self.canvas.delete(temp_id)
-
-                        row_h = max(26, text_height + 12)
 
                         self.canvas.create_rectangle(
                             table_x1, y,
@@ -4226,33 +4399,26 @@ class PlayoffApp:
                             width=1
                         )
 
-                        self.canvas.create_line(
-                            table_x1 + col1_w,
-                            y,
-                            table_x1 + col1_w,
-                            y + row_h,
-                            fill=BOX_OUTLINE,
-                            width=1
-                        )
-
-                        # ID
-                        self.canvas.create_text(
-                            table_x1 + col1_w / 2,
-                            y + row_h / 2,
-                            text=str(tid),
-                            font=("Arial", table_font_size)
-                        )
-
-                        # LABEL
-                        self.canvas.create_text(
-                            table_x1 + col1_w + 8,
-                            y + row_h / 2,
-                            text=name,
-                            font=("Arial", table_font_size),
-                            anchor="w",
-                            width=col2_w - 16,
-                            justify="left"
-                        )
+                        x = table_x1
+                        values = (str(tid), record["school"], record["participant"], record["best_time"])
+                        for value_index, (column_width, value) in enumerate(zip(column_widths, values)):
+                            value_font_size = table_font_size
+                            if value_index in (1, 2):
+                                value_font_size = max(10, table_font_size - 4)
+                                while value_font_size > 9:
+                                    value_font = tkfont.Font(family="Arial", size=value_font_size)
+                                    if value_font.measure(value) <= column_width - 16:
+                                        break
+                                    value_font_size -= 1
+                            self.canvas.create_text(
+                                x + (column_width / 2 if x == table_x1 else 8), y + row_h / 2,
+                                text=value, font=("Arial", value_font_size),
+                                anchor="center" if x == table_x1 else "w",
+                                width=0 if value_index in (1, 2) else max(20, column_width - 16), justify="left",
+                            )
+                            x += column_width
+                            if x < table_x2:
+                                self.canvas.create_line(x, y, x, y + row_h, fill=BOX_OUTLINE, width=1)
 
                         y += row_h
 
@@ -4397,6 +4563,7 @@ class PlayoffApp:
 
                 def edit_tp(field):
                     dlg = tk.Toplevel(self.root)
+                    self.set_playoff_icon(dlg)
                     dlg.title("3. místo")
 
                     ent = tk.Entry(dlg, width=30)
@@ -4512,6 +4679,8 @@ class PlayoffApp:
             bottom_y = h - 80
 
         header_h = 34
+        validity_column_width = 120
+        validity_margin = 8
 
         # outer borders
         self.canvas.create_rectangle(
@@ -4654,6 +4823,13 @@ class PlayoffApp:
             fill="white",
             font=header_font
         )
+        self.canvas.create_text(
+            left_x2 - validity_margin - validity_column_width / 2,
+            top_y + 5 + header_h / 2,
+            text="Platnost",
+            fill="white",
+            font=("Arial", max(8, header_font[1] - 3), "bold"),
+        )
 
         self.canvas.create_text(
             right_x1 + 8,
@@ -4662,6 +4838,13 @@ class PlayoffApp:
             text="  ID      Vloženo                            Čas",
             fill="white",
             font=header_font
+        )
+        self.canvas.create_text(
+            right_x2 - validity_margin - validity_column_width / 2,
+            top_y + 5 + header_h / 2,
+            text="Platnost",
+            fill="white",
+            font=("Arial", max(8, header_font[1] - 3), "bold"),
         )
 
         # --------------------------------------------------
@@ -4673,23 +4856,20 @@ class PlayoffApp:
         # --------------------------------------------------
         # LEFT TABLE
         # --------------------------------------------------
-        valid_a = [
-            int(r.get("ms", 0))
-            for r in self.laps_a
-            if int(r.get("ms", 0)) >= 10000
-        ]
-
-        best_a = min(valid_a) if valid_a else None
+        best_a = best_valid_lap_ms(self.laps_a)
 
         y = first_row_y
         for idx, rec in enumerate(self.laps_a[:visible_rows]):
             row_top = y - row_height // 2
             row_bottom = row_top + row_height
             ms = int(rec.get("ms", 0))
-            invalid = ms < 10000
+            invalid = bool(rec.get("invalid", False))
+            too_short = ms < 10000
             best = (best_a is not None and ms == best_a)
             
             if invalid:
+                bg = "#d9d9d9"
+            elif too_short:
                 bg = "#ffb3b3"      # red
             elif best:
                 bg = "#b8ffb8"      # grn
@@ -4723,6 +4903,25 @@ class PlayoffApp:
                 fill="black"
             )
 
+            action_tag = f"lap_validity_a_{rec['id']}"
+            action_x1 = left_x2 - validity_margin - validity_column_width
+            self.canvas.create_rectangle(
+                action_x1, row_top + 3, left_x2 - validity_margin, row_bottom - 3,
+                fill="#777777" if invalid else "#d62828",
+                outline="black", tags=action_tag,
+            )
+            self.canvas.create_text(
+                (action_x1 + left_x2 - validity_margin) / 2, y,
+                text="OBNOVIT" if invalid else "ZNEPLATNIT",
+                fill="white", font=("Arial", max(7, row_font[1] - 8), "bold"), tags=action_tag,
+            )
+            self.canvas.tag_bind(
+                action_tag, "<Button-1>",
+                lambda _event, record_id=rec["id"]: self.toggle_lap_validity("a", record_id),
+            )
+            if invalid:
+                self.canvas.create_line(left_x1 + 3, y, action_x1 - 4, y, fill="#555555", width=2)
+
             # separator line
             self.canvas.create_line(
                 left_x1,
@@ -4737,23 +4936,20 @@ class PlayoffApp:
         # --------------------------------------------------
         # RIGHT TABLE
         # --------------------------------------------------
-        valid_b = [
-            int(r.get("ms", 0))
-            for r in self.laps_b
-            if int(r.get("ms", 0)) >= 10000
-        ]
-
-        best_b = min(valid_b) if valid_b else None
+        best_b = best_valid_lap_ms(self.laps_b)
 
         y = first_row_y
         for idx, rec in enumerate(self.laps_b[:visible_rows]):
             row_top = y - row_height // 2
             row_bottom = row_top + row_height
             ms = int(rec.get("ms", 0))
-            invalid = ms < 10000
+            invalid = bool(rec.get("invalid", False))
+            too_short = ms < 10000
             best = (best_b is not None and ms == best_b)
 
             if invalid:
+                bg = "#d9d9d9"
+            elif too_short:
                 bg = "#ffb3b3"      # red
             elif best:
                 bg = "#b8ffb8"      # grn
@@ -4787,6 +4983,25 @@ class PlayoffApp:
                 fill="black"
             )                
 
+            action_tag = f"lap_validity_b_{rec['id']}"
+            action_x1 = right_x2 - validity_margin - validity_column_width
+            self.canvas.create_rectangle(
+                action_x1, row_top + 3, right_x2 - validity_margin, row_bottom - 3,
+                fill="#777777" if invalid else "#d62828",
+                outline="black", tags=action_tag,
+            )
+            self.canvas.create_text(
+                (action_x1 + right_x2 - validity_margin) / 2, y,
+                text="OBNOVIT" if invalid else "ZNEPLATNIT",
+                fill="white", font=("Arial", max(7, row_font[1] - 8), "bold"), tags=action_tag,
+            )
+            self.canvas.tag_bind(
+                action_tag, "<Button-1>",
+                lambda _event, record_id=rec["id"]: self.toggle_lap_validity("b", record_id),
+            )
+            if invalid:
+                self.canvas.create_line(right_x1 + 3, y, action_x1 - 4, y, fill="#555555", width=2)
+
             # separator line
             self.canvas.create_line(
                 right_x1,
@@ -4810,6 +5025,15 @@ class PlayoffApp:
                 anchor='center'
             )
             self.canvas.itemconfigure(self.timer_window, state='normal')
+
+    def toggle_lap_validity(self, lane, record_id):
+        records = self.laps_a if lane == "a" else self.laps_b
+        for record in records:
+            if record.get("id") == record_id:
+                record["invalid"] = not bool(record.get("invalid", False))
+                self.redraw()
+                return True
+        return False
 
     def clear_laps_a(self):
         if messagebox.askyesno("Potvrzení", "Smazat všechny záznamy A?"):
@@ -5246,53 +5470,60 @@ class PlayoffApp:
                 page_w, page_h = landscape(A4)
                 margin = 40
 
-                col1_w = 100
-                col2_w = page_w - col1_w - 2 * margin
+                table_w = page_w - 2 * margin
+                col_widths = (60, table_w * 0.46, table_w * 0.31, table_w * 0.23 - 60)
+                column_headers = self.get_team_table_headers()
                 row_h = max(26, min(cell_font_size, 18) + 10)
 
                 x1 = margin
                 y = page_h - margin
 
-                # --- HEADER ---
-                pdf.setFillColor(HexColor("#dddddd"))
-                pdf.rect(x1, y - row_h, col1_w, row_h, stroke=1, fill=1)
-                pdf.rect(x1 + col1_w, y - row_h, col2_w, row_h, stroke=1, fill=1)
+                def draw_table_header(current_y):
+                    pdf.setFillColor(HexColor("#dddddd"))
+                    pdf.rect(x1, current_y - row_h, table_w, row_h, stroke=1, fill=1)
+                    pdf.setFont("DejaVu", 12)
+                    pdf.setFillColor(black)
+                    pdf.drawCentredString(
+                        x1 + table_w / 2,
+                        current_y - row_h / 2 - 4,
+                        getattr(self, "team_table_title", TEAM_TABLE_DEFAULT_TITLE),
+                    )
+                    current_y -= row_h
+                    x = x1
+                    for column_width, header in zip(col_widths, column_headers):
+                        pdf.setFillColor(HexColor("#dddddd"))
+                        pdf.rect(x, current_y - row_h, column_width, row_h, stroke=1, fill=1)
+                        pdf.setFillColor(black)
+                        pdf.setFont("DejaVu", 10)
+                        pdf.drawCentredString(x + column_width / 2, current_y - row_h / 2 - 4, header)
+                        x += column_width
+                    return current_y - row_h
 
-                pdf.setFont("DejaVu", 12)
-                pdf.setFillColor(black)
-                pdf.drawCentredString(x1 + col1_w / 2, y - row_h / 2 - 4, "ID")
-
-                col_title = self.bracket.titles[0]
-                pdf.drawCentredString(x1 + col1_w + col2_w / 2, y - row_h / 2 - 4, col_title)
-
-                y -= row_h
+                y = draw_table_header(y)
                 pdf.setFont("DejaVu", 11)
 
-                for tid, name in table_data:
+                for tid, record in table_data:
                     # --- PAGE ---
-                    if y - row_h < margin:
+                    if y - row_h * 2 < margin:
                         pdf.showPage()
                         y = page_h - margin
-
-                        pdf.setFillColor(HexColor("#dddddd"))
-                        pdf.rect(x1, y - row_h, col1_w, row_h, stroke=1, fill=1)
-                        pdf.rect(x1 + col1_w, y - row_h, col2_w, row_h, stroke=1, fill=1)
-
-                        pdf.setFont("DejaVu", 12)
-                        pdf.setFillColor(black)
-                        pdf.drawCentredString(x1 + col1_w / 2, y - row_h / 2 - 4, "ID")
-                        pdf.drawCentredString(x1 + col1_w + col2_w / 2, y - row_h / 2 - 4, col_title)
-
-                        y -= row_h
+                        y = draw_table_header(y)
                         pdf.setFont("DejaVu", 11)
 
                     pdf.setFillColor(HexColor("#ffffff"))
-                    pdf.rect(x1, y - row_h, col1_w, row_h, stroke=1, fill=1)
-                    pdf.rect(x1 + col1_w, y - row_h, col2_w, row_h, stroke=1, fill=1)
-
+                    x = x1
+                    for column_width in col_widths:
+                        pdf.rect(x, y - row_h, column_width, row_h, stroke=1, fill=1)
+                        x += column_width
                     pdf.setFillColor(black)
-                    pdf.drawCentredString(x1 + col1_w / 2, y - row_h / 2 - 4, str(tid))
-                    pdf.drawString(x1 + col1_w + 6, y - row_h / 2 - 4, name)
+                    values = (str(tid), record["school"], record["participant"], record["best_time"])
+                    x = x1
+                    for index, (column_width, value) in enumerate(zip(col_widths, values)):
+                        if index in (0, 3):
+                            pdf.drawCentredString(x + column_width / 2, y - row_h / 2 - 4, value)
+                        else:
+                            pdf.drawString(x + 6, y - row_h / 2 - 4, value)
+                        x += column_width
 
                     y -= row_h
 

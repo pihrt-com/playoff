@@ -1,7 +1,7 @@
 {
-  "version": "1.0.16",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.16/PlayoffSetup_1.0.16.exe",
-  "sha256": "88aa85c20ec7bba0c32cfc68bd1b79e3dca212ceef19b7d3685c09d23fb0c9dc",
-  "size": 41897574,
-  "notes": "USB zařízení lze samostatně vypnout a otestovat bez brány. Nové PROMO zobrazuje uložený propagační text na LED displejích s volitelným režimem a rychlostí."
+  "version": "1.0.17",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.17/PlayoffSetup_1.0.17.exe",
+  "sha256": "0c8a1767ca4f47f790cb9653405a56c741618afddffe80a44cdd5e9a66f9b5c1",
+  "size": 38108317,
+  "notes": "Tabulka účastníků nově podporuje školu, soutěžícího a nejlepší čas. V režimu LAPS lze neplatné kolo přeškrtnout bez smazání a vyřadit je z nejrychlejšího času."
 }

@@ -267,6 +267,35 @@ class LapsCountdownTests(unittest.TestCase):
         self.assertEqual(app.lap_id_b, 1)
         redraw.assert_called_once_with()
 
+    def test_invalid_lap_is_preserved_but_excluded_from_best_time(self):
+        app = make_app()
+        app.laps_a = [
+            {"id": 3, "ms": 13000, "invalid": False},
+            {"id": 2, "ms": 19000, "invalid": False},
+            {"id": 1, "ms": 24000, "invalid": False},
+        ]
+        redraw = mock.Mock()
+        app.redraw = redraw
+
+        self.assertEqual(playoff.best_valid_lap_ms(app.laps_a), 13000)
+        self.assertTrue(app.toggle_lap_validity("a", 3))
+
+        self.assertEqual(len(app.laps_a), 3)
+        self.assertTrue(app.laps_a[0]["invalid"])
+        self.assertEqual(playoff.best_valid_lap_ms(app.laps_a), 19000)
+        redraw.assert_called_once_with()
+
+    def test_too_short_and_manually_invalid_laps_are_not_best_times(self):
+        records = [
+            {"ms": 9000, "invalid": False},
+            {"ms": 13000, "invalid": True},
+            {"ms": 19000, "invalid": False},
+        ]
+
+        self.assertEqual(playoff.best_valid_lap_ms(records), 19000)
+        self.assertFalse(playoff.lap_is_eligible_for_best(records[0]))
+        self.assertFalse(playoff.lap_is_eligible_for_best(records[1]))
+
 
 if __name__ == "__main__":
     unittest.main()

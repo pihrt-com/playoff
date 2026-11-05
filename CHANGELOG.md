@@ -1,5 +1,16 @@
 # Historie změn
 
+## 1.0.17 – 05. 11. 2026
+
+- Tabulka účastníků se při zapnutém předkole skládá z předkola i Kola 1 a duplicitní ID zobrazí pouze jednou.
+- Tabulka zobrazuje ID, školu nebo adresu školy, jméno soutěžícího a nejlepší čas jízdy; její společný nadpis i všechna záhlaví lze kliknutím upravit a uloží se do projektu.
+- Řádky tabulky účastníků mají opět kompaktní pevnou výšku, aby se vešel seznam až 24 účastníků.
+- Dialog Pojmenování týmů a import/export Excelu podporují čtyři volitelné údaje a zachovávají kompatibilitu se staršími dvousloupcovými sešity i projekty.
+- Všechna vyskakovací okna aplikace používají ikonu Playoffu místo výchozí ikony Tkinteru.
+- Nastavení odpočtu v režimech PLAYOFF i LAPS je vlastní dialog s ikonou Playoffu.
+- Škola a jméno soutěžícího jsou v hlavní tabulce vykreslené menším písmem, které se v případě potřeby přizpůsobí šířce sloupce bez zvětšení řádku.
+- Každý záznam měření v režimu LAPS lze samostatně označit jako neplatný bez smazání nebo přečíslování; přeškrtnutý záznam se nezapočítává do nejlepšího zeleně zvýrazněného kola a lze jej obnovit.
+
 ## 1.0.16 – 03. 11. 2026
 
 - Bránu i oba LED displeje lze v dialogu USB nastavení samostatně vypnout volbou „Nepoužívat“.

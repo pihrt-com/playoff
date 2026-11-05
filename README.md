@@ -9,6 +9,14 @@ Zde naleznete aplikaci pro MS Windows (instalace i portable verze), dokumentaci 
 
 V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadáváme číslo nebo název týmu, pravým tlačítkem postupujeme tým do dalšího kola. Výsledný pavouk lze uložit, načíst, exportovat do PDF a propojit se startovními semafory. Nebo se lze přepnout do řežimu měření časů jednotlivých kol. Pokud je kolo kratší než 10 vteřin je podbarvené pole červené. Nejkratší čas v kolech je podbarven zeleně.
 
+## Aktuální změny – 05. 11. 2026 (`GitHub/playoff`)
+
+Tabulka účastníků vedle pavouka slučuje ID z předkola i Kola 1, pokud je předkolo zapnuté; stejný tým se zobrazí jen jednou. Obsahuje čtyři upravitelné sloupce pro ID, školu nebo adresu, jméno soutěžícího a nejlepší čas jízdy. Kliknutím lze změnit společný nadpis i každé záhlaví sloupce a nastavení se ukládá do souboru projektu.
+
+Dialog Pojmenování týmů podporuje import i export Excelu se čtyřmi sloupci a přijímá také starší nebo částečně vyplněné tabulky. Všechna dialogová okna Playoffu včetně nastavení odpočtu používají ikonu programu místo výchozí ikony Tkinteru. Škola a jméno soutěžícího se v tabulce vykreslují menším písmem, které se podle dostupné šířky ještě zmenší, aniž by se zvětšila výška řádku.
+
+V režimu LAPS lze každý záznam dráhy A nebo B označit tlačítkem `ZNEPLATNIT`. Záznam zůstane zachovaný pod stejným ID, graficky se přeškrtne a neúčastní se výběru zeleně zvýrazněného nejrychlejšího kola. Tlačítko `OBNOVIT` jej vrátí mezi platné záznamy.
+
 ## Aplikace
 
 Magnetická tabule (takto to nemá vypadat)
