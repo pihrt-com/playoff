@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.17"                                         # current version of the application
+APP_current       = "1.0.18"                                         # current version of the application
 APP_date          = "05.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -175,6 +175,7 @@ USB_PORT_DISABLED_LABEL    = "Nepoužívat"
 
 LED_REFRESH_OPTIONS        = tuple(round(value / 10, 1) for value in range(1, 11))
 DEFAULT_LED_REFRESH        = 0.1
+DEFAULT_LAPS_MAX_TEAMS     = 40
 LAPS_COUNTDOWN_WARNING     = 10
 LAPS_COUNTDOWN_BLINK_MS    = 500
 PROMO_TEXT_MAX_LENGTH      = 79
@@ -200,6 +201,74 @@ def normalize_led_refresh(value):
     if interval in LED_REFRESH_OPTIONS:
         return interval
     return DEFAULT_LED_REFRESH
+
+
+def normalize_laps_max_teams(value, default=DEFAULT_LAPS_MAX_TEAMS):
+    """Return a valid even LAPS team maximum or the supplied default."""
+    try:
+        maximum = int(value)
+    except (TypeError, ValueError):
+        return default
+    if maximum < 2 or maximum % 2:
+        return default
+    return maximum
+
+
+def normalize_laps_team_history(history):
+    """Normalize saved per-team LAPS records while preserving valid history."""
+    if not isinstance(history, dict):
+        return {}
+
+    normalized = {}
+    for raw_team_id, raw_state in history.items():
+        try:
+            team_id = int(raw_team_id)
+        except (TypeError, ValueError):
+            continue
+        if team_id < 1 or not isinstance(raw_state, dict):
+            continue
+
+        records = []
+        used_rides = set()
+        next_available_ride = 1
+        raw_records = raw_state.get("records", [])
+        if not isinstance(raw_records, list):
+            raw_records = []
+        for raw_record in raw_records:
+            if not isinstance(raw_record, dict):
+                continue
+            try:
+                ride = int(raw_record.get("ride", next_available_ride))
+            except (TypeError, ValueError):
+                ride = next_available_ride
+            if ride < 1 or ride in used_rides:
+                while next_available_ride in used_rides:
+                    next_available_ride += 1
+                ride = next_available_ride
+            try:
+                milliseconds = max(0, int(raw_record.get("ms", 0)))
+            except (TypeError, ValueError):
+                milliseconds = 0
+            used_rides.add(ride)
+            next_available_ride = max(next_available_ride, ride + 1)
+            records.append({
+                "id": team_id,
+                "ride": ride,
+                "date": str(raw_record.get("date", "") or ""),
+                "time": str(raw_record.get("time", "") or ""),
+                "ms": milliseconds,
+                "invalid": bool(raw_record.get("invalid", False)),
+            })
+
+        try:
+            saved_next_ride = int(raw_state.get("next_ride", next_available_ride))
+        except (TypeError, ValueError):
+            saved_next_ride = next_available_ride
+        normalized[str(team_id)] = {
+            "records": records,
+            "next_ride": max(1, next_available_ride, saved_next_ride),
+        }
+    return normalized
 
 
 def validate_promo_text(value):
@@ -499,10 +568,14 @@ class PlayoffApp:
         self.view_mode_var = tk.StringVar(value=self.view_mode)
         
         # laps mode data
+        self.laps_max_teams = DEFAULT_LAPS_MAX_TEAMS
+        self.laps_active_team_a = 1
+        self.laps_teams = {}
         self.laps_a = []
         self.laps_b = []
         self.lap_id_a = 1
         self.lap_id_b = 1
+        self._load_laps_team_pair(1, store_current=False, redraw=False)
 
         # Top toolbar: left settings (calls existing menu), right Start button and status label
         toolbar = tk.Frame(root)
@@ -714,6 +787,17 @@ class PlayoffApp:
             command=lambda: self.set_odd_behavior('waiting')
         )
 
+        laps_menu = tk.Menu(self.settings_menu, tearoff=0)
+        self.settings_menu.add_cascade(label='LAPS', menu=laps_menu)
+        laps_menu.add_command(
+            label='LAPS max počet týmů',
+            command=self.ask_laps_max_teams,
+        )
+        laps_menu.add_command(
+            label='Vymazat tabulky A a B všech týmů',
+            command=self.clear_all_laps_history,
+        )
+
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label='Načíst pozadí', command=self.load_bg_image)
         self.settings_menu.add_command(label='Smazat pozadí', command=self.remove_bg)
@@ -819,7 +903,8 @@ class PlayoffApp:
         self.settings_menu.add_command(label='USB nastavení', command=self.open_usb_dialog)
 
         self.settings_menu.add_separator()
-        self.settings_menu.add_command(label='Export do PDF', command=self.export_pdf)
+        self.settings_menu.add_command(label='Export do PDF PLAYOFF', command=self.export_pdf)
+        self.settings_menu.add_command(label='Export do PDF LAPS', command=self.export_laps_pdf)
 
         # Fullscreen mode toggle
         self.fullscreen_var = tk.BooleanVar(value=self.projector_mode)
@@ -970,6 +1055,10 @@ class PlayoffApp:
                     s.get('live_led_refresh', self.live_led_refresh)
                 )
                 self.live_led_refresh_var.set(f"{self.live_led_refresh:.1f}")
+                self.laps_max_teams = normalize_laps_max_teams(
+                    s.get('laps_max_teams', self.laps_max_teams),
+                    self.laps_max_teams,
+                )
                 promo_valid, promo_text, _promo_error = validate_promo_text(
                     s.get('promo_text', self.promo_text)
                 )
@@ -1664,7 +1753,8 @@ class PlayoffApp:
                     self.lap_label_a.config(fg="green")
                     from datetime import datetime
                     rec = {
-                        "id": self.lap_id_a,
+                        "id": self.laps_active_team_a,
+                        "ride": self.lap_id_a,
                         "date": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
                         "time": self.format_lap(self.lap_time_a),
                         "ms": self.lap_time_a,
@@ -1683,7 +1773,8 @@ class PlayoffApp:
                     self.lap_label_b.config(fg="green")
                     from datetime import datetime
                     rec = {
-                        "id": self.lap_id_b,
+                        "id": self.laps_active_team_a + 1,
+                        "ride": self.lap_id_b,
                         "date": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
                         "time": self.format_lap(self.lap_time_b),
                         "ms": self.lap_time_b,
@@ -2524,6 +2615,7 @@ class PlayoffApp:
             titles = []
             pre_titles = []
 
+        self._store_active_laps_pair()
         data = {
             'team_count': team_count,
             'odd_behavior': self.odd_behavior,
@@ -2567,6 +2659,9 @@ class PlayoffApp:
             'promo_text': self.promo_text,
             'promo_mode': self.promo_mode,
             'promo_scroll_ms': self.promo_scroll_ms,
+            'laps_max_teams': self.laps_max_teams,
+            'laps_active_team_a': self.laps_active_team_a,
+            'laps_teams': self.laps_teams,
         }
         if (self.bracket and self.pre_round_enabled and self.bracket.pre_rounds):
             data['pre_rounds'] = [
@@ -2653,6 +2748,11 @@ class PlayoffApp:
         self.promo_active = False
         self.promo_scroll_position = 0
         self.promo_after_id = None
+        self._restore_laps_history(
+            data.get('laps_teams', {}),
+            data.get('laps_max_teams', DEFAULT_LAPS_MAX_TEAMS),
+            data.get('laps_active_team_a', 1),
+        )
         self.display_port_a = data.get('display_port_a', self.display_port_a)
         self.display_port_b = data.get('display_port_b', self.display_port_b)
         self.display_baud_a = data.get('display_baud_a', self.display_baud_a)
@@ -3726,6 +3826,7 @@ class PlayoffApp:
 
     def clear_all(self):
         # clear everything: remove bracket and background; user must generate again
+        self.clear_all_laps_history(confirm=False, redraw=False)
         self.bracket = None
         self.canvas.delete("all")
         self.bg_path = None
@@ -3865,8 +3966,16 @@ class PlayoffApp:
             "- Posledních 10 sekund bliká pozadí černě a červeně, text zůstává bílý\n"
             "- Vypnutí odpočtu nebo změna režimu cyklus zastaví\n\n"
 
+            "=== TÝMY A HISTORIE V LAPS ===\n"
+            "- Modrá tlačítka Team, + a − přepínají dvojice týmů 1/2, 3/4 a dále; vedle tlačítek je aktuální dvojice vždy viditelná\n"
+            "- Každý tým má vlastní historii a vlastní pokračující číslování ve sloupci Jízda\n"
+            "- Přepnutí na jinou dvojici původní výsledky nesmaže; po návratu se znovu zobrazí\n"
+            "- Nastavení → LAPS → LAPS max počet týmů přijímá sudé číslo nejméně 2\n"
+            "- Nastavení → LAPS umožňuje po potvrzení vymazat výsledky všech týmů\n"
+            "- Tlačítka SMAZAT nad tabulkami mažou jen právě zobrazenou dvojici\n\n"
+
             "=== PLATNOST KOL V LAPS ===\n"
-            "- U každého záznamu A i B tlačítko ZNEPLATNIT řádek přeškrtne, ale nesmaže jej ani nezmění jeho ID\n"
+            "- U každého záznamu A i B tlačítko ZNEPLATNIT řádek přeškrtne, ale nesmaže jej ani nezmění tým či číslo jízdy\n"
             "- Neplatné záznamy se nezapočítávají do zeleně označeného nejrychlejšího kola\n"
             "- Tlačítko OBNOVIT vrátí záznam mezi platná kola\n\n"
 
@@ -3892,10 +4001,12 @@ class PlayoffApp:
             "- START nebo potvrzená změna režimu PLAYOFF/LAPS propagační text z displejů smaže\n\n"
 
             "=== PDF EXPORT ===\n"
-            "Nastavení → Export do PDF\n"
+            "Nastavení → Export do PDF PLAYOFF\n"
             "- První stránka: pavouk + vítěz + datum a čas exportu\n"
-            "- Druhá stránka: tabulka pojmenování týmů\n"
-            "- Automatické stránkování při dlouhé tabulce\n\n"
+            "- Další stránka: tabulka pojmenování týmů\n"
+            "Nastavení → Export do PDF LAPS\n"
+            "- Vytvoří jednu stránku pro každý nastavený tým se všemi jeho jízdami\n"
+            "- Zachová barevné rozlišení nejrychlejších, krátkých a neplatných jízd\n\n"
 
             "=== PROJEKTOROVÝ REŽIM ===\n"
             "Nastavení → Celá obrazovka ZAP/VYP\n"
@@ -3904,7 +4015,7 @@ class PlayoffApp:
 
             "=== UKLÁDÁNÍ A NAČÍTÁNÍ ===\n"
             "Nastavení → Uložit do souboru\n"
-            "- Uloží kompletní stav pavouka, pozadí, USB, odpočet i pojmenování týmů\n\n"
+            "- Uloží kompletní stav pavouka, pozadí, USB, odpočet, pojmenování týmů i historii LAPS\n\n"
             "Nastavení → Načíst ze souboru\n"
             "- Obnoví veškerý uložený obsah\n\n"
 
@@ -4634,6 +4745,132 @@ class PlayoffApp:
             self._log("TIMER ERROR:", e)
 
     # --- laps mode ---
+    def _ensure_laps_team_state(self, team_id):
+        key = str(int(team_id))
+        state = self.laps_teams.get(key)
+        if not isinstance(state, dict):
+            state = {"records": [], "next_ride": 1}
+            self.laps_teams[key] = state
+        state.setdefault("records", [])
+        state.setdefault("next_ride", 1)
+        return state
+
+    def _store_active_laps_pair(self):
+        if not hasattr(self, "laps_teams"):
+            return
+        team_a = int(getattr(self, "laps_active_team_a", 1))
+        state_a = self._ensure_laps_team_state(team_a)
+        state_b = self._ensure_laps_team_state(team_a + 1)
+        state_a["records"] = self.laps_a
+        state_a["next_ride"] = max(1, int(self.lap_id_a))
+        state_b["records"] = self.laps_b
+        state_b["next_ride"] = max(1, int(self.lap_id_b))
+
+    def _load_laps_team_pair(self, team_a, store_current=True, redraw=True):
+        if store_current and hasattr(self, "laps_a"):
+            self._store_active_laps_pair()
+        maximum = normalize_laps_max_teams(
+            getattr(self, "laps_max_teams", DEFAULT_LAPS_MAX_TEAMS)
+        )
+        try:
+            team_a = int(team_a)
+        except (TypeError, ValueError):
+            team_a = 1
+        team_a = max(1, min(maximum - 1, team_a))
+        if team_a % 2 == 0:
+            team_a -= 1
+        self.laps_active_team_a = team_a
+        state_a = self._ensure_laps_team_state(team_a)
+        state_b = self._ensure_laps_team_state(team_a + 1)
+        self.laps_a = state_a["records"]
+        self.laps_b = state_b["records"]
+        self.lap_id_a = max(1, int(state_a.get("next_ride", 1)))
+        self.lap_id_b = max(1, int(state_b.get("next_ride", 1)))
+        if redraw:
+            self.redraw()
+
+    def _restore_laps_history(self, history, maximum, active_team_a):
+        normalized = normalize_laps_team_history(history)
+        highest_saved_team = max(
+            (int(team_id) for team_id, state in normalized.items() if state["records"]),
+            default=0,
+        )
+        maximum = normalize_laps_max_teams(maximum)
+        if highest_saved_team > maximum:
+            maximum = highest_saved_team + (highest_saved_team % 2)
+        self.laps_max_teams = maximum
+        self.laps_teams = normalized
+        self._load_laps_team_pair(active_team_a, store_current=False, redraw=False)
+
+    def change_laps_team_pair(self, step):
+        target = self.laps_active_team_a + (2 if step > 0 else -2)
+        target = max(1, min(self.laps_max_teams - 1, target))
+        if target == self.laps_active_team_a:
+            return False
+        self._load_laps_team_pair(target)
+        return True
+
+    def ask_laps_max_teams(self):
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title("LAPS max počet týmů")
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        tk.Label(dlg, text="Sudý počet týmů (nejméně 2):").pack(padx=12, pady=(12, 6))
+        entry = tk.Entry(dlg, width=12)
+        entry.insert(0, str(self.laps_max_teams))
+        entry.pack(padx=12, pady=4)
+        entry.focus_set()
+
+        def save_maximum():
+            raw_value = entry.get().strip()
+            if not raw_value.isdigit() or int(raw_value) < 2 or int(raw_value) % 2:
+                messagebox.showerror(
+                    "Chyba",
+                    "LAPS max počet týmů musí být sudé číslo nejméně 2.",
+                    parent=dlg,
+                )
+                return
+            maximum = int(raw_value)
+            highest_team_with_results = max(
+                (
+                    int(team_id)
+                    for team_id, state in self.laps_teams.items()
+                    if state.get("records")
+                ),
+                default=0,
+            )
+            if maximum < highest_team_with_results:
+                messagebox.showerror(
+                    "Chyba",
+                    f"Výsledky již obsahují tým {highest_team_with_results}. Nejdříve vymažte historii LAPS.",
+                    parent=dlg,
+                )
+                return
+            self.laps_max_teams = maximum
+            target = min(self.laps_active_team_a, maximum - 1)
+            self._load_laps_team_pair(target)
+            self.persist_user_settings(laps_max_teams=maximum)
+            dlg.destroy()
+
+        tk.Button(dlg, text="Uložit", command=save_maximum).pack(pady=(6, 12))
+        dlg.bind("<Return>", lambda _event: save_maximum())
+        dlg.bind("<Escape>", lambda _event: dlg.destroy())
+
+    def clear_all_laps_history(self, confirm=True, redraw=True):
+        if confirm and not messagebox.askyesno(
+            "Potvrzení",
+            "Smazat všechny záznamy LAPS všech týmů?",
+        ):
+            return False
+        self.laps_teams = {}
+        self.laps_active_team_a = 1
+        self._load_laps_team_pair(1, store_current=False, redraw=False)
+        if redraw:
+            self.redraw()
+        return True
+
     def draw_laps(self):
         self.canvas.delete("all")
         self.timer_window = None
@@ -4718,6 +4955,37 @@ class PlayoffApp:
             text="B",
             font=title_font
         )
+
+        for x1, x2, text, tag, button_font in (
+            (10, 78, "Team", "laps_team_settings", ("Arial", 9, "bold")),
+            (84, 118, "+", "laps_team_next", ("Arial", 15, "bold")),
+            (124, 158, "−", "laps_team_previous", ("Arial", 15, "bold")),
+        ):
+            self.canvas.create_rectangle(
+                x1, 10, x2, 40,
+                fill="#0b6bd6",
+                outline="black",
+                tags=tag,
+            )
+            self.canvas.create_text(
+                (x1 + x2) / 2, 25,
+                text=text,
+                fill="white",
+                font=button_font,
+                tags=tag,
+            )
+        self.canvas.create_text(
+            168,
+            25,
+            anchor="w",
+            text=f"{self.laps_active_team_a}-{self.laps_active_team_a + 1}",
+            fill="#0b6bd6",
+            font=("Arial", 12, "bold"),
+            tags="laps_team_pair_label",
+        )
+        self.canvas.tag_bind("laps_team_settings", "<Button-1>", lambda _event: self.ask_laps_max_teams())
+        self.canvas.tag_bind("laps_team_next", "<Button-1>", lambda _event: self.change_laps_team_pair(1))
+        self.canvas.tag_bind("laps_team_previous", "<Button-1>", lambda _event: self.change_laps_team_pair(-1))
 
         # button DEL A
         self.canvas.create_rectangle(
@@ -4819,7 +5087,7 @@ class PlayoffApp:
             left_x1 + 8,
             top_y + 5 + header_h / 2,
             anchor="w",
-            text="  ID      Vloženo                           Čas",
+            text=" ID  Jízda   Vloženo                       Čas",
             fill="white",
             font=header_font
         )
@@ -4828,14 +5096,14 @@ class PlayoffApp:
             top_y + 5 + header_h / 2,
             text="Platnost",
             fill="white",
-            font=("Arial", max(8, header_font[1] - 3), "bold"),
+            font=header_font,
         )
 
         self.canvas.create_text(
             right_x1 + 8,
             top_y + 5 + header_h / 2,
             anchor="w",
-            text="  ID      Vloženo                            Čas",
+            text=" ID  Jízda   Vloženo                       Čas",
             fill="white",
             font=header_font
         )
@@ -4844,7 +5112,7 @@ class PlayoffApp:
             top_y + 5 + header_h / 2,
             text="Platnost",
             fill="white",
-            font=("Arial", max(8, header_font[1] - 3), "bold"),
+            font=header_font,
         )
 
         # --------------------------------------------------
@@ -4889,6 +5157,7 @@ class PlayoffApp:
 
             txt = (
                 f"{rec['id']:>3}   "
+                f"{rec.get('ride', 1):>3}   "
                 f"{rec['date']}   "
                 f"{rec['time']}   "
                 f"({ms}ms)"
@@ -4903,7 +5172,8 @@ class PlayoffApp:
                 fill="black"
             )
 
-            action_tag = f"lap_validity_a_{rec['id']}"
+            ride_id = rec.get("ride", 1)
+            action_tag = f"lap_validity_a_{rec['id']}_{ride_id}"
             action_x1 = left_x2 - validity_margin - validity_column_width
             self.canvas.create_rectangle(
                 action_x1, row_top + 3, left_x2 - validity_margin, row_bottom - 3,
@@ -4917,7 +5187,7 @@ class PlayoffApp:
             )
             self.canvas.tag_bind(
                 action_tag, "<Button-1>",
-                lambda _event, record_id=rec["id"]: self.toggle_lap_validity("a", record_id),
+                lambda _event, selected_ride=ride_id: self.toggle_lap_validity("a", selected_ride),
             )
             if invalid:
                 self.canvas.create_line(left_x1 + 3, y, action_x1 - 4, y, fill="#555555", width=2)
@@ -4969,6 +5239,7 @@ class PlayoffApp:
 
             txt = (
                 f"{rec['id']:>3}   "
+                f"{rec.get('ride', 1):>3}   "
                 f"{rec['date']}   "
                 f"{rec['time']}   "
                 f"({ms}ms)"
@@ -4983,7 +5254,8 @@ class PlayoffApp:
                 fill="black"
             )                
 
-            action_tag = f"lap_validity_b_{rec['id']}"
+            ride_id = rec.get("ride", 1)
+            action_tag = f"lap_validity_b_{rec['id']}_{ride_id}"
             action_x1 = right_x2 - validity_margin - validity_column_width
             self.canvas.create_rectangle(
                 action_x1, row_top + 3, right_x2 - validity_margin, row_bottom - 3,
@@ -4997,7 +5269,7 @@ class PlayoffApp:
             )
             self.canvas.tag_bind(
                 action_tag, "<Button-1>",
-                lambda _event, record_id=rec["id"]: self.toggle_lap_validity("b", record_id),
+                lambda _event, selected_ride=ride_id: self.toggle_lap_validity("b", selected_ride),
             )
             if invalid:
                 self.canvas.create_line(right_x1 + 3, y, action_x1 - 4, y, fill="#555555", width=2)
@@ -5026,10 +5298,10 @@ class PlayoffApp:
             )
             self.canvas.itemconfigure(self.timer_window, state='normal')
 
-    def toggle_lap_validity(self, lane, record_id):
+    def toggle_lap_validity(self, lane, ride_id):
         records = self.laps_a if lane == "a" else self.laps_b
         for record in records:
-            if record.get("id") == record_id:
+            if record.get("ride", record.get("id")) == ride_id:
                 record["invalid"] = not bool(record.get("invalid", False))
                 self.redraw()
                 return True
@@ -5063,7 +5335,7 @@ class PlayoffApp:
 
         # --- Font ---
         try:
-            pdfmetrics.registerFont(TTFont("DejaVu", "DejaVuSans.ttf"))
+            pdfmetrics.registerFont(TTFont("DejaVu", os.path.join(BASE_PATH, "DejaVuSans.ttf")))
         except Exception:
             messagebox.showerror(
                 "Chyba",
@@ -5544,6 +5816,150 @@ class PlayoffApp:
             messagebox.showinfo("Hotovo", f"PDF uložen: {fname}")
         except Exception as e:
             messagebox.showerror("Chyba", str(e))
+
+    def export_laps_pdf(self):
+        try:
+            pdfmetrics.registerFont(
+                TTFont("DejaVu", os.path.join(BASE_PATH, "DejaVuSans.ttf"))
+            )
+        except Exception:
+            messagebox.showerror(
+                "Chyba",
+                "Font DejaVuSans.ttf nebyl nalezen.",
+            )
+            return False
+
+        fname = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialfile="LAPS_vysledky.pdf",
+        )
+        if not fname:
+            return False
+
+        self._store_active_laps_pair()
+        page_w, page_h = landscape(A4)
+        margin = 28
+        title_y = page_h - 35
+        table_top = page_h - 58
+        footer_h = 28
+        header_h = 30
+        table_w = page_w - 2 * margin
+        column_widths = (
+            table_w * 0.08,
+            table_w * 0.10,
+            table_w * 0.30,
+            table_w * 0.29,
+            table_w * 0.23,
+        )
+        headers = ("ID", "Jízda", "Vloženo", "Čas", "Platnost")
+
+        def fit_text(text, width, font_size):
+            text = str(text or "")
+            if pdfmetrics.stringWidth(text, "DejaVu", font_size) <= width - 8:
+                return text
+            suffix = "…"
+            while text and pdfmetrics.stringWidth(text + suffix, "DejaVu", font_size) > width - 8:
+                text = text[:-1]
+            return text + suffix
+
+        try:
+            pdf = rl_canvas.Canvas(fname, pagesize=(page_w, page_h))
+            for team_id in range(1, self.laps_max_teams + 1):
+                state = self._ensure_laps_team_state(team_id)
+                records = list(state.get("records", []))
+                lane = "A" if team_id % 2 else "B"
+                best_time = best_valid_lap_ms(records)
+
+                pdf.setFillColor(black)
+                pdf.setFont("DejaVu", 17)
+                pdf.drawCentredString(page_w / 2, title_y, f"LAPS - tým {team_id} - dráha {lane}")
+
+                x = margin
+                for width, header in zip(column_widths, headers):
+                    pdf.setFillColor(HexColor(LINE_COLOR))
+                    pdf.setStrokeColor(HexColor(LINE_COLOR))
+                    pdf.rect(x, table_top - header_h, width, header_h, stroke=1, fill=1)
+                    pdf.setFillColor(HexColor("#ffffff"))
+                    pdf.setFont("DejaVu", 11)
+                    pdf.drawCentredString(x + width / 2, table_top - header_h / 2 - 4, header)
+                    x += width
+
+                available_rows_h = table_top - header_h - footer_h - margin
+                row_h = min(34, available_rows_h / max(1, len(records)))
+                row_font_size = max(3, min(11, row_h * 0.42))
+                y = table_top - header_h
+
+                if not records:
+                    pdf.setFillColor(HexColor("#ffffff"))
+                    pdf.setStrokeColor(HexColor("#d8d8d8"))
+                    pdf.rect(margin, y - 34, table_w, 34, stroke=1, fill=1)
+                    pdf.setFillColor(black)
+                    pdf.setFont("DejaVu", 11)
+                    pdf.drawCentredString(page_w / 2, y - 21, "Bez zaznamenaných jízd")
+                else:
+                    for index, record in enumerate(records):
+                        milliseconds = int(record.get("ms", 0))
+                        invalid = bool(record.get("invalid", False))
+                        if invalid:
+                            fill = "#d9d9d9"
+                        elif milliseconds < 10000:
+                            fill = "#ffb3b3"
+                        elif best_time is not None and milliseconds == best_time:
+                            fill = "#b8ffb8"
+                        elif index % 2:
+                            fill = "#f2f7ff"
+                        else:
+                            fill = "#ffffff"
+
+                        row_bottom = y - row_h
+                        values = (
+                            str(team_id),
+                            str(record.get("ride", index + 1)),
+                            str(record.get("date", "")),
+                            f"{record.get('time', '')} ({milliseconds} ms)",
+                            "NEPLATNÁ" if invalid else "PLATNÁ",
+                        )
+                        x = margin
+                        pdf.setFont("DejaVu", row_font_size)
+                        for width, value in zip(column_widths, values):
+                            pdf.setFillColor(HexColor(fill))
+                            pdf.setStrokeColor(HexColor("#d8d8d8"))
+                            pdf.rect(x, row_bottom, width, row_h, stroke=1, fill=1)
+                            pdf.setFillColor(black)
+                            pdf.drawCentredString(
+                                x + width / 2,
+                                row_bottom + row_h / 2 - row_font_size * 0.35,
+                                fit_text(value, width, row_font_size),
+                            )
+                            x += width
+                        if invalid:
+                            pdf.setStrokeColor(HexColor("#555555"))
+                            pdf.setLineWidth(max(0.5, row_font_size / 8))
+                            pdf.line(
+                                margin + 3,
+                                row_bottom + row_h / 2,
+                                margin + table_w - 3,
+                                row_bottom + row_h / 2,
+                            )
+                        y = row_bottom
+
+                pdf.setFillColor(black)
+                pdf.setFont("DejaVu", 9)
+                pdf.drawRightString(
+                    page_w - margin,
+                    18,
+                    f"Tým {team_id} z {self.laps_max_teams} - Generováno programem PLAYOFF od www.pihrt.com",
+                )
+                pdf.showPage()
+
+            pdf.save()
+            messagebox.showinfo("Hotovo", f"PDF LAPS uložen: {fname}")
+            return fname
+        except Exception as error:
+            self._log("PDF LAPS ERROR:", error)
+            messagebox.showerror("Chyba", str(error))
+            return False
 
 # --- run ---
 if __name__ == '__main__':

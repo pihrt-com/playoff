@@ -121,6 +121,14 @@ class UpdaterDownloadTests(unittest.TestCase):
 
 
 class UpdaterWindowTests(unittest.TestCase):
+    def test_playoff_icon_is_applied_to_window(self):
+        window = mock.Mock()
+
+        self.assertTrue(updater.set_playoff_icon(window))
+        icon_path = window.iconbitmap.call_args.args[0]
+        self.assertTrue(icon_path.endswith("playoff.ico"))
+        self.assertTrue(os.path.exists(icon_path))
+
     def test_window_contains_progress_status_log_and_recovery_buttons(self):
         root = tk.Tk()
         root.withdraw()

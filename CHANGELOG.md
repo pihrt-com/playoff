@@ -1,5 +1,16 @@
 # Historie změn
 
+## 1.0.18 – 05. 11. 2026
+
+- Režim LAPS rozlišuje ID týmu a samostatné číslo jízdy.
+- Modrá tlačítka `Team`, `+` a `−` přepínají dvojice týmů bez ztráty jejich uložené historie; vedle zvětšených tučných ovladačů se zobrazuje aktuální dvojice.
+- Každý tým má vlastní seznam výsledků a pokračující číslování jízd; aktivní dvojice i všechny záznamy se ukládají do projektu.
+- Nové podmenu `LAPS` nastavuje sudý maximální počet týmů, ve výchozím stavu 40, a umožňuje vymazat výsledky všech týmů.
+- Tlačítka mazání nad tabulkami odstraňují pouze výsledky právě zobrazené dvojice, zatímco `Vymazat všechno` odstraní kompletní historii LAPS.
+- Sloupec `Platnost` používá stejný font a velikost jako ostatní záhlaví tabulky.
+- Okno updateru používá ikonu `playoff.ico`.
+- Původní export byl přejmenován na `Export do PDF PLAYOFF`; nový `Export do PDF LAPS` vytváří jednu grafickou stránku pro každý tým se všemi jeho jízdami.
+
 ## 1.0.17 – 05. 11. 2026
 
 - Tabulka účastníků se při zapnutém předkole skládá z předkola i Kola 1 a duplicitní ID zobrazí pouze jednou.

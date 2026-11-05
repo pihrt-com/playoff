@@ -17,6 +17,26 @@ CHUNK_SIZE = 256 * 1024
 DOWNLOAD_TIMEOUT = 30
 
 
+def resource_path(filename):
+    candidates = [
+        os.path.join(getattr(sys, "_MEIPASS", ""), filename),
+        os.path.join(os.path.dirname(sys.executable), filename),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), filename),
+    ]
+    return next((path for path in candidates if path and os.path.exists(path)), "")
+
+
+def set_playoff_icon(window):
+    icon_path = resource_path("playoff.ico")
+    if not icon_path:
+        return False
+    try:
+        window.iconbitmap(icon_path)
+        return True
+    except tk.TclError:
+        return False
+
+
 class DownloadCancelled(Exception):
     pass
 
@@ -175,6 +195,7 @@ class UpdaterWindow:
         self.indeterminate = False
 
         root.title("Aktualizace Playoff")
+        set_playoff_icon(root)
         root.geometry("570x360")
         root.minsize(520, 330)
         root.protocol("WM_DELETE_WINDOW", self.on_close)

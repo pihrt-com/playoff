@@ -5,7 +5,7 @@ a = Analysis(
     ['updater.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('playoff.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

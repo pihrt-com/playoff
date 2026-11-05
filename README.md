@@ -15,7 +15,11 @@ Tabulka účastníků vedle pavouka slučuje ID z předkola i Kola 1, pokud je p
 
 Dialog Pojmenování týmů podporuje import i export Excelu se čtyřmi sloupci a přijímá také starší nebo částečně vyplněné tabulky. Všechna dialogová okna Playoffu včetně nastavení odpočtu používají ikonu programu místo výchozí ikony Tkinteru. Škola a jméno soutěžícího se v tabulce vykreslují menším písmem, které se podle dostupné šířky ještě zmenší, aniž by se zvětšila výška řádku.
 
-V režimu LAPS lze každý záznam dráhy A nebo B označit tlačítkem `ZNEPLATNIT`. Záznam zůstane zachovaný pod stejným ID, graficky se přeškrtne a neúčastní se výběru zeleně zvýrazněného nejrychlejšího kola. Tlačítko `OBNOVIT` jej vrátí mezi platné záznamy.
+Režim LAPS nově rozlišuje ID týmu a pořadí jízdy. Modrá tlačítka `Team`, `+` a `−` přepínají dvojice týmů, přičemž výrazný údaj vedle tlačítek stále ukazuje aktuální dvojici, například `1-2` nebo `3-4`. Každá dvojice si uchovává vlastní výsledky a po návratu je znovu zobrazí. Maximální sudý počet týmů, výchozí hodnotu 40 a úplné vymazání historie všech týmů obsahuje nové podmenu `LAPS`; celý stav se ukládá do projektu.
+
+Každý záznam dráhy A nebo B lze označit tlačítkem `ZNEPLATNIT`. Záznam zůstane zachovaný pod stejným ID týmu a číslem jízdy, graficky se přeškrtne a neúčastní se výběru zeleně zvýrazněného nejrychlejšího kola. Tlačítko `OBNOVIT` jej vrátí mezi platné záznamy. Nadpis `Platnost` používá stejný font a velikost jako ostatní záhlaví tabulky.
+
+Samostatné okno updateru používá stejnou ikonu Playoffu jako hlavní aplikace a její dialogy.
 
 ## Aplikace
 
@@ -35,7 +39,9 @@ Volba „Povolit odpočet“ zobrazuje časovač také v režimu LAPS, kde je um
 
 Po dosažení nuly se nastavený interval automaticky obnoví a začne další cyklus. Během posledních 10 sekund se pozadí střídá mezi černou a červenou, zatímco text zůstává bílý. Vypnutí volby nebo přepnutí z režimu LAPS cyklus zastaví. Jednorázové spouštění odpočtu v režimu PLAYOFF přes START/OK zůstává beze změny.
 
-V horní liště LAPS jsou samostatná tlačítka `SMAZAT` pro A a B a mezi nimi červené tlačítko `SMAZAT A+B`. Společná akce po potvrzení smaže záznamy obou drah a obnoví jejich číslování od jedničky.
+V horní liště LAPS jsou samostatná tlačítka `SMAZAT` pro A a B a mezi nimi červené tlačítko `SMAZAT A+B`. Společná akce po potvrzení smaže záznamy obou drah právě zobrazené dvojice a obnoví jejich číslování jízd od jedničky. Úplné vymazání výsledků všech dvojic je dostupné v podmenu `Nastavení → LAPS` a provede je také hlavní akce `Vymazat všechno`.
+
+Původní položka exportu se jmenuje `Export do PDF PLAYOFF`. Nová položka `Export do PDF LAPS` uloží jednu stránku pro každý nastavený tým se všemi jeho jízdami. Tabulka používá stejné sloupce a barevné rozlišení jako aplikace, ale neobsahuje ovládací tlačítka.
 
 ## Průběžný čas na LED displejích
 
@@ -60,6 +66,8 @@ Pravá část dialogu USB nastavení zobrazuje nalezenou bránu a LED displeje p
 ## Aktualizace programu
 
 Po potvrzení nové verze se otevře samostatné okno „Aktualizace Playoff“. Zobrazuje připojení k serveru, průběh a velikost stahovaného instalačního souboru, jeho ověření a spuštění instalátoru.
+
+Okno updateru používá ikonu `playoff.ico` stejně jako hlavní aplikace a ostatní dialogy.
 
 Instalátor se před spuštěním kontroluje podle velikosti a SHA-256 uvedeného v aktualizačním manifestu. Při chybě zůstane okno otevřené se srozumitelnou zprávou a technickými podrobnostmi; uživatel může stahování zopakovat, zavřít updater nebo znovu spustit původní Playoff.
 
@@ -249,6 +257,10 @@ https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
 https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
 
 ## Historie změn
+
+### 05. 11. 2026 – GitHub/playoff – verze 1.0.18
+
+Verze 1.0.18 přidává v režimu LAPS samostatnou historii pro každý tým, přepínání dvojic s viditelným údajem aktuálních ID, oddělené sloupce ID a Jízda, ukládání a načítání všech výsledků v projektu a úplné mazání před novou soutěží. Nový export PDF LAPS vytváří jednu grafickou stránku pro každý tým. Záhlaví tabulky mají sjednocené písmo a updater používá ikonu Playoffu.
 
 ### 03. 11. 2026 – GitHub/playoff – verze 1.0.16
 

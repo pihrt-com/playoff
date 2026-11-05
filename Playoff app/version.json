@@ -1,7 +1,7 @@
 {
-  "version": "1.0.17",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.17/PlayoffSetup_1.0.17.exe",
-  "sha256": "0c8a1767ca4f47f790cb9653405a56c741618afddffe80a44cdd5e9a66f9b5c1",
-  "size": 38108317,
-  "notes": "Tabulka účastníků nově podporuje školu, soutěžícího a nejlepší čas. V režimu LAPS lze neplatné kolo přeškrtnout bez smazání a vyřadit je z nejrychlejšího času."
+  "version": "1.0.18",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.18/PlayoffSetup_1.0.18.exe",
+  "sha256": "91b59d1cf677f055e902b36ffc8ad0f2469a25cc991fb5cbedc60e0fecaf87e0",
+  "size": 41952391,
+  "notes": "LAPS nově uchovává výsledky samostatně pro každý tým, zobrazuje ID týmu a číslo jízdy, ukládá kompletní historii do projektu a exportuje jednu PDF stránku pro každý tým."
 }
