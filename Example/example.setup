@@ -1,85 +1,85 @@
 {
   "team_count": 16,
   "odd_behavior": "manual",
-  "font_scale": "medium",
-  "canvas_bg": "#c0c0c0",
-  "line_width": 4,
+  "font_scale": "large",
+  "canvas_bg": "#ffffff",
+  "line_width": 2,
   "bg_path": null,
   "lock_edit": false,
   "titles": [
-    "First 16",
-    "Quarterfinals",
-    "Semifinals",
-    "Final",
-    "Winner"
+    "Kolo 1",
+    "Kolo 2",
+    "Kolo 3",
+    "Finále",
+    "Vítěz"
   ],
   "rounds": [
     [
       {
-        "a": "2",
-        "b": "10"
-      },
-      {
-        "a": "3",
-        "b": "5"
-      },
-      {
-        "a": "6",
-        "b": "7"
+        "a": "4",
+        "b": "6"
       },
       {
         "a": "8",
-        "b": "9"
+        "b": "7"
       },
       {
-        "a": "1",
-        "b": "11"
+        "a": "12",
+        "b": "25"
       },
       {
-        "a": "4",
-        "b": "12"
+        "a": "35",
+        "b": "31"
       },
       {
-        "a": "14",
-        "b": "13"
+        "a": "10",
+        "b": "14"
       },
       {
-        "a": "20",
-        "b": "21"
+        "a": "22",
+        "b": "28"
+      },
+      {
+        "a": "37",
+        "b": "33"
+      },
+      {
+        "a": "29",
+        "b": "39"
       }
     ],
     [
-      {
-        "a": "2",
-        "b": "3"
-      },
       {
         "a": "6",
         "b": "8"
       },
       {
-        "a": "1",
-        "b": "4"
+        "a": "12",
+        "b": "31"
       },
       {
         "a": "14",
-        "b": "20"
-      }
-    ],
-    [
-      {
-        "a": "2",
-        "b": "6"
+        "b": "28"
       },
       {
-        "a": "1",
-        "b": "14"
+        "a": "37",
+        "b": "39"
       }
     ],
     [
       {
         "a": "6",
-        "b": "1"
+        "b": "31"
+      },
+      {
+        "a": "14",
+        "b": "37"
+      }
+    ],
+    [
+      {
+        "a": "6",
+        "b": "14"
       }
     ],
     [
@@ -93,137 +93,506 @@
   "enable_timer": true,
   "timer_value": "05:00",
   "timer_start_mode": "ok",
-  "usb_port": "COM12",
-  "usb_baud": 9600,
+  "pre_round_enabled": true,
+  "usb_port": "COM5",
+  "usb_baud": 115200,
   "usb_timeout": 10.0,
+  "display_port_a": "",
+  "display_port_b": "",
+  "display_baud_a": 9600,
+  "display_baud_b": 9600,
+  "view_mode": "laps",
   "team_names": [
     {
       "id": "1",
-      "desc": "Gymnázium, Stříbro"
+      "school": "SŠ technická Znojmo",
+      "participant": "Karel Novák, Kryšpín Dacvan",
+      "best_time": "12:34:156"
     },
     {
       "id": "2",
-      "desc": "Mehmet Kemal Coskunoz Vocational and Technical Antolian High School"
+      "school": "SPŠ strojnická a SOŠ profesora Švejcara Plzeň",
+      "participant": "Martin Syrovátko, Jan Kužel",
+      "best_time": "10:25:254"
     },
     {
       "id": "3",
-      "desc": "Střední odborné učiliště elektrotechnické, Plzeň"
+      "school": "SPŠ strojnická a SOŠ profesora Švejcara Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "4",
-      "desc": "Střední odborné učiliště, Domažlice"
+      "school": "SPŠE a VOŠ Pardubice",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "5",
-      "desc": "Střední škola informatiky a finančních služeb, Plzeň"
+      "school": "SPŠE a VOŠ Pardubice",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "6",
-      "desc": "Střední odborné učiliště elektrotechnické, Plzeň"
+      "school": "Gymnázium Luďka Pika, Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "7",
-      "desc": "Tehnička škola Daruvar"
+      "school": "Gymnázium Luďka Pika, Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "8",
-      "desc": "Bursa Hürriyet Mesleki ve Teknik Anadolu Lisesi"
+      "school": "Sportovní gymnázium Plzeň ",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "9",
-      "desc": "Střední odborné učiliště, Domažlice"
+      "school": "SOŠ Stříbro",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "10",
-      "desc": "Stredná priemyselná škola techniky a dizajnu, Poprad"
+      "school": "SOŠ Stříbro",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "11",
-      "desc": "Tophane Vocational and Technical Anatolian Hign School"
+      "school": "VOŠ a SPŠE Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "12",
-      "desc": "Střední škola informatiky a finančních služeb, Plzeň"
+      "school": "VOŠ a SPŠE Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "13",
-      "desc": "Yesilyayla Vocational and Technical Anatolian High School"
+      "school": "SPŠ dopravní Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "14",
-      "desc": "Stredná odborná škola, Handlová"
+      "school": "SPŠ dopravní Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "15",
-      "desc": "Tianjin Technician Institute of Mechanical & Electrical Technology"
+      "school": "SŠ a MŠ Liberec",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "16",
-      "desc": "Gymnázium Stříbro"
+      "school": "Gymnázium J.Š.Baara Domažlice",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "17",
-      "desc": "Bursa Hürriyet Mesleki ve Teknik Anadolu Lisesi"
+      "school": "Gymnázium J.Š.Baara Domažlice",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "18",
-      "desc": "Sportovní gymnázium Plzeň"
+      "school": "SŠ informatiky a finančních služeb Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "19",
-      "desc": "Beruflliches Schulzentrum Cham"
+      "school": "SŠ informatiky a finančních služeb Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "20",
-      "desc": "Stredná odborná škola, Handlová"
+      "school": "SŠ zemědělská a potravinářská Klatovy",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "21",
-      "desc": "Beruflliches Schulzentrum Cham"
+      "school": "Gymnázium Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "22",
-      "desc": "Gymnázium Luďka Pika, Plzeň"
+      "school": "Střední škola živnostenská a Základní škola, Planá",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "23",
-      "desc": "Stredná priemyselná škola techniky a dizajnu, Poprad"
+      "school": "Střední škola živnostenská a Základní škola, Planá",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "24",
-      "desc": "Vyšší odborná škola a Střední průmyslová škola elektrotechnická, Plzeň"
+      "school": "SOU elektrotechnické Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "25",
-      "desc": "Tianjin Technician Institute of Mechanical & Electrical Technology"
+      "school": "SOU elektrotechnické Plzeň",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "26",
-      "desc": "Beruflliches Schulzentrum Cham"
+      "school": "SOŠ a SOU Sušice",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "27",
-      "desc": "Tehnička škola Daruvar"
+      "school": "SOŠ a SOU Sušice",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "28",
-      "desc": "Otomotiv Endüstrisi İhracatçıları Birliği Mesleki ve Teknik Anadolu Lisesi"
+      "school": "Gymnázium Stříbro",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "29",
-      "desc": "Střední škola zemědělská a potravinářská, Klatovy"
+      "school": "Gymnázium Stříbro",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "30",
-      "desc": "Vyšší odborná škola a Střední průmyslová škola elektrotechnická, Plzeň"
+      "school": "SOU Domažlice",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "31",
-      "desc": "Střední škola živnostenská a Základní škola, Planá"
+      "school": "SOU Domažlice",
+      "participant": "",
+      "best_time": ""
     },
     {
       "id": "32",
-      "desc": "Tehnička škola Daruvar"
+      "school": "VOŠ a SPŠ elektrotechnická Františka Křižíka Praha",
+      "participant": "",
+      "best_time": ""
+    },
+    {
+      "id": "33",
+      "school": "VOŠ a SPŠ elektrotechnická Františka Křižíka Praha",
+      "participant": "",
+      "best_time": ""
+    },
+    {
+      "id": "34",
+      "school": "SŠ Rokycany",
+      "participant": "",
+      "best_time": ""
+    },
+    {
+      "id": "35",
+      "school": "Gymnázium Sušice",
+      "participant": "",
+      "best_time": ""
+    },
+    {
+      "id": "36",
+      "school": "Gymnázium Sušice",
+      "participant": "",
+      "best_time": ""
+    },
+    {
+      "id": "37",
+      "school": "SPŠ strojní a stavební Tábor",
+      "participant": "",
+      "best_time": ""
+    },
+    {
+      "id": "38",
+      "school": "SPŠ strojní a stavební Tábor",
+      "participant": "",
+      "best_time": ""
+    },
+    {
+      "id": "39",
+      "school": "SŠ a VOŠ informatiky a financí Brno",
+      "participant": "",
+      "best_time": ""
+    },
+    {
+      "id": "40",
+      "school": "SŠ a VOŠ informatiky a financí Brno",
+      "participant": "",
+      "best_time": ""
     }
-  ]
+  ],
+  "team_table_title": "Účastníci soutěže",
+  "team_table_headers": [
+    "ID",
+    "Škola / adresa školy",
+    "Jméno soutěžícího",
+    "Nejlepší čas jízdy"
+  ],
+  "third_place_enabled": true,
+  "third_place": {
+    "a": "31",
+    "b": "37",
+    "winner": "31"
+  },
+  "third_place_title": "3. místo",
+  "pre_titles": [
+    "Předkolo"
+  ],
+  "pre_rounds": [
+    [
+      {
+        "a": "1",
+        "b": "3"
+      },
+      {
+        "a": "2",
+        "b": "5"
+      },
+      {
+        "a": "12",
+        "b": "11"
+      },
+      {
+        "a": "40",
+        "b": "9"
+      },
+      {
+        "a": "10",
+        "b": "13"
+      },
+      {
+        "a": "14",
+        "b": "19"
+      },
+      {
+        "a": "22",
+        "b": "28"
+      },
+      {
+        "a": "33",
+        "b": "38"
+      }
+    ]
+  ],
+  "lap_timer_enabled": true,
+  "live_led_enabled": true,
+  "live_led_refresh": 0.1,
+  "promo_text": "123",
+  "promo_mode": "continuous",
+  "promo_scroll_ms": 250,
+  "laps_max_teams": 40,
+  "laps_active_team_a": 3,
+  "laps_teams": {
+    "1": {
+      "records": [
+        {
+          "id": 1,
+          "ride": 7,
+          "date": "06.11.2026 08:24:39",
+          "time": "00:04:587",
+          "ms": 4587,
+          "invalid": true
+        },
+        {
+          "id": 1,
+          "ride": 6,
+          "date": "06.11.2026 08:24:22",
+          "time": "00:05:132",
+          "ms": 5132,
+          "invalid": true
+        },
+        {
+          "id": 1,
+          "ride": 5,
+          "date": "06.11.2026 08:24:11",
+          "time": "00:34:007",
+          "ms": 34007,
+          "invalid": false
+        },
+        {
+          "id": 1,
+          "ride": 4,
+          "date": "06.11.2026 08:23:21",
+          "time": "00:10:616",
+          "ms": 10616,
+          "invalid": true
+        },
+        {
+          "id": 1,
+          "ride": 3,
+          "date": "06.11.2026 08:22:54",
+          "time": "00:23:804",
+          "ms": 23804,
+          "invalid": false
+        },
+        {
+          "id": 1,
+          "ride": 2,
+          "date": "06.11.2026 08:22:25",
+          "time": "00:04:883",
+          "ms": 4883,
+          "invalid": true
+        },
+        {
+          "id": 1,
+          "ride": 1,
+          "date": "06.11.2026 08:22:13",
+          "time": "00:11:706",
+          "ms": 11706,
+          "invalid": true
+        }
+      ],
+      "next_ride": 8
+    },
+    "2": {
+      "records": [
+        {
+          "id": 2,
+          "ride": 8,
+          "date": "06.11.2026 08:24:35",
+          "time": "00:07:526",
+          "ms": 7526,
+          "invalid": true
+        },
+        {
+          "id": 2,
+          "ride": 7,
+          "date": "06.11.2026 08:24:21",
+          "time": "00:05:714",
+          "ms": 5714,
+          "invalid": true
+        },
+        {
+          "id": 2,
+          "ride": 6,
+          "date": "06.11.2026 08:24:09",
+          "time": "00:30:997",
+          "ms": 30997,
+          "invalid": false
+        },
+        {
+          "id": 2,
+          "ride": 5,
+          "date": "06.11.2026 08:23:33",
+          "time": "00:10:099",
+          "ms": 10099,
+          "invalid": true
+        },
+        {
+          "id": 2,
+          "ride": 4,
+          "date": "06.11.2026 08:23:09",
+          "time": "00:12:318",
+          "ms": 12318,
+          "invalid": false
+        },
+        {
+          "id": 2,
+          "ride": 3,
+          "date": "06.11.2026 08:22:48",
+          "time": "00:20:797",
+          "ms": 20797,
+          "invalid": false
+        },
+        {
+          "id": 2,
+          "ride": 2,
+          "date": "06.11.2026 08:22:19",
+          "time": "00:04:008",
+          "ms": 4008,
+          "invalid": true
+        },
+        {
+          "id": 2,
+          "ride": 1,
+          "date": "06.11.2026 08:22:00",
+          "time": "00:07:870",
+          "ms": 7870,
+          "invalid": true
+        }
+      ],
+      "next_ride": 9
+    },
+    "3": {
+      "records": [
+        {
+          "id": 3,
+          "ride": 3,
+          "date": "06.11.2026 08:25:54",
+          "time": "00:14:200",
+          "ms": 14200,
+          "invalid": false
+        },
+        {
+          "id": 3,
+          "ride": 2,
+          "date": "06.11.2026 08:25:27",
+          "time": "00:18:833",
+          "ms": 18833,
+          "invalid": false
+        },
+        {
+          "id": 3,
+          "ride": 1,
+          "date": "06.11.2026 08:25:02",
+          "time": "00:03:478",
+          "ms": 3478,
+          "invalid": true
+        }
+      ],
+      "next_ride": 4
+    },
+    "4": {
+      "records": [
+        {
+          "id": 4,
+          "ride": 3,
+          "date": "06.11.2026 08:25:57",
+          "time": "00:24:371",
+          "ms": 24371,
+          "invalid": false
+        },
+        {
+          "id": 4,
+          "ride": 2,
+          "date": "06.11.2026 08:25:29",
+          "time": "00:18:526",
+          "ms": 18526,
+          "invalid": false
+        },
+        {
+          "id": 4,
+          "ride": 1,
+          "date": "06.11.2026 08:25:06",
+          "time": "00:10:181",
+          "ms": 10181,
+          "invalid": false
+        }
+      ],
+      "next_ride": 4
+    }
+  }
 }
