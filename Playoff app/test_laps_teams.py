@@ -118,6 +118,59 @@ class LapsTeamHistoryTests(unittest.TestCase):
         self.assertEqual((app.lap_id_a, app.lap_id_b), (1, 1))
         self.assertEqual(set(app.laps_teams), {"1", "2"})
 
+    def test_team_name_lookup_requires_exact_id(self):
+        app = make_laps_app(4)
+        app.team_names = [
+            {"id": "1", "school": "SPŠ", "participant": "Anna Nováková"},
+            {"id": "03", "school": "Gymnázium", "participant": "Petr Malý"},
+        ]
+
+        self.assertEqual(app.team_record_by_id(1)["school"], "SPŠ")
+        self.assertIsNone(app.team_record_by_id(2))
+        self.assertIsNone(app.team_record_by_id(3))
+
+    def test_best_team_time_is_derived_without_changing_saved_record(self):
+        app = make_laps_app(4)
+        saved_record = {
+            "id": "1",
+            "school": "SPŠ",
+            "participant": "Anna Nováková",
+            "best_time": "původní hodnota",
+        }
+        app.team_names = [saved_record]
+        app.laps_a.extend([
+            {"id": 1, "ride": 1, "ms": 9000, "invalid": False},
+            {"id": 1, "ride": 2, "ms": 12500, "invalid": False},
+            {"id": 1, "ride": 3, "ms": 11000, "invalid": True},
+            {"id": 1, "ride": 4, "ms": 14000, "invalid": False},
+        ])
+
+        self.assertEqual(app.team_best_lap_ms("1"), 12500)
+        self.assertEqual(app.team_best_time_display("1"), "00:12:500 (12500)")
+        self.assertEqual(
+            app.team_export_row(saved_record),
+            ["1", "SPŠ", "Anna Nováková", 12500],
+        )
+        self.assertEqual(
+            app.laps_pdf_team_summary(1),
+            [
+                "Škola: SPŠ",
+                "Soutěžící: Anna Nováková",
+                "Nejlepší čas: 00:12:500 (12500)",
+            ],
+        )
+        self.assertEqual(saved_record["best_time"], "původní hodnota")
+
+    def test_missing_green_lap_leaves_display_and_export_empty(self):
+        app = make_laps_app(4)
+        app.laps_b.extend([
+            {"id": 2, "ride": 1, "ms": 8000, "invalid": False},
+            {"id": 2, "ride": 2, "ms": 15000, "invalid": True},
+        ])
+
+        self.assertEqual(app.team_best_time_display("2"), "")
+        self.assertEqual(app.team_export_row({"id": "2"})[3], "")
+
 
 class LapsMenuAndSetupTests(unittest.TestCase):
     @classmethod
@@ -240,9 +293,32 @@ class LapsMenuAndSetupTests(unittest.TestCase):
             ]
             self.assertEqual(pair_labels, ["3-4"])
 
+    def test_laps_canvas_shows_school_and_participant_only_for_matching_ids(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(self.root, profile)
+            app.team_names = [
+                {"id": "1", "school": "SPŠ Plzeň", "participant": "Anna Nováková"},
+                {"id": "03", "school": "Neshodné ID", "participant": "Nikdo"},
+            ]
+            app.view_mode = "laps"
+            app.draw_laps()
+
+            team_one_text = [
+                app.canvas.itemcget(item, "text")
+                for item in app.canvas.find_withtag("laps_team_info_1")
+            ]
+            self.assertEqual(
+                team_one_text,
+                ["Škola: SPŠ Plzeň", "Soutěžící: Anna Nováková"],
+            )
+            self.assertFalse(app.canvas.find_withtag("laps_team_info_2"))
+
     def test_laps_pdf_contains_one_page_for_each_configured_team(self):
         app = make_laps_app(4)
         app._log = mock.Mock()
+        app.team_names = [
+            {"id": "1", "school": "SPŠ Plzeň", "participant": "Anna Nováková"},
+        ]
         app.laps_a.append({
             "id": 1,
             "ride": 1,
@@ -263,6 +339,7 @@ class LapsMenuAndSetupTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             pdf_path = os.path.join(directory, "laps.pdf")
+            app.laps_pdf_team_summary = mock.Mock(wraps=app.laps_pdf_team_summary)
             with mock.patch.object(playoff.filedialog, "asksaveasfilename", return_value=pdf_path), mock.patch.object(playoff.messagebox, "showinfo"), mock.patch.object(playoff.messagebox, "showerror") as showerror:
                 result = app.export_laps_pdf()
 
@@ -274,6 +351,10 @@ class LapsMenuAndSetupTests(unittest.TestCase):
             self.assertEqual(
                 pdf_data.count(b"/Type /Page") - pdf_data.count(b"/Type /Pages"),
                 4,
+            )
+            self.assertEqual(
+                app.laps_pdf_team_summary.call_args_list,
+                [mock.call(1), mock.call(2), mock.call(3), mock.call(4)],
             )
 
 

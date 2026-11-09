@@ -129,6 +129,15 @@ def best_valid_lap_ms(records):
     return min(valid_times) if valid_times else None
 
 
+def format_lap_ms(milliseconds):
+    """Format milliseconds for the application without changing stored data."""
+    milliseconds = max(0, int(milliseconds))
+    minutes = milliseconds // 60000
+    seconds = (milliseconds % 60000) // 1000
+    millis = milliseconds % 1000
+    return f"{minutes:02d}:{seconds:02d}:{millis:03d}"
+
+
 # Pillow optional
 try:
     from PIL import Image, ImageDraw, ImageFont, ImageTk
@@ -1400,10 +1409,7 @@ class PlayoffApp:
         self.lap_after_id = self.root.after(50, self.lap_loop)
 
     def format_lap(self, ms):
-        minutes = ms // 60000
-        seconds = (ms % 60000) // 1000
-        millis = ms % 1000
-        return f"{minutes:02d}:{seconds:02d}:{millis:03d}"
+        return format_lap_ms(ms)
 
     def start_laps_timer(self):
         self.stop_promo()
@@ -1996,12 +2002,12 @@ class PlayoffApp:
                 id_var = tk.StringVar(value=item.get("id", ""))
                 school_var = tk.StringVar(value=item.get("school", ""))
                 participant_var = tk.StringVar(value=item.get("participant", ""))
-                best_time_var = tk.StringVar(value=item.get("best_time", ""))
+                best_time_var = tk.StringVar(value=self.team_best_time_display(item.get("id", "")))
 
                 e1 = tk.Entry(scroll_frame, textvariable=id_var, width=10)
                 e2 = tk.Entry(scroll_frame, textvariable=school_var, width=52)
                 e3 = tk.Entry(scroll_frame, textvariable=participant_var, width=30)
-                e4 = tk.Entry(scroll_frame, textvariable=best_time_var, width=16)
+                e4 = tk.Entry(scroll_frame, textvariable=best_time_var, width=22, state="readonly")
 
                 e1.grid(row=i+1, column=0, padx=5, pady=2)
                 e2.grid(row=i+1, column=1, padx=5, pady=2)
@@ -2020,11 +2026,11 @@ class PlayoffApp:
                         self.team_names[index]["id"] = var_id.get()
                         self.team_names[index]["school"] = var_school.get()
                         self.team_names[index]["participant"] = var_participant.get()
-                        self.team_names[index]["best_time"] = var_best_time.get()
+                        var_best_time.set(self.team_best_time_display(var_id.get()))
                     return tracer
 
                 trace = make_trace(i, id_var, school_var, participant_var, best_time_var)
-                for variable in (id_var, school_var, participant_var, best_time_var):
+                for variable in (id_var, school_var, participant_var):
                     variable.trace_add("write", trace)
 
                 row_widgets.append((e1, e2, e3, e4, btn_del))
@@ -2064,8 +2070,7 @@ class PlayoffApp:
             ws.append(["ID týmu", "Škola / adresa školy", "Jméno soutěžícího", "Nejlepší čas jízdy"])
 
             for item in self.team_names:
-                record = normalize_team_record(item)
-                ws.append([record[field] for field in TEAM_RECORD_FIELDS])
+                ws.append(self.team_export_row(item))
 
             wb.save(path)
             messagebox.showinfo("Hotovo", f"Export dokončen:\n{path}")
@@ -3908,9 +3913,10 @@ class PlayoffApp:
             "Nastavení → Pojmenování týmů\n"
             "- Sloupce: ID týmu / škola nebo adresa / jméno soutěžícího / nejlepší čas jízdy\n"
             "- Neomezený počet řádků\n"
-            "- Ruční editace\n"
+            "- Ruční editace ID, školy a soutěžícího\n"
+            "- Nejlepší čas jízdy se automaticky přebírá z nejrychlejšího platného zeleného kola LAPS\n"
             "- Import z Excelu přijme i nevyplněné nové sloupce\n"
-            "- Export do Excelu obsahuje všechny čtyři sloupce\n"
+            "- Export do Excelu obsahuje nejlepší čas pouze v milisekundách\n"
             "- Tlačítko Smazat vše\n"
             "- Data se ukládají do souboru spolu s pavoukem\n\n"
 
@@ -3970,6 +3976,7 @@ class PlayoffApp:
             "- Modrá tlačítka Team, + a − přepínají dvojice týmů 1/2, 3/4 a dále; vedle tlačítek je aktuální dvojice vždy viditelná\n"
             "- Každý tým má vlastní historii a vlastní pokračující číslování ve sloupci Jízda\n"
             "- Přepnutí na jinou dvojici původní výsledky nesmaže; po návratu se znovu zobrazí\n"
+            "- Nad tabulkami se při přesné shodě ID zobrazí škola a soutěžící z Pojmenování týmů\n"
             "- Nastavení → LAPS → LAPS max počet týmů přijímá sudé číslo nejméně 2\n"
             "- Nastavení → LAPS umožňuje po potvrzení vymazat výsledky všech týmů\n"
             "- Tlačítka SMAZAT nad tabulkami mažou jen právě zobrazenou dvojici\n\n"
@@ -4006,6 +4013,7 @@ class PlayoffApp:
             "- Další stránka: tabulka pojmenování týmů\n"
             "Nastavení → Export do PDF LAPS\n"
             "- Vytvoří jednu stránku pro každý nastavený tým se všemi jeho jízdami\n"
+            "- Pod nadpisem uvede školu, soutěžícího a nejlepší platný čas týmu\n"
             "- Zachová barevné rozlišení nejrychlejších, krátkých a neplatných jízd\n\n"
 
             "=== PROJEKTOROVÝ REŽIM ===\n"
@@ -4087,6 +4095,70 @@ class PlayoffApp:
 
         result.sort(key=sort_key)
         return result
+
+    def team_record_by_id(self, team_id):
+        """Return team naming data only for an exact, non-empty ID match."""
+        requested_id = str(team_id).strip()
+        if not requested_id:
+            return None
+        for record in normalize_team_records(getattr(self, "team_names", [])):
+            if record["id"].strip() == requested_id:
+                return record
+        return None
+
+    def team_best_lap_ms(self, team_id):
+        """Return the green LAPS time for a team without modifying saved names."""
+        requested_id = str(team_id).strip()
+        if not requested_id:
+            return None
+        try:
+            numeric_id = int(requested_id)
+        except (TypeError, ValueError):
+            return None
+        if str(numeric_id) != requested_id or numeric_id < 1:
+            return None
+
+        active_team_a = int(getattr(self, "laps_active_team_a", 1))
+        if numeric_id == active_team_a:
+            records = getattr(self, "laps_a", [])
+        elif numeric_id == active_team_a + 1:
+            records = getattr(self, "laps_b", [])
+        else:
+            state = getattr(self, "laps_teams", {}).get(requested_id, {})
+            records = state.get("records", []) if isinstance(state, dict) else []
+        return best_valid_lap_ms(records)
+
+    def team_best_time_display(self, team_id):
+        """Return the derived UI value while Excel keeps only milliseconds."""
+        milliseconds = self.team_best_lap_ms(team_id)
+        if milliseconds is None:
+            return ""
+        return f"{format_lap_ms(milliseconds)} ({milliseconds})"
+
+    def team_export_row(self, record):
+        """Return Excel values with the derived best time as raw milliseconds."""
+        normalized = normalize_team_record(record)
+        best_time = self.team_best_lap_ms(normalized["id"])
+        return [
+            normalized["id"],
+            normalized["school"],
+            normalized["participant"],
+            best_time if best_time is not None else "",
+        ]
+
+    def laps_pdf_team_summary(self, team_id):
+        """Return optional team naming data and the derived best LAPS time."""
+        lines = []
+        record = self.team_record_by_id(team_id)
+        if record:
+            if record["school"]:
+                lines.append(f"Škola: {record['school']}")
+            if record["participant"]:
+                lines.append(f"Soutěžící: {record['participant']}")
+        best_time = self.team_best_time_display(team_id)
+        if best_time:
+            lines.append(f"Nejlepší čas: {best_time}")
+        return lines
 
     # --- playoff mode ---
     def redraw(self):
@@ -4511,7 +4583,7 @@ class PlayoffApp:
                         )
 
                         x = table_x1
-                        values = (str(tid), record["school"], record["participant"], record["best_time"])
+                        values = (str(tid), record["school"], record["participant"], self.team_best_time_display(tid))
                         for value_index, (column_width, value) in enumerate(zip(column_widths, values)):
                             value_font_size = table_font_size
                             if value_index in (1, 2):
@@ -4908,7 +4980,10 @@ class PlayoffApp:
         right_x1 = mid + 10
         right_x2 = w - 10
 
-        top_y = 55
+        info_font_size = {"small": 8, "medium": 11, "large": 14}.get(self.font_scale, 11)
+        info_line_height = info_font_size + 5
+        info_first_y = 50 + info_line_height / 2
+        top_y = 50 + 2 * info_line_height + 6
 
         if self.projector_mode:
             bottom_y = h - 10
@@ -4986,6 +5061,29 @@ class PlayoffApp:
         self.canvas.tag_bind("laps_team_settings", "<Button-1>", lambda _event: self.ask_laps_max_teams())
         self.canvas.tag_bind("laps_team_next", "<Button-1>", lambda _event: self.change_laps_team_pair(1))
         self.canvas.tag_bind("laps_team_previous", "<Button-1>", lambda _event: self.change_laps_team_pair(-1))
+
+        for team_id, center_x, table_width in (
+            (self.laps_active_team_a, (left_x1 + left_x2) / 2, left_x2 - left_x1),
+            (self.laps_active_team_a + 1, (right_x1 + right_x2) / 2, right_x2 - right_x1),
+        ):
+            record = self.team_record_by_id(team_id)
+            if not record:
+                continue
+            team_info = (
+                (f"Škola: {record['school']}" if record["school"] else "", "bold"),
+                (f"Soutěžící: {record['participant']}" if record["participant"] else "", "normal"),
+            )
+            for line_index, (text, weight) in enumerate(team_info):
+                if text:
+                    self.canvas.create_text(
+                        center_x,
+                        info_first_y + line_index * info_line_height,
+                        text=text,
+                        font=("Arial", info_font_size, weight),
+                        width=max(20, table_width - 24),
+                        justify="center",
+                        tags=f"laps_team_info_{team_id}",
+                    )
 
         # button DEL A
         self.canvas.create_rectangle(
@@ -5788,7 +5886,7 @@ class PlayoffApp:
                         pdf.rect(x, y - row_h, column_width, row_h, stroke=1, fill=1)
                         x += column_width
                     pdf.setFillColor(black)
-                    values = (str(tid), record["school"], record["participant"], record["best_time"])
+                    values = (str(tid), record["school"], record["participant"], self.team_best_time_display(tid))
                     x = x1
                     for index, (column_width, value) in enumerate(zip(col_widths, values)):
                         if index in (0, 3):
@@ -5841,7 +5939,7 @@ class PlayoffApp:
         page_w, page_h = landscape(A4)
         margin = 28
         title_y = page_h - 35
-        table_top = page_h - 58
+        table_top = page_h - 105
         footer_h = 28
         header_h = 30
         table_w = page_w - 2 * margin
@@ -5874,6 +5972,16 @@ class PlayoffApp:
                 pdf.setFillColor(black)
                 pdf.setFont("DejaVu", 17)
                 pdf.drawCentredString(page_w / 2, title_y, f"LAPS - tým {team_id} - dráha {lane}")
+
+                pdf.setFont("DejaVu", 10)
+                summary_y = title_y - 18
+                for summary_line in self.laps_pdf_team_summary(team_id):
+                    pdf.drawCentredString(
+                        page_w / 2,
+                        summary_y,
+                        fit_text(summary_line, table_w, 10),
+                    )
+                    summary_y -= 14
 
                 x = margin
                 for width, header in zip(column_widths, headers):

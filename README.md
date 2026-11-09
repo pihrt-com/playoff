@@ -9,7 +9,11 @@ Zde naleznete aplikaci pro MS Windows (instalace i portable verze), dokumentaci 
 
 V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadáváme číslo nebo název týmu, pravým tlačítkem postupujeme tým do dalšího kola. Výsledný pavouk lze uložit, načíst, exportovat do PDF a propojit se startovními semafory. Nebo se lze přepnout do řežimu měření časů jednotlivých kol. Pokud je kolo kratší než 10 vteřin je podbarvené pole červené. Nejkratší čas v kolech je podbarven zeleně.
 
-## Aktuální změny – 05. 11. 2026 (`GitHub/playoff`)
+## Aktuální změny – 09. 11. 2026 (`GitHub/playoff`)
+
+Režim LAPS zobrazuje mezi označením drah A/B a záhlavím výsledků školu a jméno soutěžícího pro právě vybranou dvojici. Údaje se načítají z Pojmenování týmů pouze při přesné shodě ID; pokud seznam nebo odpovídající ID neexistuje, informační řádky zůstanou prázdné.
+
+Sloupec Nejlepší čas jízdy se odvozuje od nejrychlejšího platného zeleného výsledku LAPS pro stejné ID. V aplikaci a v PDF se zobrazuje například `00:12:500 (12500)`, ale do Excelu se exportuje pouze hodnota `12500` v milisekundách; formátovaný text se do projektu ani do pojmenování týmů neukládá. Každá stránka PDF exportu LAPS uvádí pod nadpisem také odpovídající školu, soutěžícího a nejlepší platný čas.
 
 Tabulka účastníků vedle pavouka slučuje ID z předkola i Kola 1, pokud je předkolo zapnuté; stejný tým se zobrazí jen jednou. Obsahuje čtyři upravitelné sloupce pro ID, školu nebo adresu, jméno soutěžícího a nejlepší čas jízdy. Kliknutím lze změnit společný nadpis i každé záhlaví sloupce a nastavení se ukládá do souboru projektu.
 
