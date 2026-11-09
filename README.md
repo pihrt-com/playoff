@@ -259,33 +259,3 @@ https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
 # PIHRT.COM
 
 https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
-
-## Historie změn
-
-### 09. 11. 2026 – GitHub/playoff – verze 1.0.19
-
-Verze 1.0.19 propojuje režim LAPS s Pojmenováním týmů podle přesné shody ID. Nad tabulkami A/B zobrazuje školu a soutěžícího, nejlepší platný zelený čas promítá do tabulky účastníků ve formátu `00:12:500 (12500)` a do Excelu zapisuje pouze milisekundy. PDF export LAPS uvádí na každé stránce školu, soutěžícího a nejlepší čas; informační řádky v aplikaci mají odstup od ovladačů a škola používá normální řez písma.
-
-### 05. 11. 2026 – GitHub/playoff – verze 1.0.18
-
-Verze 1.0.18 přidává v režimu LAPS samostatnou historii pro každý tým, přepínání dvojic s viditelným údajem aktuálních ID, oddělené sloupce ID a Jízda, ukládání a načítání všech výsledků v projektu a úplné mazání před novou soutěží. Nový export PDF LAPS vytváří jednu grafickou stránku pro každý tým. Záhlaví tabulky mají sjednocené písmo a updater používá ikonu Playoffu.
-
-### 03. 11. 2026 – GitHub/playoff – verze 1.0.16
-
-Verze 1.0.16 umožňuje vypnout libovolný USB port volbou „Nepoužívat“, testovat LED displeje bez připojené brány, zabrání dvojímu použití stejného COM portu a v rozšířeném dialogu ukazuje nalezená zařízení. Nové tlačítko `PROMO` zobrazuje uložený propagační text na všech dostupných LED displejích ve třech režimech, včetně plynulé rotace kompatibilní s firmwarem 1.0 a nastavitelné rychlosti. Součástí zdrojů je také firmware displeje 1.1 s kruhovou rotací a kontrola aktualizací už nenabídne starší verzi.
-
-### 19. 10. 2026 – GitHub/playoff – verze 1.0.15
-
-Do horní lišty LAPS přibylo potvrzované červené tlačítko `SMAZAT A+B` pro vymazání záznamů obou drah. Opraveno bylo také USB připojování: LED displeje se nyní inicializují a opakovaně zkoušejí nezávisle a změna portu měřicí brány se použije ihned, bez nutnosti aplikaci zavírat a znovu spouštět.
-
-### 19. 10. 2026 – GitHub/playoff – verze 1.0.14
-
-Verze 1.0.14 přidává do režimu LAPS opakovaný odpočet se společným nastavením `MM:SS`, spuštěním a resetem levým tlačítkem, automatickým obnovením dalšího cyklu a černo-červeným varovným blikáním během posledních 10 sekund. Režim PLAYOFF si zachovává původní jednorázové spouštění přes START nebo potvrzení semaforu.
-
-### 18. 10. 2026 – GitHub/playoff – verze 1.0.13
-
-Verze 1.0.13 přidává grafický updater s ukazatelem průběhu a stažené velikosti, průběžnými stavovými zprávami, kontrolou velikosti a SHA-256, bezpečným dočasným souborem, opakováním po chybě a návratem do původní aplikace. README nově zobrazuje živé badge pro stabilní release, počet stažení, GitHub Actions testy a licenci.
-
-### 18. 10. 2026 – GitHub/playoff – verze 1.0.12
-
-Verze 1.0.12 doplňuje volitelné průběžné odesílání času na LED displeje s obnovováním 0,1–1,0 s, bezpečné slučování pomalých USB zápisů, vybírání odpovědí displeje, uložení nových voleb, testy a rozšířenou nápovědu.
