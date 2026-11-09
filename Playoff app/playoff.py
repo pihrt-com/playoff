@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.18"                                         # current version of the application
-APP_date          = "05.11.2026"                                     # current version date
+APP_current       = "1.0.19"                                         # current version of the application
+APP_date          = "09.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -4982,8 +4982,9 @@ class PlayoffApp:
 
         info_font_size = {"small": 8, "medium": 11, "large": 14}.get(self.font_scale, 11)
         info_line_height = info_font_size + 5
-        info_first_y = 50 + info_line_height / 2
-        top_y = 50 + 2 * info_line_height + 6
+        info_top_y = 56
+        info_first_y = info_top_y + info_line_height / 2
+        top_y = info_top_y + 2 * info_line_height + 6
 
         if self.projector_mode:
             bottom_y = h - 10
@@ -5070,7 +5071,7 @@ class PlayoffApp:
             if not record:
                 continue
             team_info = (
-                (f"Škola: {record['school']}" if record["school"] else "", "bold"),
+                (f"Škola: {record['school']}" if record["school"] else "", "normal"),
                 (f"Soutěžící: {record['participant']}" if record["participant"] else "", "normal"),
             )
             for line_index, (text, weight) in enumerate(team_info):

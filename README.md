@@ -9,7 +9,7 @@ Zde naleznete aplikaci pro MS Windows (instalace i portable verze), dokumentaci 
 
 V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadáváme číslo nebo název týmu, pravým tlačítkem postupujeme tým do dalšího kola. Výsledný pavouk lze uložit, načíst, exportovat do PDF a propojit se startovními semafory. Nebo se lze přepnout do řežimu měření časů jednotlivých kol. Pokud je kolo kratší než 10 vteřin je podbarvené pole červené. Nejkratší čas v kolech je podbarven zeleně.
 
-## Aktuální změny – 09. 11. 2026 (`GitHub/playoff`)
+## Aktuální změny – 09. 11. 2026
 
 Režim LAPS zobrazuje mezi označením drah A/B a záhlavím výsledků školu a jméno soutěžícího pro právě vybranou dvojici. Údaje se načítají z Pojmenování týmů pouze při přesné shodě ID; pokud seznam nebo odpovídající ID neexistuje, informační řádky zůstanou prázdné.
 
@@ -261,6 +261,10 @@ https://www.printables.com/model/1658726-playoff-semaphore-for-robocompetition
 https://pihrt.com/elektronika/493-playoff-app-pro-robovehicle
 
 ## Historie změn
+
+### 09. 11. 2026 – GitHub/playoff – verze 1.0.19
+
+Verze 1.0.19 propojuje režim LAPS s Pojmenováním týmů podle přesné shody ID. Nad tabulkami A/B zobrazuje školu a soutěžícího, nejlepší platný zelený čas promítá do tabulky účastníků ve formátu `00:12:500 (12500)` a do Excelu zapisuje pouze milisekundy. PDF export LAPS uvádí na každé stránce školu, soutěžícího a nejlepší čas; informační řádky v aplikaci mají odstup od ovladačů a škola používá normální řez písma.
 
 ### 05. 11. 2026 – GitHub/playoff – verze 1.0.18
 

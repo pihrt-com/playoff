@@ -1,7 +1,7 @@
 {
-  "version": "1.0.18",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.18/PlayoffSetup_1.0.18.exe",
-  "sha256": "91b59d1cf677f055e902b36ffc8ad0f2469a25cc991fb5cbedc60e0fecaf87e0",
-  "size": 41952391,
-  "notes": "LAPS nově uchovává výsledky samostatně pro každý tým, zobrazuje ID týmu a číslo jízdy, ukládá kompletní historii do projektu a exportuje jednu PDF stránku pro každý tým."
+  "version": "1.0.19",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.19/PlayoffSetup_1.0.19.exe",
+  "sha256": "80f65db16fff4cfe3182a04285ef897e4bbd4d442675977ce75ceb4a80a02f76",
+  "size": 39863560,
+  "notes": "LAPS zobrazuje školu a soutěžícího podle přesného ID týmu a odvozuje nejlepší platný čas pro tabulku účastníků, Excel i PDF export."
 }

@@ -298,10 +298,12 @@ class LapsMenuAndSetupTests(unittest.TestCase):
             app = self.make_real_app(self.root, profile)
             app.team_names = [
                 {"id": "1", "school": "SPŠ Plzeň", "participant": "Anna Nováková"},
+                {"id": "2", "school": "Pouze škola", "participant": ""},
                 {"id": "03", "school": "Neshodné ID", "participant": "Nikdo"},
             ]
             app.view_mode = "laps"
-            app.draw_laps()
+            with mock.patch.object(app.canvas, "winfo_width", return_value=1200), mock.patch.object(app.canvas, "winfo_height", return_value=800):
+                app.draw_laps()
 
             team_one_text = [
                 app.canvas.itemcget(item, "text")
@@ -311,7 +313,19 @@ class LapsMenuAndSetupTests(unittest.TestCase):
                 team_one_text,
                 ["Škola: SPŠ Plzeň", "Soutěžící: Anna Nováková"],
             )
-            self.assertFalse(app.canvas.find_withtag("laps_team_info_2"))
+            team_two_items = app.canvas.find_withtag("laps_team_info_2")
+            self.assertEqual(
+                [app.canvas.itemcget(item, "text") for item in team_two_items],
+                ["Škola: Pouze škola"],
+            )
+            school_item = team_two_items[0]
+            self.assertNotIn("bold", app.canvas.itemcget(school_item, "font"))
+            team_button_bottom = max(
+                app.canvas.bbox(item)[3]
+                for item in app.canvas.find_withtag("laps_team_settings")
+            )
+            self.assertGreaterEqual(app.canvas.bbox(school_item)[1] - team_button_bottom, 6)
+            self.assertFalse(app.canvas.find_withtag("laps_team_info_3"))
 
     def test_laps_pdf_contains_one_page_for_each_configured_team(self):
         app = make_laps_app(4)

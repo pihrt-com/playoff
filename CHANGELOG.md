@@ -1,11 +1,12 @@
 # Historie změn
 
-## Připravované změny – 09. 11. 2026
+## 1.0.19 – 09. 11. 2026
 
 - Nad tabulkami LAPS se pro právě vybranou dvojici zobrazí škola a jméno soutěžícího z Pojmenování týmů, pouze pokud se ID přesně shoduje.
 - Nejlepší platný zelený čas LAPS se promítá do sloupce Nejlepší čas jízdy ve tvaru `00:12:500 (12500)` bez uložení formátovaného textu do projektu.
 - Export Pojmenování týmů zapisuje do posledního sloupce pouze nejlepší čas v milisekundách; pokud tým nemá platný zelený výsledek, buňka zůstane prázdná.
 - Každá stránka PDF exportu LAPS obsahuje školu, jméno soutěžícího a nejlepší platný čas příslušného týmu.
+- Informační řádky LAPS mají odstup od ovladačů `Team`, `+` a `−`; název školy používá normální řez písma i tehdy, když soutěžící není vyplněný.
 
 ## 1.0.18 – 05. 11. 2026
 
