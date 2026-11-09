@@ -239,6 +239,12 @@ Ukázka použití ze soutěže ROBO 2026 – Techmania a SOUE Plzeň
 
 [![](https://github.com/pihrt-com/playoff/blob/main/Example/fin4.jpg?raw=true)](https://github.com/pihrt-com/playoff/blob/main/Example/jpg4.png)
 
+| | | |
+|---|---|---|
+| [![ROBO 2026 – 20261104_075313](Foto/20261104_075313.jpg)](Foto/20261104_075313.jpg) | [![ROBO 2026 – 20261104_075342](Foto/20261104_075342.jpg)](Foto/20261104_075342.jpg) | [![ROBO 2026 – 20261104_075349](Foto/20261104_075349.jpg)](Foto/20261104_075349.jpg) |
+| [![ROBO 2026 – 20261104_075437](Foto/20261104_075437.jpg)](Foto/20261104_075437.jpg) | [![ROBO 2026 – 20261104_080151](Foto/20261104_080151.jpg)](Foto/20261104_080151.jpg) | [![ROBO 2026 – 20261104_080201](Foto/20261104_080201.jpg)](Foto/20261104_080201.jpg) |
+| [![ROBO 2026 – 20261104_080219](Foto/20261104_080219.jpg)](Foto/20261104_080219.jpg) | [![ROBO 2026 – 20261104_080224](Foto/20261104_080224.jpg)](Foto/20261104_080224.jpg) | [![ROBO 2026 – 20261104_113614](Foto/20261104_113614.jpg)](Foto/20261104_113614.jpg) |
+
 ---
 
 # Kredity
