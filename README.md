@@ -13,6 +13,8 @@ V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadávám
 
 Nastavení obsahuje samostatný oddíl Import online z ROBO. Po zadání HTTPS adresy a API klíče lze nastavit klíč pro všech šestnáct pozic předkola a osmifinále, stáhnout jednorázový náhled pořadí a teprve potom zaplnit pavouka. Import vyžaduje zapnuté předkolo a pavouka pro 16 týmů; při vypnutém předkole zůstává nastavení dostupné, ale stahování je vypnuté.
 
+Import používá výsledky soutěžního systému [ROBO](https://github.com/pihrt-com/robo).
+
 Výchozí klíč vytvoří dvojice předkola 9/24 až 16/17. Do osmifinále vloží osm přímo nasazených týmů podle pořadí 1, 8, 5, 4, 3, 6, 7 a 2, zatímco osm navázaných polí ponechá prázdných. Pravým tlačítkem se vítěz předkola propíše do určeného slotu osmifinále; modré spojnice ukazují použité vazby v aplikaci i v exportu PDF. Čas vytvoření dat ROBO se zobrazuje v místním formátu data a času.
 
 Všechna nová okna importu používají ikonu Playoffu. Nově vytvořený pavouk používá ve výchozím stavu silné čáry.
