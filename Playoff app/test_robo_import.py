@@ -30,6 +30,22 @@ def make_app():
 
 
 class RoboImportTests(unittest.TestCase):
+    def test_dialog_icon_is_applied_to_the_specific_window(self):
+        class IconWindow:
+            def __init__(self):
+                self.paths = []
+
+            def iconbitmap(self, path):
+                self.paths.append(path)
+
+        window = IconWindow()
+        app = playoff.PlayoffApp.__new__(playoff.PlayoffApp)
+
+        app.set_playoff_icon(window)
+
+        self.assertEqual(len(window.paths), 1)
+        self.assertTrue(window.paths[0].endswith("playoff.ico"))
+
     def test_default_key_places_direct_seeds_and_leaves_pre_round_targets_empty(self):
         plan = playoff.robo_import_plan(SAMPLE_PAYLOAD, playoff.robo_import_default_rules())
 

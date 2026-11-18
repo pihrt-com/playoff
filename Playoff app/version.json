@@ -1,7 +1,7 @@
 {
-  "version": "1.0.20",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.20/PlayoffSetup_1.0.20.exe",
-  "sha256": "facc566327ae7d459aa65dc75d342bcb0ce1de2194fa4fa321dc0ce46cc5f061",
-  "size": 52167709,
-  "notes": "Přidán jednorázový import pavouka z ROBO včetně klíče předkola, náhledu, propojení vítězů a PDF exportu."
+  "version": "1.0.21",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.21/PlayoffSetup_1.0.21.exe",
+  "sha256": "f975ed700a55d88181a2db951927e896c646a9262183cf58f1fb51a7a90a9d28",
+  "size": 52170033,
+  "notes": "Opraveno zobrazení ikony programu ve všech oknech Playoffu."
 }

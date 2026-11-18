@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.21 – 18. 11. 2026
+
+- Opraveno přiřazení ikony programu všem hlavním i dialogovým oknům Playoffu.
+- Aktualizační manifest nyní odpovídá ověřenému instalačnímu souboru vydání 1.0.20, takže lze přejít na tuto opravu přes Kontrolu aktualizace.
+
 ## 1.0.20 – 18. 11. 2026
 
 - Přidán samostatný oddíl Import online z ROBO s nastavením endpointu, API klíče a klikacího klíče předkola i osmifinále.

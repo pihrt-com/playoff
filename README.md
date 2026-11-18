@@ -11,6 +11,8 @@ V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadávám
 
 ## Aktuální změny – 18. 11. 2026
 
+Verze 1.0.21 opravuje ikonu programu ve všech oknech Playoffu. Kontrola aktualizace z verze 1.0.20 nyní používá ověřený součet zveřejněného instalátoru.
+
 Nastavení obsahuje samostatný oddíl Import online z ROBO. Po zadání HTTPS adresy a API klíče lze nastavit klíč pro všech šestnáct pozic předkola a osmifinále, stáhnout jednorázový náhled pořadí a teprve potom zaplnit pavouka. Import vyžaduje zapnuté předkolo a pavouka pro 16 týmů; při vypnutém předkole zůstává nastavení dostupné, ale stahování je vypnuté.
 
 Import používá výsledky soutěžního systému [ROBO](https://github.com/pihrt-com/robo).

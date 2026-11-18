@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.20"                                         # current version of the application
+APP_current       = "1.0.21"                                         # current version of the application
 APP_date          = "18.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -1393,12 +1393,9 @@ class PlayoffApp:
     def set_playoff_icon(self, window):
         icon_path = os.path.join(BASE_PATH, "playoff.ico")
         try:
-            window.iconbitmap(default=icon_path)
+            window.iconbitmap(icon_path)
         except Exception:
-            try:
-                window.iconbitmap(icon_path)
-            except Exception:
-                pass
+            pass
 
     def _now(self):
         return time.strftime("%H:%M:%S")
