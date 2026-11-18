@@ -1,5 +1,13 @@
 # Historie změn
 
+## 1.0.20 – 18. 11. 2026
+
+- Přidán samostatný oddíl Import online z ROBO s nastavením endpointu, API klíče a klikacího klíče předkola i osmifinále.
+- Import načte a ověří JSON ROBO v1, před zápisem zobrazí náhled a pracuje pouze při zapnutém předkole a pavouku pro 16 týmů.
+- Výchozí klíč vyplní předkolo dvojicemi 9/24 až 16/17 a osm přímo nasazených týmů v osmifinále; navázaná pole vítězů předkola zůstanou prázdná.
+- Pravé tlačítko v předkole přenese vítěze do určeného slotu osmifinále. Modré spojnice se zobrazují v pavouku i v PDF exportu.
+- Dialogy importu používají ikonu Playoffu, čas vytvoření dat ROBO se zobrazuje v místním formátu a výchozí tloušťka nového pavouka je silná.
+
 ## 1.0.19 – 09. 11. 2026
 
 - Nad tabulkami LAPS se pro právě vybranou dvojici zobrazí škola a jméno soutěžícího z Pojmenování týmů, pouze pokud se ID přesně shoduje.

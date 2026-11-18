@@ -1,0 +1,173 @@
+import tempfile
+import tkinter as tk
+import unittest
+from unittest import mock
+
+from pypdf import PdfReader
+
+import playoff
+
+
+SAMPLE_PAYLOAD = {
+    "api_version": "v1",
+    "competition": {"year": 2026, "date": "2026-11-12"},
+    "generated_at": "2026-11-18T07:53:12+00:00",
+    "best_time_includes_penalties": True,
+    "teams": [
+        {"team_number": rank + 100, "rank": rank}
+        for rank in range(1, 25)
+    ],
+}
+
+
+def make_app():
+    app = playoff.PlayoffApp.__new__(playoff.PlayoffApp)
+    app.pre_round_enabled = True
+    app.bracket = playoff.Bracket([""] * 16, [""] * 16, use_pre_round=True)
+    app.robo_import_links = {}
+    app.redraw = mock.Mock()
+    return app
+
+
+class RoboImportTests(unittest.TestCase):
+    def test_default_key_places_direct_seeds_and_leaves_pre_round_targets_empty(self):
+        plan = playoff.robo_import_plan(SAMPLE_PAYLOAD, playoff.robo_import_default_rules())
+
+        self.assertEqual(
+            plan["pre_round"],
+            ["109", "124", "110", "123", "111", "122", "112", "121", "113", "120", "114", "119", "115", "118", "116", "117"],
+        )
+        self.assertEqual(
+            plan["round_1"],
+            ["101", "", "108", "", "105", "", "104", "", "", "103", "", "106", "107", "", "", "102"],
+        )
+        self.assertEqual(plan["links"][0], {"match": 1, "side": "b"})
+        self.assertEqual(plan["links"][7], {"match": 0, "side": "b"})
+
+    def test_import_populates_only_direct_slots_and_pre_round_winner_reaches_its_keyed_destination(self):
+        app = make_app()
+        plan = playoff.robo_import_plan(SAMPLE_PAYLOAD, playoff.robo_import_default_rules())
+
+        app.apply_robo_import_plan(plan)
+
+        self.assertEqual(
+            [(match.a.text, match.b.text) for match in app.bracket.pre_rounds[0]],
+            [("109", "124"), ("110", "123"), ("111", "122"), ("112", "121"), ("113", "120"), ("114", "119"), ("115", "118"), ("116", "117")],
+        )
+        self.assertEqual(app.bracket.rounds[0][0].a.text, "101")
+        self.assertEqual(app.bracket.rounds[0][0].b.text, "")
+        self.assertEqual(app.bracket.rounds[0][1].a.text, "108")
+        self.assertEqual(app.bracket.rounds[0][1].b.text, "")
+
+        app.promote_pre_round(0, "b")
+
+        self.assertEqual(app.bracket.rounds[0][1].b.text, "124")
+        self.assertEqual(app.bracket.rounds[0][1].a.text, "108")
+
+    def test_import_is_rejected_when_pre_round_is_disabled(self):
+        app = make_app()
+        app.pre_round_enabled = False
+        plan = playoff.robo_import_plan(SAMPLE_PAYLOAD, playoff.robo_import_default_rules())
+
+        with self.assertRaisesRegex(ValueError, "vypnutém předkole"):
+            app.apply_robo_import_plan(plan)
+
+    def test_missing_or_duplicate_robo_rank_is_rejected(self):
+        missing = dict(SAMPLE_PAYLOAD, teams=SAMPLE_PAYLOAD["teams"][:-1])
+        with self.assertRaisesRegex(ValueError, "24"):
+            playoff.robo_import_plan(missing, playoff.robo_import_default_rules())
+
+        duplicate = dict(SAMPLE_PAYLOAD, teams=SAMPLE_PAYLOAD["teams"] + [{"team_number": 999, "rank": 1}])
+        with self.assertRaisesRegex(ValueError, "vícekrát"):
+            playoff.robo_import_plan(duplicate, playoff.robo_import_default_rules())
+
+    def test_key_is_added_as_query_parameter_and_requires_https(self):
+        self.assertEqual(
+            playoff.robo_import_url("https://pihrt.com/robo/api/v1?mode=test", "tajny klic"),
+            "https://pihrt.com/robo/api/v1?mode=test&key=tajny+klic",
+        )
+        with self.assertRaisesRegex(ValueError, "https"):
+            playoff.robo_import_url("http://pihrt.com/robo/api/v1", "key")
+
+    def test_robo_timestamp_is_human_readable(self):
+        formatted = playoff.format_robo_generated_at("2026-11-18T08:44:55+00:00")
+        self.assertIn("18. 11. 2026", formatted)
+        self.assertNotIn("T08", formatted)
+
+    def test_saved_links_ignore_invalid_legacy_or_manual_values(self):
+        self.assertEqual(
+            playoff.normalize_robo_import_links({"0": {"match": "1", "side": "b"}, "bad": {"match": 2, "side": "a"}, "2": {"match": 9, "side": "a"}}),
+            {0: {"match": 1, "side": "b"}},
+        )
+
+
+class RoboImportMenuTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = tk.Tk()
+        cls.root.withdraw()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.root.destroy()
+
+    def make_real_app(self, profile):
+        patches = (
+            mock.patch.object(playoff, "USB_AVAILABLE", False),
+            mock.patch.object(playoff.PlayoffApp, "check_for_update"),
+            mock.patch.object(playoff.PlayoffApp, "auto_check_usb"),
+            mock.patch.object(playoff.PlayoffApp, "auto_check_displays"),
+            mock.patch.object(playoff.os.path, "expanduser", return_value=profile),
+        )
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        return playoff.PlayoffApp(self.root)
+
+    def test_robo_menu_stays_configurable_but_disables_download_without_pre_round(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(profile)
+            labels = {
+                app.settings_menu.entrycget(index, "label"): index
+                for index in range(app.settings_menu.index("end") + 1)
+                if app.settings_menu.type(index) != "separator"
+            }
+            self.assertIn("Import online z ROBO", labels)
+            menu = self.root.nametowidget(app.settings_menu.entrycget(labels["Import online z ROBO"], "menu"))
+            self.assertEqual(menu.entrycget(0, "label"), "Nastavení importu…")
+            self.assertEqual(menu.entrycget(2, "state"), "normal")
+
+            app.pre_round_var.set(False)
+            app.toggle_pre_round()
+
+            self.assertEqual(menu.entrycget(0, "state"), "normal")
+            self.assertEqual(menu.entrycget(2, "state"), "disabled")
+
+    def test_imported_bracket_draws_eight_pre_round_links(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(profile)
+            app.generate_bracket_with_empty(16)
+            app.apply_robo_import_plan(
+                playoff.robo_import_plan(SAMPLE_PAYLOAD, playoff.robo_import_default_rules())
+            )
+            self.assertEqual(len(app.canvas.find_withtag("robo_import_link")), 8)
+
+    def test_pdf_export_contains_pre_round_and_robo_connections(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(profile)
+            app.generate_bracket_with_empty(16)
+            app.apply_robo_import_plan(
+                playoff.robo_import_plan(SAMPLE_PAYLOAD, playoff.robo_import_default_rules())
+            )
+            self.assertEqual(app.line_width, playoff.DEFAULT_LINE_WIDTH)
+            pdf_path = f"{profile}\\robo-playoff.pdf"
+            with mock.patch.object(playoff.filedialog, "asksaveasfilename", return_value=pdf_path), mock.patch.object(playoff.messagebox, "showinfo"), mock.patch.object(playoff.messagebox, "showerror") as showerror:
+                app.export_pdf()
+            self.assertFalse(showerror.called)
+            with open(pdf_path, "rb") as exported:
+                self.assertTrue(exported.read(5).startswith(b"%PDF"))
+            self.assertIn("Předkolo", PdfReader(pdf_path).pages[0].extract_text())
+
+
+if __name__ == "__main__":
+    unittest.main()

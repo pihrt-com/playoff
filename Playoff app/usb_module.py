@@ -371,12 +371,6 @@ class USBManager:
         if display_id not in (1, 2):
             return False
 
-        if not PY_SERIAL_AVAILABLE:
-            error = "pyserial není nainstalován."
-            self.display_errors[display_id] = error
-            self._log(f"Display connect skipped: {error}")
-            return False
-
         if display_id == 1:
             port = str(
                 port_override if port_override is not None
@@ -417,6 +411,12 @@ class USBManager:
             self.disconnect_display(display_id)
         elif current is not None:
             self.disconnect_display(display_id)
+
+        if not PY_SERIAL_AVAILABLE:
+            error = "pyserial není nainstalován."
+            self.display_errors[display_id] = error
+            self._log(f"Display connect skipped: {error}")
+            return False
 
         display = None
         try:

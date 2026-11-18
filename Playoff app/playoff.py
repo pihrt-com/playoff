@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.19"                                         # current version of the application
-APP_date          = "09.11.2026"                                     # current version date
+APP_current       = "1.0.20"                                         # current version of the application
+APP_date          = "18.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -14,7 +14,10 @@ from tkinter import font as tkfont
 import math, json, os, sys
 import subprocess
 import urllib.request
+import urllib.parse
+import urllib.error
 import time
+from datetime import datetime
 
 try:
     from reportlab.pdfgen import canvas as rl_canvas
@@ -83,6 +86,7 @@ def is_newer_version(candidate, current):
 TEAM_TABLE_DEFAULT_TITLE = "Účastníci soutěže"
 TEAM_TABLE_DEFAULT_HEADERS = ("ID", "Škola / adresa školy", "Jméno soutěžícího", "Nejlepší čas jízdy")
 TEAM_RECORD_FIELDS = ("id", "school", "participant", "best_time")
+DEFAULT_LINE_WIDTH = 4
 
 
 def normalize_team_record(record):
@@ -136,6 +140,215 @@ def format_lap_ms(milliseconds):
     seconds = (milliseconds % 60000) // 1000
     millis = milliseconds % 1000
     return f"{minutes:02d}:{seconds:02d}:{millis:03d}"
+
+
+def format_robo_generated_at(value):
+    """Convert ROBO's ISO timestamp to a readable local date and time."""
+    value = str(value or "").strip()
+    if not value:
+        return "—"
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    return parsed.astimezone().strftime("%d. %m. %Y %H:%M:%S")
+
+
+ROBO_IMPORT_DEFAULT_ENDPOINT = "https://pihrt.com/robo/api/v1"
+ROBO_IMPORT_MAX_RESPONSE_BYTES = 1024 * 1024
+ROBO_IMPORT_TIMEOUT_SECONDS = 10
+ROBO_IMPORT_DEFAULT_PRE_ROUND = (9, 24, 10, 23, 11, 22, 12, 21, 13, 20, 14, 19, 15, 18, 16, 17)
+ROBO_IMPORT_DEFAULT_ROUND_1 = (
+    {"source": "rank", "rank": 1},
+    {"source": "pre_winner", "match": 8},
+    {"source": "rank", "rank": 8},
+    {"source": "pre_winner", "match": 1},
+    {"source": "rank", "rank": 5},
+    {"source": "pre_winner", "match": 4},
+    {"source": "rank", "rank": 4},
+    {"source": "pre_winner", "match": 5},
+    {"source": "pre_winner", "match": 6},
+    {"source": "rank", "rank": 3},
+    {"source": "pre_winner", "match": 3},
+    {"source": "rank", "rank": 6},
+    {"source": "rank", "rank": 7},
+    {"source": "pre_winner", "match": 2},
+    {"source": "pre_winner", "match": 7},
+    {"source": "rank", "rank": 2},
+)
+
+
+def robo_import_default_rules():
+    """Return a new copy of the default ROBO qualification bracket rules."""
+    return {
+        "pre_round": list(ROBO_IMPORT_DEFAULT_PRE_ROUND),
+        "round_1": [dict(rule) for rule in ROBO_IMPORT_DEFAULT_ROUND_1],
+    }
+
+
+def normalize_robo_import_rules(value):
+    """Return complete safe rules; invalid saved values fall back to the default key."""
+    defaults = robo_import_default_rules()
+    value = value if isinstance(value, dict) else {}
+    pre_round = value.get("pre_round")
+    round_1 = value.get("round_1")
+    if not isinstance(pre_round, list) or len(pre_round) != 16:
+        pre_round = defaults["pre_round"]
+    if not isinstance(round_1, list) or len(round_1) != 16:
+        round_1 = defaults["round_1"]
+    try:
+        pre_round = [int(rank) for rank in pre_round]
+    except (TypeError, ValueError):
+        pre_round = defaults["pre_round"]
+    normalized_round_1 = []
+    for rule, fallback in zip(round_1, defaults["round_1"]):
+        if not isinstance(rule, dict):
+            normalized_round_1.append(dict(fallback))
+            continue
+        source = rule.get("source")
+        try:
+            number = int(rule.get("rank" if source == "rank" else "match"))
+        except (TypeError, ValueError):
+            normalized_round_1.append(dict(fallback))
+            continue
+        if source == "rank" and number > 0:
+            normalized_round_1.append({"source": "rank", "rank": number})
+        elif source == "pre_winner" and 1 <= number <= 8:
+            normalized_round_1.append({"source": "pre_winner", "match": number})
+        else:
+            normalized_round_1.append(dict(fallback))
+    return {"pre_round": pre_round, "round_1": normalized_round_1}
+
+
+def robo_import_rule_label(rule):
+    if rule.get("source") == "pre_winner":
+        return f"Vítěz předkola {rule['match']}"
+    return f"Pořadí {rule['rank']}"
+
+
+def validate_robo_import_rules(rules):
+    """Reject ambiguous qualification keys before any network or bracket operation."""
+    rules = normalize_robo_import_rules(rules)
+    pre_round = rules["pre_round"]
+    direct = [rule["rank"] for rule in rules["round_1"] if rule["source"] == "rank"]
+    winners = [rule["match"] for rule in rules["round_1"] if rule["source"] == "pre_winner"]
+    if any(rank < 1 for rank in pre_round + direct):
+        raise ValueError("Pořadí týmů musí být kladné číslo.")
+    if len(set(pre_round)) != len(pre_round):
+        raise ValueError("Pravidlo předkola používá stejné pořadí vícekrát.")
+    if len(set(pre_round + direct)) != len(pre_round + direct):
+        raise ValueError("Stejný tým podle pořadí je v klíči použit vícekrát.")
+    if sorted(winners) != list(range(1, 9)):
+        raise ValueError("Osmifinále musí používat každého vítěze předkola právě jednou.")
+    return rules
+
+
+def normalize_robo_import_links(value):
+    """Read persisted pre-round destinations without allowing malformed setups to fail loading."""
+    links = {}
+    if not isinstance(value, dict):
+        return links
+    for source, target in value.items():
+        if not isinstance(target, dict) or target.get("side") not in ("a", "b"):
+            continue
+        try:
+            source_index = int(source)
+            match_index = int(target.get("match"))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= source_index < 8 and 0 <= match_index < 8:
+            links[source_index] = {"match": match_index, "side": target["side"]}
+    return links
+
+
+def robo_import_plan(payload, rules):
+    """Validate a ROBO v1 response and map its ranking to the configured bracket key."""
+    if not isinstance(payload, dict) or payload.get("api_version") != "v1":
+        raise ValueError("Server nevrátil podporovanou odpověď ROBO API v1.")
+    teams = payload.get("teams")
+    if not isinstance(teams, list):
+        raise ValueError("Odpověď ROBO neobsahuje seznam týmů.")
+    ranking = {}
+    for team in teams:
+        if not isinstance(team, dict) or team.get("rank") is None:
+            continue
+        try:
+            rank = int(team["rank"])
+            team_number = int(team["team_number"])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("ROBO v odpovědi obsahuje neplatné pořadí nebo číslo týmu.") from None
+        if rank < 1 or team_number < 1:
+            raise ValueError("ROBO v odpovědi obsahuje neplatné pořadí nebo číslo týmu.")
+        if rank in ranking:
+            raise ValueError(f"ROBO v odpovědi obsahuje pořadí {rank} vícekrát.")
+        ranking[rank] = str(team_number)
+
+    rules = validate_robo_import_rules(rules)
+    required_ranks = set(rules["pre_round"])
+    required_ranks.update(
+        rule["rank"] for rule in rules["round_1"] if rule["source"] == "rank"
+    )
+    missing = sorted(rank for rank in required_ranks if rank not in ranking)
+    if missing:
+        raise ValueError(
+            "ROBO zatím nemá zařazené potřebné pořadí: "
+            + ", ".join(str(rank) for rank in missing) + "."
+        )
+
+    pre_round = list(rules["pre_round"])
+    round_1 = []
+    links = {}
+    for position, rule in enumerate(rules["round_1"]):
+        if rule["source"] == "rank":
+            round_1.append(ranking[rule["rank"]])
+        else:
+            round_1.append("")
+            links[rule["match"] - 1] = {
+                "match": position // 2,
+                "side": "a" if position % 2 == 0 else "b",
+            }
+    if len(links) != 8:
+        raise ValueError("Pravidlo osmifinále musí obsahovat právě osm vítězů předkola.")
+    return {
+        "pre_round": [ranking[rank] for rank in pre_round],
+        "round_1": round_1,
+        "links": links,
+        "rules": rules,
+        "competition": payload.get("competition", {}),
+        "generated_at": str(payload.get("generated_at", "")),
+    }
+
+
+def robo_import_url(endpoint, api_key):
+    endpoint = str(endpoint or "").strip()
+    api_key = str(api_key or "").strip()
+    if not endpoint.startswith("https://"):
+        raise ValueError("Adresa ROBO API musí začínat https://.")
+    if not api_key:
+        raise ValueError("Zadejte API klíč pro ROBO.")
+    parts = urllib.parse.urlsplit(endpoint)
+    query = dict(urllib.parse.parse_qsl(parts.query, keep_blank_values=True))
+    query["key"] = api_key
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(query), ""))
+
+
+def download_robo_import(endpoint, api_key):
+    """Download one bounded ROBO response without ever logging the secret URL."""
+    request = urllib.request.Request(
+        robo_import_url(endpoint, api_key),
+        headers={"Accept": "application/json", "User-Agent": "Playoff"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=ROBO_IMPORT_TIMEOUT_SECONDS) as response:
+            data = response.read(ROBO_IMPORT_MAX_RESPONSE_BYTES + 1)
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise ValueError(f"JSON z ROBO se nepodařilo stáhnout: {error}") from None
+    if len(data) > ROBO_IMPORT_MAX_RESPONSE_BYTES:
+        raise ValueError("Odpověď ROBO je příliš velká.")
+    try:
+        return json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError("ROBO nevrátilo platný JSON.") from None
 
 
 # Pillow optional
@@ -500,7 +713,7 @@ class PlayoffApp:
         self.bg_image = None
         self.bg_tk = None
         self.canvas_bg = CANVAS_BG_DEFAULT
-        self.line_width = 2           # normal/thick
+        self.line_width = DEFAULT_LINE_WIDTH  # normal/thick
         self.font_scale = "large"     # small/medium/large
         self.odd_behavior = "manual"  # auto/manual/waiting
         self.lock_edit = False
@@ -521,6 +734,10 @@ class PlayoffApp:
         self.team_table_title = TEAM_TABLE_DEFAULT_TITLE
         self.team_table_headers = list(TEAM_TABLE_DEFAULT_HEADERS)
         self.pre_round_enabled = True
+        self.robo_import_endpoint = ROBO_IMPORT_DEFAULT_ENDPOINT
+        self.robo_import_api_key = ""
+        self.robo_import_rules = robo_import_default_rules()
+        self.robo_import_links = {}
         self.third_place_enabled = True
         self.third_place_title = "3. místo"
         self.lap_timer_enabled = True
@@ -807,6 +1024,20 @@ class PlayoffApp:
             command=self.clear_all_laps_history,
         )
 
+        self.robo_import_menu = tk.Menu(self.settings_menu, tearoff=0)
+        self.settings_menu.add_cascade(label='Import online z ROBO', menu=self.robo_import_menu)
+        self.robo_import_menu.add_command(
+            label='Nastavení importu…',
+            command=self.open_robo_import_settings,
+        )
+        self.robo_import_menu.add_separator()
+        self.robo_import_menu.add_command(
+            label='Stáhnout a zobrazit náhled importu',
+            command=self.open_robo_import_preview,
+        )
+        self.robo_import_preview_menu_index = self.robo_import_menu.index('end')
+        self.update_robo_import_menu_state()
+
         self.settings_menu.add_separator()
         self.settings_menu.add_command(label='Načíst pozadí', command=self.load_bg_image)
         self.settings_menu.add_command(label='Smazat pozadí', command=self.remove_bg)
@@ -1078,6 +1309,13 @@ class PlayoffApp:
                 self.promo_scroll_ms = normalize_promo_scroll_ms(
                     s.get('promo_scroll_ms', self.promo_scroll_ms)
                 )
+                self.robo_import_endpoint = str(
+                    s.get('robo_import_endpoint', self.robo_import_endpoint) or ROBO_IMPORT_DEFAULT_ENDPOINT
+                ).strip()
+                self.robo_import_api_key = str(s.get('robo_import_api_key', self.robo_import_api_key) or '')
+                self.robo_import_rules = normalize_robo_import_rules(
+                    s.get('robo_import_rules', self.robo_import_rules)
+                )
                 self.apply_lap_timer_visibility()
 
                 self.view_mode = s.get('view_mode', 'playoff')
@@ -1150,12 +1388,17 @@ class PlayoffApp:
             self._log("USB SETTINGS LOAD ERROR:", e)
 
         self.update_promo_button_state()
+        self.update_robo_import_menu_state()
 
     def set_playoff_icon(self, window):
+        icon_path = os.path.join(BASE_PATH, "playoff.ico")
         try:
-            window.iconbitmap(os.path.join(BASE_PATH, "playoff.ico"))
+            window.iconbitmap(default=icon_path)
         except Exception:
-            pass
+            try:
+                window.iconbitmap(icon_path)
+            except Exception:
+                pass
 
     def _now(self):
         return time.strftime("%H:%M:%S")
@@ -1211,6 +1454,7 @@ class PlayoffApp:
     def toggle_pre_round(self):
         self.pre_round_enabled = self.pre_round_var.get()
         if not self.bracket:
+            self.update_robo_import_menu_state()
             self.redraw()
             return
 
@@ -1222,6 +1466,223 @@ class PlayoffApp:
         else:
             pass
 
+        self.update_robo_import_menu_state()
+
+        self.redraw()
+
+    def update_robo_import_menu_state(self):
+        """Keep configuration available, but never offer a pre-round import without a pre-round."""
+        if not hasattr(self, 'robo_import_menu'):
+            return
+        state = 'normal' if self.pre_round_enabled else 'disabled'
+        self.robo_import_menu.entryconfig(self.robo_import_preview_menu_index, state=state)
+
+    def open_robo_import_settings(self):
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title('Import online z ROBO')
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.geometry('900x650')
+        dlg.minsize(820, 540)
+
+        endpoint_var = tk.StringVar(value=self.robo_import_endpoint)
+        api_key_var = tk.StringVar(value=self.robo_import_api_key)
+        rules = normalize_robo_import_rules(self.robo_import_rules)
+        pre_vars = [tk.StringVar(value=str(rank)) for rank in rules['pre_round']]
+        round_vars = [tk.StringVar(value=robo_import_rule_label(rule)) for rule in rules['round_1']]
+
+        form = tk.Frame(dlg)
+        form.pack(fill='x', padx=14, pady=(14, 6))
+        tk.Label(form, text='Adresa ROBO API:').grid(row=0, column=0, sticky='w', pady=4)
+        tk.Entry(form, textvariable=endpoint_var, width=72).grid(row=0, column=1, sticky='ew', pady=4)
+        tk.Label(form, text='Klíč pro API:').grid(row=1, column=0, sticky='w', pady=4)
+        tk.Entry(form, textvariable=api_key_var, width=72, show='•').grid(row=1, column=1, sticky='ew', pady=4)
+        form.columnconfigure(1, weight=1)
+
+        tk.Label(
+            dlg,
+            text='Pravidlo určuje pořadí 16 slotů předkola a 16 slotů osmifinále.',
+            anchor='w',
+        ).pack(fill='x', padx=14, pady=(4, 2))
+        tables = tk.Frame(dlg)
+        tables.pack(fill='both', expand=True, padx=14, pady=6)
+        pre_frame = tk.LabelFrame(tables, text='Předkolo')
+        final_frame = tk.LabelFrame(tables, text='Osmifinále')
+        pre_frame.pack(side='left', fill='both', expand=True, padx=(0, 6))
+        final_frame.pack(side='left', fill='both', expand=True, padx=(6, 0))
+        tk.Label(pre_frame, text='Pozice').grid(row=0, column=0, padx=6, pady=4)
+        tk.Label(pre_frame, text='Pořadí').grid(row=0, column=1, padx=6, pady=4)
+        tk.Label(final_frame, text='Pozice').grid(row=0, column=0, padx=6, pady=4)
+        tk.Label(final_frame, text='Zdroj týmu').grid(row=0, column=1, padx=6, pady=4)
+        rule_choices = (
+            [f'Pořadí {rank}' for rank in range(1, 65)]
+            + [f'Vítěz předkola {match}' for match in range(1, 9)]
+        )
+        for index, (pre_var, round_var) in enumerate(zip(pre_vars, round_vars), start=1):
+            tk.Label(pre_frame, text=str(index)).grid(row=index, column=0, padx=6, pady=1)
+            tk.Spinbox(pre_frame, from_=1, to=64, width=8, textvariable=pre_var).grid(
+                row=index, column=1, padx=6, pady=1
+            )
+            tk.Label(final_frame, text=str(index)).grid(row=index, column=0, padx=6, pady=1)
+            ttk.Combobox(
+                final_frame, textvariable=round_var, values=rule_choices, width=24, state='readonly'
+            ).grid(row=index, column=1, padx=6, pady=1, sticky='ew')
+
+        def restore_defaults():
+            defaults = robo_import_default_rules()
+            for variable, rank in zip(pre_vars, defaults['pre_round']):
+                variable.set(str(rank))
+            for variable, rule in zip(round_vars, defaults['round_1']):
+                variable.set(robo_import_rule_label(rule))
+
+        def parse_round_rule(value):
+            value = value.strip()
+            if value.startswith('Pořadí '):
+                return {'source': 'rank', 'rank': int(value.removeprefix('Pořadí ').strip())}
+            if value.startswith('Vítěz předkola '):
+                return {'source': 'pre_winner', 'match': int(value.removeprefix('Vítěz předkola ').strip())}
+            raise ValueError('Vyberte platný zdroj každého slotu osmifinále.')
+
+        def save():
+            try:
+                new_rules = validate_robo_import_rules({
+                    'pre_round': [int(variable.get()) for variable in pre_vars],
+                    'round_1': [parse_round_rule(variable.get()) for variable in round_vars],
+                })
+                endpoint = endpoint_var.get().strip()
+                if not endpoint.startswith('https://'):
+                    raise ValueError('Adresa ROBO API musí začínat https://.')
+            except ValueError as error:
+                messagebox.showerror('Nastavení importu ROBO', str(error), parent=dlg)
+                return
+            self.robo_import_endpoint = endpoint
+            self.robo_import_api_key = api_key_var.get().strip()
+            self.robo_import_rules = new_rules
+            self.persist_user_settings(
+                robo_import_endpoint=self.robo_import_endpoint,
+                robo_import_api_key=self.robo_import_api_key,
+                robo_import_rules=self.robo_import_rules,
+            )
+            dlg.destroy()
+
+        buttons = tk.Frame(dlg)
+        buttons.pack(fill='x', padx=14, pady=(2, 14))
+        tk.Button(buttons, text='Obnovit výchozí klíč', command=restore_defaults).pack(side='left')
+        tk.Button(buttons, text='Uložit', command=save).pack(side='right', padx=(6, 0))
+        tk.Button(buttons, text='Storno', command=dlg.destroy).pack(side='right')
+        dlg.bind('<Escape>', lambda _event: dlg.destroy())
+        self.root.wait_window(dlg)
+
+    def _robo_import_structure_error(self):
+        if not self.bracket:
+            return 'Nejprve vytvořte pavouka pro 16 týmů.'
+        if not self.pre_round_enabled or len(self.bracket.pre_rounds) != 1 or len(self.bracket.pre_rounds[0]) != 8:
+            return 'Import vyžaduje zapnuté předkolo s osmi zápasy.'
+        if not self.bracket.rounds or len(self.bracket.rounds[0]) != 8:
+            return 'Import vyžaduje osmifinále s osmi zápasy (pavouk pro 16 týmů).'
+        return ''
+
+    def open_robo_import_preview(self):
+        if not self.pre_round_enabled:
+            messagebox.showwarning(
+                'Import online z ROBO',
+                'Pro import z ROBO nejprve zapněte Nastavení → Používat předkolo.',
+            )
+            return
+        if self.view_mode != 'playoff':
+            messagebox.showwarning('Import online z ROBO', 'Přepněte program do režimu PLAYOFF.')
+            return
+        try:
+            payload = download_robo_import(self.robo_import_endpoint, self.robo_import_api_key)
+            plan = robo_import_plan(payload, self.robo_import_rules)
+        except ValueError as error:
+            messagebox.showerror('Import online z ROBO', str(error))
+            return
+
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title('Náhled importu z ROBO')
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.geometry('720x610')
+        competition = plan['competition'] if isinstance(plan['competition'], dict) else {}
+        tk.Label(
+            dlg,
+            text=f"ROBO {competition.get('year', '—')} · data vytvořena: {format_robo_generated_at(plan['generated_at'])}",
+            font=('Arial', 10, 'bold'),
+        ).pack(anchor='w', padx=14, pady=(14, 4))
+        tk.Label(
+            dlg,
+            text='Po potvrzení se přepíší všechna pole předkola a osmifinále; osm navázaných polí osmifinále zůstane prázdných.',
+            wraplength=680, justify='left',
+        ).pack(anchor='w', padx=14, pady=(0, 8))
+        tables = tk.Frame(dlg)
+        tables.pack(fill='both', expand=True, padx=14, pady=4)
+        for title, values in (('Předkolo', plan['pre_round']), ('Osmifinále', plan['round_1'])):
+            frame = tk.LabelFrame(tables, text=title)
+            frame.pack(side='left', fill='both', expand=True, padx=5)
+            for index, value in enumerate(values, start=1):
+                if title == 'Předkolo':
+                    label = f"Pořadí {plan['rules']['pre_round'][index - 1]} → tým {value}"
+                else:
+                    rule_label = robo_import_rule_label(plan['rules']['round_1'][index - 1])
+                    label = f"{rule_label} → tým {value}" if value else f"{rule_label} → prázdné"
+                tk.Label(frame, text=f'{index:>2}. {label}', anchor='w').pack(fill='x', padx=10, pady=1)
+
+        structure_error = self._robo_import_structure_error()
+        if structure_error:
+            tk.Label(dlg, text=structure_error, fg='#b00020', wraplength=680, justify='left').pack(
+                anchor='w', padx=14, pady=8
+            )
+
+        def confirm():
+            try:
+                self.apply_robo_import_plan(plan)
+            except ValueError as error:
+                messagebox.showerror('Import online z ROBO', str(error), parent=dlg)
+                return
+            dlg.destroy()
+            messagebox.showinfo('Import online z ROBO', 'Předkolo a osmifinále byly vyplněny.')
+
+        buttons = tk.Frame(dlg)
+        buttons.pack(fill='x', padx=14, pady=14)
+        tk.Button(buttons, text='Zavřít', command=dlg.destroy).pack(side='right')
+        tk.Button(buttons, text='Potvrdit a vyplnit pavouka', command=confirm, state='disabled' if structure_error else 'normal').pack(side='right', padx=(0, 6))
+        dlg.bind('<Escape>', lambda _event: dlg.destroy())
+        self.root.wait_window(dlg)
+
+    def apply_robo_import_plan(self, plan):
+        if not self.pre_round_enabled:
+            raise ValueError('Import z ROBO nelze provést při vypnutém předkole.')
+        structure_error = self._robo_import_structure_error()
+        if structure_error:
+            raise ValueError(structure_error)
+        for index, match in enumerate(self.bracket.pre_rounds[0]):
+            match.a.text = plan['pre_round'][index * 2]
+            match.b.text = plan['pre_round'][index * 2 + 1]
+        for match, left, right in zip(self.bracket.rounds[0], plan['round_1'][::2], plan['round_1'][1::2]):
+            match.a.text = left
+            match.b.text = right
+        self.robo_import_links = {int(source): dict(target) for source, target in plan['links'].items()}
+        self.redraw()
+
+    def promote_pre_round(self, match_index, side):
+        if not self.bracket or match_index not in self.robo_import_links:
+            messagebox.showwarning('Předkolo', 'Tento zápas předkola nemá nastavený cíl v osmifinále.')
+            return
+        match = self.bracket.pre_rounds[0][match_index]
+        winner = match.a.text.strip() if side == 'a' else match.b.text.strip()
+        if not winner:
+            messagebox.showwarning('Předkolo', 'Pole je prázdné — nejdřív vyplňte tým.')
+            return
+        target_info = self.robo_import_links[match_index]
+        target_match = self.bracket.rounds[0][target_info['match']]
+        target = target_match.a if target_info['side'] == 'a' else target_match.b
+        if target.text and target.text != winner:
+            if not messagebox.askyesno('Přepsat?', 'V cílovém poli osmifinále už je jiný tým. Přepsat?'):
+                return
+        target.text = winner
         self.redraw()
 
     def check_for_update(self):
@@ -2636,6 +3097,10 @@ class PlayoffApp:
             'timer_value': self.timer_value, 
             'timer_start_mode': self.timer_start_mode,
             'pre_round_enabled': self.pre_round_enabled,                       
+            'robo_import_endpoint': self.robo_import_endpoint,
+            'robo_import_api_key': self.robo_import_api_key,
+            'robo_import_rules': self.robo_import_rules,
+            'robo_import_links': self.robo_import_links,
             # USB fields
             'usb_port': self.usb_port,
             'usb_baud': self.usb_baud,
@@ -2709,7 +3174,7 @@ class PlayoffApp:
         self.odd_behavior = data.get('odd_behavior', 'manual')
         self.font_scale = data.get('font_scale', 'medium')
         self.canvas_bg = data.get('canvas_bg', CANVAS_BG_DEFAULT)
-        self.line_width = data.get('line_width', 2)
+        self.line_width = data.get('line_width', DEFAULT_LINE_WIDTH)
         self.line_width_var.set(self.line_width)
         self.bg_path = data.get('bg_path')
         self.lock_edit = data.get('lock_edit', False)
@@ -2727,6 +3192,14 @@ class PlayoffApp:
         self.team_table_headers = normalize_team_table_headers(data.get('team_table_headers'))
         self.pre_round_enabled = data.get('pre_round_enabled', True)
         self.pre_round_var.set(self.pre_round_enabled)
+        self.robo_import_endpoint = str(
+            data.get('robo_import_endpoint', self.robo_import_endpoint) or ROBO_IMPORT_DEFAULT_ENDPOINT
+        ).strip()
+        self.robo_import_api_key = str(data.get('robo_import_api_key', self.robo_import_api_key) or '')
+        self.robo_import_rules = normalize_robo_import_rules(
+            data.get('robo_import_rules', self.robo_import_rules)
+        )
+        self.robo_import_links = normalize_robo_import_links(data.get('robo_import_links', {}))
         self.third_place_enabled = data.get('third_place_enabled', False)
         self.third_place_var.set(self.third_place_enabled)
         self.third_place = data.get('third_place', {"a": "", "b": "", "winner": ""})
@@ -2767,6 +3240,7 @@ class PlayoffApp:
         self.update_view_mode_gui()
         self.update_view_mode_buttons()
         self.update_promo_button_state()
+        self.update_robo_import_menu_state()
         # apply UI lap timer state
         self.apply_lap_timer_visibility()
         self.generate_bracket_with_empty(n)
@@ -3905,6 +4379,14 @@ class PlayoffApp:
             "- Smazat obsah: Vymaže pouze názvy týmů\n"
             "- Vymazat vše: Odstraní pavouka i pozadí\n\n"
 
+            "=== IMPORT ONLINE Z ROBO ===\n"
+            "Nastavení → Import online z ROBO\n"
+            "- Nastavení importu ukládá HTTPS adresu, API klíč a klíč šestnácti slotů předkola i osmifinále\n"
+            "- Náhled stáhne aktuální JSON ROBO, zobrazí místní datum a čas vytvoření dat a před potvrzením nic nezmění\n"
+            "- Import je dostupný jen při zapnutém předkole a pavouku pro 16 týmů\n"
+            "- Předkolo se vyplní celé; v osmifinále zůstávají místa vítězů předkola prázdná\n"
+            "- Pravé tlačítko na vítězi předkola jej přenese podle modré spojnice do určeného slotu osmifinále\n\n"
+
             "=== KOLO A TITULKY ===\n"
             "- Kliknutím na nadpis kola lze změnit jeho název\n"
             "- Poslední sloupec je vždy VÍTĚZ\n\n"
@@ -4299,6 +4781,32 @@ class PlayoffApp:
             start_y = max(margin_y + title_font_size + 10,
                           (height - total_col_h) // 2)
 
+            # Imported ROBO keys connect each pre-round match to its exact empty
+            # slot in round one. Draw these links before boxes, so the line stays
+            # visually behind both interactive columns.
+            if self.bracket.rounds and self.robo_import_links:
+                first_round = self.bracket.rounds[0]
+                first_round_h = len(first_round) * (box_h * 2 + 8) + (len(first_round) - 1) * v_gap
+                first_round_y = max(margin_y + title_font_size + 10, (height - first_round_h) // 2)
+                first_round_x = col_x_positions[1]
+                for source_index, target_info in self.robo_import_links.items():
+                    if not (0 <= source_index < matches_count and 0 <= target_info['match'] < len(first_round)):
+                        continue
+                    source_y = start_y + source_index * ((box_h * 2 + 8) + v_gap) + box_h + 4
+                    target_top = first_round_y + target_info['match'] * ((box_h * 2 + 8) + v_gap)
+                    target_y = target_top + (box_h / 2 if target_info['side'] == 'a' else box_h + 8 + box_h / 2)
+                    self.canvas.create_line(
+                        col_x + box_w,
+                        source_y,
+                        first_round_x,
+                        target_y,
+                        width=self.line_width,
+                        fill=LINE_COLOR,
+                        smooth=True,
+                        dash=(6, 3),
+                        tags='robo_import_link',
+                    )
+
             for m_idx, match in enumerate(pre_matches):
 
                 top_y = start_y + m_idx * ((box_h * 2 + 8) + v_gap)
@@ -4354,7 +4862,11 @@ class PlayoffApp:
                     self.canvas.tag_bind(hit_a, '<Button-1>',
                                          lambda e, mm=m_idx: self.edit_pre_slot(mm, 'a'))
                     self.canvas.tag_bind(hit_b, '<Button-1>',
-                                         lambda e, mm=m_idx: self.edit_pre_slot(mm, 'b'))                
+                                         lambda e, mm=m_idx: self.edit_pre_slot(mm, 'b'))
+                    self.canvas.tag_bind(hit_a, '<Button-3>',
+                                         lambda e, mm=m_idx: self.promote_pre_round(mm, 'a'))
+                    self.canvas.tag_bind(hit_b, '<Button-3>',
+                                         lambda e, mm=m_idx: self.promote_pre_round(mm, 'b'))
 
         offset = 1 if (self.pre_round_enabled and self.bracket.pre_rounds) else 0
         for r_idx, matches in enumerate(rounds):
@@ -5591,6 +6103,34 @@ class PlayoffApp:
                 rects.append((b_x1, b_y1, b_x2, b_y2,
                               self.line_width, fill_b, outline_b,
                               match.b.text, cell_font_size, False))
+
+                # ROBO imports have an explicit mapping from each pre-round
+                # match to one empty slot in round one. It must stay visible in
+                # the PDF just like it is on the interactive bracket canvas.
+                if r_idx == 0 and offset == 1 and m_idx in self.robo_import_links:
+                    target_info = self.robo_import_links[m_idx]
+                    first_round = rounds[1]
+                    target_match_index = target_info['match']
+                    if 0 <= target_match_index < len(first_round):
+                        first_matches = len(first_round)
+                        first_total_h = first_matches * (box_h * 2 + 8) + (first_matches - 1) * v_gap
+                        first_start_y = max(
+                            margin_y + title_font_size + 10,
+                            (canvas_h - first_total_h) // 2,
+                        )
+                        target_top_y = first_start_y + target_match_index * ((box_h * 2 + 8) + v_gap)
+                        target_y = target_top_y + (
+                            box_h / 2 if target_info['side'] == 'a'
+                            else box_h + 8 + box_h / 2
+                        )
+                        lines.append((
+                            a_x2,
+                            (a_y1 + b_y2) / 2,
+                            col_x_positions[1],
+                            target_y,
+                            self.line_width,
+                            LINE_COLOR,
+                        ))
 
                 # connection to the next round
                 if (r_idx + 1 < rounds_count) and (r_idx != final_real_round) and (r_idx >= offset):                   
