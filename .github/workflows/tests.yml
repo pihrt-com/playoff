@@ -21,7 +21,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pytest pillow reportlab openpyxl pyserial
+        run: python -m pip install --upgrade pytest pillow reportlab openpyxl pyserial pypdf
 
       - name: Run tests
         env:
