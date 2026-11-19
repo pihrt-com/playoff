@@ -130,7 +130,10 @@ class UpdaterWindowTests(unittest.TestCase):
         self.assertTrue(os.path.exists(icon_path))
 
     def test_window_contains_progress_status_log_and_recovery_buttons(self):
-        root = tk.Tk()
+        try:
+            root = tk.Tk()
+        except tk.TclError as error:
+            self.skipTest(f"Tkinter není v tomto prostředí dostupný: {error}")
         root.withdraw()
         try:
             args = SimpleNamespace(
