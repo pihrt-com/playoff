@@ -1,5 +1,12 @@
 # Historie změn
 
+## 1.0.23 – 19. 11. 2026
+
+- Nabídka Nastavení má malé ikony u počtu týmů, načtení a uložení souboru, zámku editace, PDF exportů, nápovědy a kontroly aktualizace.
+- Spojnice importu ROBO z předkola do osmifinále jsou v aplikaci plné stejně jako v PDF.
+- Po potvrzení USB nastavení se brána i samostatné LED displeje ihned znovu připojí; stav brány už nehlásí úspěch při neotevřeném portu.
+- Výchozí rychlost brány i obou LED displejů je 115200 Bd.
+
 ## 1.0.22 – 19. 11. 2026
 
 - Portable verze a instalátor nyní obsahují certifikáty pro HTTPS, takže funguje Kontrola aktualizace i stažení JSON z ROBO.

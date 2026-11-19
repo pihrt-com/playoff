@@ -177,7 +177,8 @@ class USBDisplayTests(unittest.TestCase):
         manager.port = "COM8"
         manager.handler.rx_running = True
         manager.disconnect = mock.Mock()
-        manager.connect = mock.Mock()
+        manager.connect = mock.Mock(return_value=True)
+        manager.handler.is_open = mock.Mock(return_value=True)
         manager.handler.start_reader = mock.Mock()
         callback = mock.Mock()
 
@@ -186,6 +187,19 @@ class USBDisplayTests(unittest.TestCase):
         manager.disconnect.assert_called_once_with()
         manager.connect.assert_called_once_with()
         manager.handler.start_reader.assert_called_once_with(callback)
+
+    def test_reconnect_reports_failed_gate_opening(self):
+        manager = make_manager()
+        manager.port = "COM8"
+        manager.disconnect = mock.Mock()
+        manager.connect = mock.Mock(return_value=False)
+        callback = mock.Mock()
+
+        self.assertFalse(manager.reconnect(callback))
+
+        manager.disconnect.assert_called_once_with()
+        manager.connect.assert_called_once_with()
+        self.assertFalse(manager.handler.rx_running)
 
     def test_dialog_test_uses_selected_display_port_without_gate(self):
         manager = make_manager()

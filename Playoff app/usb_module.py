@@ -344,6 +344,7 @@ class USBManager:
             self.baud,
             self.timeout
         )
+        return self.handler.is_open()
 
     def disconnect(self):
         self.handler.close()
@@ -362,10 +363,11 @@ class USBManager:
         self.disconnect()
         if not self.port:
             return False
-        self.connect()
+        if not self.connect():
+            return False
         if callback is not None:
             self.handler.start_reader(callback)
-        return True
+        return self.handler.is_open()
 
     def _connect_display(self, display_id, port_override=None, baud_override=None):
         if display_id not in (1, 2):

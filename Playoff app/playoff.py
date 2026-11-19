@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.22"                                         # current version of the application
+APP_current       = "1.0.23"                                         # current version of the application
 APP_date          = "19.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -1023,7 +1023,13 @@ class PlayoffApp:
 
 
         # teams
-        self.settings_menu.add_command(label='Počet týmů', command=self.ask_team_count)
+        self.menu_icons = self.build_settings_menu_icons()
+        self.settings_menu.add_command(
+            label='Počet týmů',
+            image=self.menu_icons['teams'],
+            compound='left',
+            command=self.ask_team_count,
+        )
         self.settings_menu.add_command(label='Generovat týmy', command=self.generate_from_entry)
         self.settings_menu.add_command(label='Pojmenování týmů', command=self.open_team_naming_dialog)
         self.settings_menu.add_command(label='Smazat jen obsah', command=self.reset_values)
@@ -1128,9 +1134,24 @@ class PlayoffApp:
         )
 
         self.settings_menu.add_separator()
-        self.settings_menu.add_checkbutton(label='Zamknout editaci týmů', command=self.toggle_lock_edit)
-        self.settings_menu.add_command(label='Načíst ze souboru', command=self.load_setup)
-        self.settings_menu.add_command(label='Uložit do souboru', command=self.save_setup)
+        self.settings_menu.add_checkbutton(
+            label='Zamknout editaci týmů',
+            image=self.menu_icons['lock'],
+            compound='left',
+            command=self.toggle_lock_edit,
+        )
+        self.settings_menu.add_command(
+            label='Načíst ze souboru',
+            image=self.menu_icons['open'],
+            compound='left',
+            command=self.load_setup,
+        )
+        self.settings_menu.add_command(
+            label='Uložit do souboru',
+            image=self.menu_icons['save'],
+            compound='left',
+            command=self.save_setup,
+        )
 
         # timer enable
         self.settings_menu.add_separator()        
@@ -1185,8 +1206,18 @@ class PlayoffApp:
         self.settings_menu.add_command(label='USB nastavení', command=self.open_usb_dialog)
 
         self.settings_menu.add_separator()
-        self.settings_menu.add_command(label='Export do PDF PLAYOFF', command=self.export_pdf)
-        self.settings_menu.add_command(label='Export do PDF LAPS', command=self.export_laps_pdf)
+        self.settings_menu.add_command(
+            label='Export do PDF PLAYOFF',
+            image=self.menu_icons['pdf'],
+            compound='left',
+            command=self.export_pdf,
+        )
+        self.settings_menu.add_command(
+            label='Export do PDF LAPS',
+            image=self.menu_icons['pdf'],
+            compound='left',
+            command=self.export_laps_pdf,
+        )
 
         # Fullscreen mode toggle
         self.fullscreen_var = tk.BooleanVar(value=self.projector_mode)
@@ -1196,9 +1227,19 @@ class PlayoffApp:
             command=self.toggle_projector
         )
 
-        self.settings_menu.add_command(label='Nápověda', command=self.show_help)
+        self.settings_menu.add_command(
+            label='Nápověda',
+            image=self.menu_icons['help'],
+            compound='left',
+            command=self.show_help,
+        )
         
-        self.settings_menu.add_command(label='Kontrola aktualizace', command=self.check_for_update)
+        self.settings_menu.add_command(
+            label='Kontrola aktualizace',
+            image=self.menu_icons['update'],
+            compound='left',
+            command=self.check_for_update,
+        )
 
         self.settings_btn.config(menu=self.settings_menu)
         self.settings_btn.pack(side='left')
@@ -1391,8 +1432,7 @@ class PlayoffApp:
                             )
 
                             # Apply the loaded port even when a prior initialization is active.
-                            self.usb.reconnect(self.on_usb_line)
-                            self.update_usb_status(True)
+                            self.update_usb_status(self.usb.reconnect(self.on_usb_line))
                             self._log(f"USB AUTO CONNECT: port {self.usb_port} speed {self.usb_baud}")
                         else:
                             self.usb.disconnect()
@@ -1438,6 +1478,75 @@ class PlayoffApp:
             window.iconbitmap(icon_path)
         except Exception:
             pass
+
+    def build_settings_menu_icons(self):
+        """Create small retained Tk images for the most frequently used settings actions."""
+        def image():
+            return tk.PhotoImage(width=16, height=16)
+
+        def rectangle(icon, x1, y1, x2, y2, color):
+            icon.put(color, to=(x1, y1, x2, y2))
+
+        def circle(icon, center_x, center_y, radius, color):
+            radius_squared = radius * radius
+            for y in range(max(0, center_y - radius), min(16, center_y + radius + 1)):
+                for x in range(max(0, center_x - radius), min(16, center_x + radius + 1)):
+                    if (x - center_x) ** 2 + (y - center_y) ** 2 <= radius_squared:
+                        icon.put(color, (x, y))
+
+        icons = {}
+
+        teams = image()
+        circle(teams, 8, 5, 3, '#1976d2')
+        circle(teams, 4, 11, 3, '#64b5f6')
+        circle(teams, 12, 11, 3, '#64b5f6')
+        icons['teams'] = teams
+
+        open_icon = image()
+        rectangle(open_icon, 1, 4, 15, 14, '#f6b73c')
+        rectangle(open_icon, 1, 2, 8, 6, '#f6b73c')
+        rectangle(open_icon, 2, 7, 14, 13, '#ffe08a')
+        icons['open'] = open_icon
+
+        save_icon = image()
+        rectangle(save_icon, 2, 1, 14, 15, '#1976d2')
+        rectangle(save_icon, 5, 2, 11, 6, '#e3f2fd')
+        rectangle(save_icon, 4, 9, 12, 14, '#ffffff')
+        rectangle(save_icon, 10, 2, 12, 7, '#0d47a1')
+        icons['save'] = save_icon
+
+        lock = image()
+        rectangle(lock, 3, 7, 13, 15, '#f9a825')
+        rectangle(lock, 4, 8, 12, 14, '#ffd54f')
+        for x in range(5, 11):
+            for y in range(1, 9):
+                if 10 <= (x - 8) ** 2 + (y - 7) ** 2 <= 20:
+                    lock.put('#455a64', (x, y))
+        rectangle(lock, 7, 10, 9, 13, '#5d4037')
+        icons['lock'] = lock
+
+        pdf = image()
+        rectangle(pdf, 3, 1, 13, 15, '#d32f2f')
+        rectangle(pdf, 4, 2, 11, 13, '#fbe9e7')
+        rectangle(pdf, 5, 5, 10, 7, '#d32f2f')
+        rectangle(pdf, 5, 9, 11, 10, '#ef5350')
+        rectangle(pdf, 5, 11, 9, 12, '#ef5350')
+        icons['pdf'] = pdf
+
+        help_icon = image()
+        circle(help_icon, 8, 8, 7, '#1976d2')
+        for x, y in ((6, 5), (7, 4), (8, 4), (9, 5), (9, 6), (8, 7), (7, 8), (7, 9), (7, 11)):
+            help_icon.put('#ffffff', (x, y))
+        icons['help'] = help_icon
+
+        update = image()
+        for x, y in ((5, 2), (6, 2), (7, 2), (8, 2), (9, 3), (10, 4), (11, 5), (11, 6), (10, 11), (9, 12), (8, 13), (7, 13), (6, 13), (5, 12), (4, 11), (3, 10), (3, 9), (12, 3), (12, 4), (12, 5), (2, 10), (3, 11), (4, 12)):
+            update.put('#388e3c', (x, y))
+        rectangle(update, 10, 2, 14, 6, '#388e3c')
+        rectangle(update, 2, 10, 6, 14, '#388e3c')
+        icons['update'] = update
+
+        return icons
 
     def _now(self):
         return time.strftime("%H:%M:%S")
@@ -4842,7 +4951,6 @@ class PlayoffApp:
                         width=self.line_width,
                         fill=LINE_COLOR,
                         smooth=True,
-                        dash=(6, 3),
                         tags='robo_import_link',
                     )
 

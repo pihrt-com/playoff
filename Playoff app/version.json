@@ -1,7 +1,7 @@
 {
-  "version": "1.0.22",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.22/PlayoffSetup_1.0.22.exe",
-  "sha256": "9a200264796a0268dacada7f1b5752337fa3d02d10e58cf928d43ff5e019d889",
-  "size": 52442597,
-  "notes": "Opraveno HTTPS spojení pro Kontrolu aktualizace i online import z ROBO."
+  "version": "1.0.23",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.23/PlayoffSetup_1.0.23.exe",
+  "sha256": "6219a09e9afdde933d23ece0fe51d078dff56e5411272664376cba71adc50fbb",
+  "size": 52440937,
+  "notes": "Nabídka Nastavení má malé ikony u často používaných akcí. Spojnice importu ROBO z předkola do osmifinále jsou plné a USB nastavení se použije ihned."
 }

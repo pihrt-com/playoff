@@ -168,6 +168,36 @@ class RoboImportMenuTests(unittest.TestCase):
             self.assertEqual(menu.entrycget(0, "state"), "normal")
             self.assertEqual(menu.entrycget(2, "state"), "disabled")
 
+    def test_frequent_settings_actions_have_retained_menu_icons(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(profile)
+            entries = {
+                app.settings_menu.entrycget(index, "label"): index
+                for index in range(app.settings_menu.index("end") + 1)
+                if app.settings_menu.type(index) != "separator"
+            }
+            labels = (
+                "Počet týmů",
+                "Zamknout editaci týmů",
+                "Načíst ze souboru",
+                "Uložit do souboru",
+                "Export do PDF PLAYOFF",
+                "Export do PDF LAPS",
+                "Nápověda",
+                "Kontrola aktualizace",
+            )
+            for label in labels:
+                self.assertIn(label, entries)
+                self.assertTrue(app.settings_menu.entrycget(entries[label], "image"))
+            self.assertEqual(len(app.menu_icons), 7)
+
+    def test_usb_defaults_use_115200_for_gate_and_displays(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(profile)
+            self.assertEqual(app.usb_baud, 115200)
+            self.assertEqual(app.display_baud_a, 115200)
+            self.assertEqual(app.display_baud_b, 115200)
+
     def test_imported_bracket_draws_eight_pre_round_links(self):
         with tempfile.TemporaryDirectory() as profile:
             app = self.make_real_app(profile)
@@ -175,7 +205,10 @@ class RoboImportMenuTests(unittest.TestCase):
             app.apply_robo_import_plan(
                 playoff.robo_import_plan(SAMPLE_PAYLOAD, playoff.robo_import_default_rules())
             )
-            self.assertEqual(len(app.canvas.find_withtag("robo_import_link")), 8)
+            link_ids = app.canvas.find_withtag("robo_import_link")
+            self.assertEqual(len(link_ids), 8)
+            for link_id in link_ids:
+                self.assertEqual(app.canvas.itemcget(link_id, "dash"), "")
 
     def test_pdf_export_contains_pre_round_and_robo_connections(self):
         with tempfile.TemporaryDirectory() as profile:
