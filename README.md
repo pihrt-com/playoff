@@ -9,31 +9,7 @@ Zde naleznete aplikaci pro MS Windows (instalace i portable verze), dokumentaci 
 
 V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadáváme číslo nebo název týmu, pravým tlačítkem postupujeme tým do dalšího kola. Výsledný pavouk lze uložit, načíst, exportovat do PDF a propojit se startovními semafory. Nebo se lze přepnout do řežimu měření časů jednotlivých kol. Pokud je kolo kratší než 10 vteřin je podbarvené pole červené. Nejkratší čas v kolech je podbarven zeleně.
 
-## Aktuální změny – 19. 11. 2026
-
-Verze 1.0.22 přidává do portable i instalační verze důvěryhodné certifikáty pro HTTPS. Proto nyní funguje kontrola aktualizace i načtení JSON z ROBO přímo v jednosouborové aplikaci.
-
-Nastavení obsahuje samostatný oddíl Import online z ROBO. Po zadání HTTPS adresy a API klíče lze nastavit klíč pro všech šestnáct pozic předkola a osmifinále, stáhnout jednorázový náhled pořadí a teprve potom zaplnit pavouka. Import vyžaduje zapnuté předkolo a pavouka pro 16 týmů; při vypnutém předkole zůstává nastavení dostupné, ale stahování je vypnuté.
-
-Import používá výsledky soutěžního systému [ROBO](https://github.com/pihrt-com/robo).
-
-Výchozí klíč vytvoří dvojice předkola 9/24 až 16/17. Do osmifinále vloží osm přímo nasazených týmů podle pořadí 1, 8, 5, 4, 3, 6, 7 a 2, zatímco osm navázaných polí ponechá prázdných. Pravým tlačítkem se vítěz předkola propíše do určeného slotu osmifinále; modré spojnice ukazují použité vazby v aplikaci i v exportu PDF. Čas vytvoření dat ROBO se zobrazuje v místním formátu data a času.
-
-Všechna nová okna importu používají ikonu Playoffu. Nově vytvořený pavouk používá ve výchozím stavu silné čáry.
-
-Režim LAPS zobrazuje mezi označením drah A/B a záhlavím výsledků školu a jméno soutěžícího pro právě vybranou dvojici. Údaje se načítají z Pojmenování týmů pouze při přesné shodě ID; pokud seznam nebo odpovídající ID neexistuje, informační řádky zůstanou prázdné.
-
-Sloupec Nejlepší čas jízdy se odvozuje od nejrychlejšího platného zeleného výsledku LAPS pro stejné ID. V aplikaci a v PDF se zobrazuje například `00:12:500 (12500)`, ale do Excelu se exportuje pouze hodnota `12500` v milisekundách; formátovaný text se do projektu ani do pojmenování týmů neukládá. Každá stránka PDF exportu LAPS uvádí pod nadpisem také odpovídající školu, soutěžícího a nejlepší platný čas.
-
-Tabulka účastníků vedle pavouka slučuje ID z předkola i Kola 1, pokud je předkolo zapnuté; stejný tým se zobrazí jen jednou. Obsahuje čtyři upravitelné sloupce pro ID, školu nebo adresu, jméno soutěžícího a nejlepší čas jízdy. Kliknutím lze změnit společný nadpis i každé záhlaví sloupce a nastavení se ukládá do souboru projektu.
-
-Dialog Pojmenování týmů podporuje import i export Excelu se čtyřmi sloupci a přijímá také starší nebo částečně vyplněné tabulky. Všechna dialogová okna Playoffu včetně nastavení odpočtu používají ikonu programu místo výchozí ikony Tkinteru. Škola a jméno soutěžícího se v tabulce vykreslují menším písmem, které se podle dostupné šířky ještě zmenší, aniž by se zvětšila výška řádku.
-
-Režim LAPS nově rozlišuje ID týmu a pořadí jízdy. Modrá tlačítka `Team`, `+` a `−` přepínají dvojice týmů, přičemž výrazný údaj vedle tlačítek stále ukazuje aktuální dvojici, například `1-2` nebo `3-4`. Každá dvojice si uchovává vlastní výsledky a po návratu je znovu zobrazí. Maximální sudý počet týmů, výchozí hodnotu 40 a úplné vymazání historie všech týmů obsahuje nové podmenu `LAPS`; celý stav se ukládá do projektu.
-
-Každý záznam dráhy A nebo B lze označit tlačítkem `ZNEPLATNIT`. Záznam zůstane zachovaný pod stejným ID týmu a číslem jízdy, graficky se přeškrtne a neúčastní se výběru zeleně zvýrazněného nejrychlejšího kola. Tlačítko `OBNOVIT` jej vrátí mezi platné záznamy. Nadpis `Platnost` používá stejný font a velikost jako ostatní záhlaví tabulky.
-
-Samostatné okno updateru používá stejnou ikonu Playoffu jako hlavní aplikace a její dialogy.
+Import pro předkolo používá výsledky soutěžního systému [ROBO](https://github.com/pihrt-com/robo).
 
 ## Aplikace
 
