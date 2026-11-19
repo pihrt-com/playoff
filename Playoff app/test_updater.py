@@ -19,10 +19,10 @@ class UpdateManifestTests(unittest.TestCase):
             (app_dir / "version.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(manifest["version"], "1.0.26")
+        self.assertEqual(manifest["version"], "1.0.27")
         self.assertEqual(playoff.APP_current, manifest["version"])
-        self.assertIn("/releases/download/1.0.26/", manifest["url"])
-        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.26.exe"))
+        self.assertIn("/releases/download/1.0.27/", manifest["url"])
+        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.27.exe"))
         self.assertEqual(len(manifest["sha256"]), 64)
         self.assertTrue(all(char in "0123456789abcdef" for char in manifest["sha256"]))
         self.assertGreater(manifest["size"], 0)
@@ -30,8 +30,17 @@ class UpdateManifestTests(unittest.TestCase):
         installer = (app_dir / "installer_playoff.iss").read_text(
             encoding="utf-8"
         )
-        self.assertIn("AppVersion=1.0.26", installer)
-        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.26", installer)
+        self.assertIn("AppVersion=1.0.27", installer)
+        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.27", installer)
+
+    def test_build_specs_keep_playoff_icon(self):
+        app_dir = Path(__file__).resolve().parent
+        portable_spec = (app_dir / "playoff.spec").read_text(encoding="utf-8")
+        updater_spec = (app_dir / "updater.spec").read_text(encoding="utf-8")
+
+        self.assertIn("icon='playoff.ico'", portable_spec)
+        self.assertIn("('playoff.ico', '.')", portable_spec)
+        self.assertIn("datas=[('playoff.ico', '.')]", updater_spec)
 
     def test_updater_command_contains_manifest_integrity_data(self):
         info = {

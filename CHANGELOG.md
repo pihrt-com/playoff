@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.27 – 19. 11. 2026
+
+- Při přepnutí do LAPS se týmové maticové panely ihned obnoví pro aktivní dvojici týmů.
+- Opraveno opakované rolování jména vedle statického názvu týmu a vykreslení diakritiky maticového firmware.
+
 ## 1.0.26 – 19. 11. 2026
 
 - Maticové panely nabízejí volbu statického týmu vlevo a rolování pouze jména soutěžícího vpravo.

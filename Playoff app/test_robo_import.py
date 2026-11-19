@@ -129,7 +129,10 @@ class RoboImportTests(unittest.TestCase):
 class RoboImportMenuTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.root = tk.Tk()
+        try:
+            cls.root = tk.Tk()
+        except tk.TclError as error:
+            raise unittest.SkipTest(f"Tkinter není v tomto prostředí dostupný: {error}")
         cls.root.withdraw()
 
     @classmethod
