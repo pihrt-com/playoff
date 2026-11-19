@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.25 – 19. 11. 2026
+
+- Opravena vodorovně zrcadlená písmena firmware maticového displeje MAX7219.
+- Rolování `SCR:` nyní přivádí text zprava doleva a zachovává počáteční mezery jako odsazení.
+
 ## 1.0.24 – 19. 11. 2026
 
 - Přidána podpora dvou nezávislých maticových panelů MAX7219 vedle stávajících sedmisegmentových displejů.

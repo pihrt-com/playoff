@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.24"                                         # current version of the application
+APP_current       = "1.0.25"                                         # current version of the application
 APP_date          = "19.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -983,6 +983,20 @@ class PlayoffApp:
             )
 
             self.disp2_status_label.pack(side="left", padx=(0, 10))
+
+            # --- MATRIX DISPLAY ID-3 STATUS ---
+            self.disp3_status_canvas = tk.Canvas(toolbar, width=12, height=12, highlightthickness=0, bd=0, bg=toolbar.cget("bg"))
+            self.disp3_status_id = self.disp3_status_canvas.create_oval(2, 2, 10, 10, fill="red", outline="red")
+            self.disp3_status_canvas.pack(side="left", padx=(5, 2))
+            self.disp3_status_label = tk.Label(toolbar, text="ID3", fg="#333333", font=("Arial", 8, "bold"))
+            self.disp3_status_label.pack(side="left", padx=(0, 10))
+
+            # --- MATRIX DISPLAY ID-4 STATUS ---
+            self.disp4_status_canvas = tk.Canvas(toolbar, width=12, height=12, highlightthickness=0, bd=0, bg=toolbar.cget("bg"))
+            self.disp4_status_id = self.disp4_status_canvas.create_oval(2, 2, 10, 10, fill="red", outline="red")
+            self.disp4_status_canvas.pack(side="left", padx=(5, 2))
+            self.disp4_status_label = tk.Label(toolbar, text="ID4", fg="#333333", font=("Arial", 8, "bold"))
+            self.disp4_status_label.pack(side="left", padx=(0, 10))
 
             # --------------------------------------------------
             # VIEW MODE
@@ -2345,33 +2359,29 @@ class PlayoffApp:
                 self.disp1_status_canvas.itemconfig(self.disp1_status_id, fill=color, outline=color)
             elif disp_id == 2:
                 self.disp2_status_canvas.itemconfig(self.disp2_status_id, fill=color, outline=color)
+            elif disp_id == 3:
+                self.disp3_status_canvas.itemconfig(self.disp3_status_id, fill=color, outline=color)
+            elif disp_id == 4:
+                self.disp4_status_canvas.itemconfig(self.disp4_status_id, fill=color, outline=color)
         except:
             pass            
 
     def auto_check_displays(self):
-        try:
-            ports = self.usb.list_ports() if self.usb else []
-            id1 = (
-                self.display_port_a
-                and self.display_port_a in ports
-                and self.usb.display_a
-                and self.usb.display_a.is_open
-            )
-        except:
-            id1 = False
-
-        try:
-            id2 = (
-                self.display_port_b
-                and self.display_port_b in ports
-                and self.usb.display_b
-                and self.usb.display_b.is_open
-            )
-        except:
-            id2 = False
-
-        self.update_display_status(1, id1)
-        self.update_display_status(2, id2)
+        ports = self.usb.list_ports() if self.usb else []
+        panels = (
+            (1, "display_port_a", "display_a"),
+            (2, "display_port_b", "display_b"),
+            (3, "matrix_port_a", "matrix_a"),
+            (4, "matrix_port_b", "matrix_b"),
+        )
+        for display_id, port_name, connection_name in panels:
+            try:
+                port = getattr(self, port_name, "")
+                connection = getattr(self.usb, connection_name, None) if self.usb else None
+                connected = bool(port and port in ports and connection and connection.is_open)
+            except Exception:
+                connected = False
+            self.update_display_status(display_id, connected)
 
     def auto_check_usb(self):
         """Automatic USB port check."""

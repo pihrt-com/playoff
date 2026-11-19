@@ -1,7 +1,7 @@
 {
-  "version": "1.0.24",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.24/PlayoffSetup_1.0.24.exe",
-  "sha256": "207883902386aea1bed12ff7cbb0590806284348205da5f2d3ed8668fce8f9cf",
-  "size": 52450247,
-  "notes": "Podpora dvou maticových panelů MAX7219, čtyř nezávislých panelů a volby jejich obsahu."
+  "version": "1.0.25",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.25/PlayoffSetup_1.0.25.exe",
+  "sha256": "cf109b7a6015a5ad8e5b377bcf089a42e284a03409100e36f6b633dbba62b25f",
+  "size": 52453558,
+  "notes": "Opravená orientace znaků a vstup rolování zprava u maticového panelu MAX7219."
 }
