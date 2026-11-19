@@ -1,7 +1,7 @@
 {
-  "version": "1.0.23",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.23/PlayoffSetup_1.0.23.exe",
-  "sha256": "6219a09e9afdde933d23ece0fe51d078dff56e5411272664376cba71adc50fbb",
-  "size": 52440937,
-  "notes": "Nabídka Nastavení má malé ikony u často používaných akcí. Spojnice importu ROBO z předkola do osmifinále jsou plné a USB nastavení se použije ihned."
+  "version": "1.0.24",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.24/PlayoffSetup_1.0.24.exe",
+  "sha256": "207883902386aea1bed12ff7cbb0590806284348205da5f2d3ed8668fce8f9cf",
+  "size": 52450247,
+  "notes": "Podpora dvou maticových panelů MAX7219, čtyř nezávislých panelů a volby jejich obsahu."
 }

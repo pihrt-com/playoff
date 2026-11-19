@@ -1,6 +1,6 @@
 # Historie změn
 
-## Připravované změny
+## 1.0.24 – 19. 11. 2026
 
 - Přidána podpora dvou nezávislých maticových panelů MAX7219 vedle stávajících sedmisegmentových displejů.
 - V USB nastavení lze pro každý ze čtyř panelů zvolit COM port, rychlost a obsah: odpočet, stopky A/B nebo tým A/B se jménem soutěžícího.
