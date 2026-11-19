@@ -3298,7 +3298,7 @@ class PlayoffApp:
         outer.pack(fill="both", expand=True, padx=12, pady=12)
         tk.Label(
             outer,
-            text="Každý panel má vlastní COM port. Maticové panely používají firmware MAX7219 a přijímají UTF-8 text.",
+            text="TEST ID použije ihned právě vybraný COM port a rychlost; Uložit je potřeba jen pro trvalé zapamatování nastavení.",
             justify="left",
             fg="#555555",
         ).pack(anchor="w", pady=(0, 8))

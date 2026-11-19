@@ -129,7 +129,9 @@ void render() {
   }
   for (byte row = 0; row < 8; row++) {
     digitalWrite(CS_PIN, LOW);
-    for (int module = MATRIX_MODULES - 1; module >= 0; module--) {
+    // Modules are physically chained left to right when viewed from the LEDs.
+    // Sending them in the same order prevents a horizontally mirrored message.
+    for (byte module = 0; module < MATRIX_MODULES; module++) {
       byte value = 0;
       for (byte col = 0; col < 8; col++) value |= ((columns[module * 8 + col] >> row) & 1) << col;
       SPI.transfer(row + 1); SPI.transfer(value);
