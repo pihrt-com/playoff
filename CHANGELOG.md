@@ -1,5 +1,9 @@
 # Historie změn
 
+## 1.0.26 – 19. 11. 2026
+
+- Maticové panely nabízejí volbu statického týmu vlevo a rolování pouze jména soutěžícího vpravo.
+
 ## 1.0.25 – 19. 11. 2026
 
 - Opravena vodorovně zrcadlená písmena firmware maticového displeje MAX7219.

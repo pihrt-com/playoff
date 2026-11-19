@@ -1,7 +1,7 @@
 {
-  "version": "1.0.25",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.25/PlayoffSetup_1.0.25.exe",
-  "sha256": "cf109b7a6015a5ad8e5b377bcf089a42e284a03409100e36f6b633dbba62b25f",
-  "size": 52453558,
+  "version": "1.0.26",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.26/PlayoffSetup_1.0.26.exe",
+  "sha256": "a461041def9bde881b32c0fc59d38ef77647e5e734676f2cbf0e12d3180e6e13",
+  "size": 52454079,
   "notes": "Opravená orientace znaků a vstup rolování zprava u maticového panelu MAX7219."
 }
