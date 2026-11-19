@@ -253,7 +253,7 @@ class PromoTests(unittest.TestCase):
 
         self.assertEqual(
             app.usb.latest_messages,
-            [(1, "CLS"), (2, "CLS")],
+            [(1, "CLS"), (2, "CLS"), (1, "TXT:00.000"), (2, "TXT:00.000")],
         )
         self.assertFalse(app.promo_active)
         self.assertTrue(app.timer_running)

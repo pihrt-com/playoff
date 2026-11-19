@@ -18,6 +18,7 @@ import urllib.parse
 import urllib.error
 import ssl
 import time
+import unicodedata
 from datetime import datetime
 import certifi
 
@@ -435,7 +436,18 @@ DEFAULT_USB_TIMEOUT        = 10.0
 
 DEFAULT_USB_DISPLAY_A_BAUD = 115200
 DEFAULT_USB_DISPLAY_B_BAUD = 115200
+DEFAULT_MATRIX_DISPLAY_A_BAUD = 115200
+DEFAULT_MATRIX_DISPLAY_B_BAUD = 115200
 USB_PORT_DISABLED_LABEL    = "Nepoužívat"
+
+PANEL_CONTENT_LABELS = {
+    "countdown": "Odpočet 00:00",
+    "lap_a": "Stopky A",
+    "lap_b": "Stopky B",
+    "team_a": "Tým A a soutěžící",
+    "team_b": "Tým B a soutěžící",
+}
+PANEL_CONTENT_KEYS = tuple(PANEL_CONTENT_LABELS)
 
 LED_REFRESH_OPTIONS        = tuple(round(value / 10, 1) for value in range(1, 11))
 DEFAULT_LED_REFRESH        = 0.1
@@ -554,6 +566,11 @@ def normalize_promo_mode(value):
     return DEFAULT_PROMO_MODE
 
 
+def normalize_panel_content(value, default="countdown"):
+    content = str(value or "").strip().lower()
+    return content if content in PANEL_CONTENT_KEYS else default
+
+
 def normalize_promo_scroll_ms(value):
     """Return a supported promo scroll interval in milliseconds."""
     try:
@@ -586,12 +603,14 @@ def usb_port_choice(port):
     return str(port or "").strip() or USB_PORT_DISABLED_LABEL
 
 
-def find_usb_port_conflict(gate_port, display_port_a, display_port_b):
+def find_usb_port_conflict(gate_port, display_port_a, display_port_b, matrix_port_a="", matrix_port_b=""):
     """Return the first duplicate active COM port assignment, if any."""
     assignments = (
         ("Měřící brána", normalize_usb_port_choice(gate_port)),
         ("LED displej ID-1", normalize_usb_port_choice(display_port_a)),
         ("LED displej ID-2", normalize_usb_port_choice(display_port_b)),
+        ("Maticový displej ID-3", normalize_usb_port_choice(matrix_port_a)),
+        ("Maticový displej ID-4", normalize_usb_port_choice(matrix_port_b)),
     )
     used = {}
     for device_name, port in assignments:
@@ -604,7 +623,7 @@ def find_usb_port_conflict(gate_port, display_port_a, display_port_b):
     return None
 
 
-def classify_usb_devices(port_details, gate_port="", display_port_a="", display_port_b=""):
+def classify_usb_devices(port_details, gate_port="", display_port_a="", display_port_b="", matrix_port_a="", matrix_port_b=""):
     """Classify visible serial ports without opening or resetting the devices."""
     details_by_port = {
         str(item.get("device") or "").strip(): item
@@ -615,12 +634,14 @@ def classify_usb_devices(port_details, gate_port="", display_port_a="", display_
         "gate": normalize_usb_port_choice(gate_port),
         "display_a": normalize_usb_port_choice(display_port_a),
         "display_b": normalize_usb_port_choice(display_port_b),
+        "matrix_a": normalize_usb_port_choice(matrix_port_a),
+        "matrix_b": normalize_usb_port_choice(matrix_port_b),
     }
     claimed = {port.casefold() for port in assignments.values() if port}
 
     detected_gates = []
     detected_displays = []
-    for key in ("display_a", "display_b"):
+    for key in ("display_a", "display_b", "matrix_a", "matrix_b"):
         port = assignments[key]
         if port and port in details_by_port and port not in detected_displays:
             detected_displays.append(port)
@@ -795,7 +816,7 @@ class PlayoffApp:
         self.live_led_refresh = DEFAULT_LED_REFRESH
         self.live_led_var = tk.BooleanVar(value=self.live_led_enabled)
         self.live_led_refresh_var = tk.StringVar(value=f"{self.live_led_refresh:.1f}")
-        self.live_led_next_send = {1: 0.0, 2: 0.0}
+        self.live_led_next_send = {display_id: 0.0 for display_id in range(1, 5)}
         self.promo_text = ""
         self.promo_mode = DEFAULT_PROMO_MODE
         self.promo_scroll_ms = DEFAULT_PROMO_SCROLL_MS
@@ -830,6 +851,14 @@ class PlayoffApp:
         self.display_port_b = ""
         self.display_baud_a = DEFAULT_USB_DISPLAY_A_BAUD
         self.display_baud_b = DEFAULT_USB_DISPLAY_B_BAUD
+        self.matrix_port_a = ""
+        self.matrix_port_b = ""
+        self.matrix_baud_a = DEFAULT_MATRIX_DISPLAY_A_BAUD
+        self.matrix_baud_b = DEFAULT_MATRIX_DISPLAY_B_BAUD
+        self.display_content_a = "lap_a"
+        self.display_content_b = "lap_b"
+        self.matrix_content_a = "countdown"
+        self.matrix_content_b = "team_a"
 
         # view mode
         self.view_mode = "playoff"
@@ -1363,6 +1392,14 @@ class PlayoffApp:
                 self.display_port_b = s.get('display_port_b', self.display_port_b)
                 self.display_baud_a = s.get('display_baud_a', self.display_baud_a)
                 self.display_baud_b = s.get('display_baud_b', self.display_baud_b)
+                self.matrix_port_a = s.get('matrix_port_a', self.matrix_port_a)
+                self.matrix_port_b = s.get('matrix_port_b', self.matrix_port_b)
+                self.matrix_baud_a = s.get('matrix_baud_a', self.matrix_baud_a)
+                self.matrix_baud_b = s.get('matrix_baud_b', self.matrix_baud_b)
+                self.display_content_a = normalize_panel_content(s.get('display_content_a'), 'lap_a')
+                self.display_content_b = normalize_panel_content(s.get('display_content_b'), 'lap_b')
+                self.matrix_content_a = normalize_panel_content(s.get('matrix_content_a'), 'countdown')
+                self.matrix_content_b = normalize_panel_content(s.get('matrix_content_b'), 'team_a')
                 self.enable_timer = bool(s.get('enable_timer', self.enable_timer))
                 self.timer_menu_var.set(self.enable_timer)
                 saved_timer_value = str(s.get('timer_value', self.timer_value))
@@ -2095,13 +2132,75 @@ class PlayoffApp:
             return sender(display_id, text)
         return self.usb.send_display(display_id, text)
 
+    def panel_settings(self, display_id):
+        settings = {
+            1: ("display_port_a", "display_content_a"),
+            2: ("display_port_b", "display_content_b"),
+            3: ("matrix_port_a", "matrix_content_a"),
+            4: ("matrix_port_b", "matrix_content_b"),
+        }
+        return settings.get(display_id)
+
+    def panel_content(self, display_id):
+        settings = self.panel_settings(display_id)
+        if settings is None:
+            return ""
+        _port_name, content_name = settings
+        default = "lap_a" if display_id == 1 else "lap_b" if display_id == 2 else "countdown"
+        return normalize_panel_content(getattr(self, content_name, default), default)
+
+    def panel_ids_for_content(self, content):
+        return [
+            display_id
+            for display_id in self.configured_display_ids()
+            if self.panel_content(display_id) == content
+        ]
+
+    def panel_team_text(self, lane):
+        team_id = int(getattr(self, "laps_active_team_a", 1)) + (1 if lane == "b" else 0)
+        record = self.team_record_by_id(team_id)
+        participant = str((record or {}).get("participant", "") or "").strip()
+        return f"Tým {team_id}: {participant}" if participant else f"Tým: {team_id}"
+
+    def panel_countdown_text(self):
+        if getattr(self, "laps_countdown_running", False):
+            return self.seconds_to_time(self.laps_countdown_seconds)
+        if getattr(self, "timer_running", False):
+            return self.seconds_to_time(self.current_seconds)
+        return str(getattr(self, "timer_value", "00:00"))
+
+    def panel_text(self, display_id):
+        content = self.panel_content(display_id)
+        if content == "lap_a":
+            text = self.format_display_time(getattr(self, "lap_time_a", 0))
+        elif content == "lap_b":
+            text = self.format_display_time(getattr(self, "lap_time_b", 0))
+        elif content == "team_a":
+            text = self.panel_team_text("a")
+        elif content == "team_b":
+            text = self.panel_team_text("b")
+        else:
+            text = self.panel_countdown_text()
+        if display_id in (1, 2):
+            text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+        return text
+
+    def refresh_panel_contents(self, *display_ids):
+        ids = display_ids or tuple(self.configured_display_ids())
+        for display_id in ids:
+            self.send_display_latest(display_id, f"TXT:{self.panel_text(display_id)}")
+
+    def refresh_panels_for_content(self, content):
+        self.refresh_panel_contents(*self.panel_ids_for_content(content))
+
     def reset_live_led_schedule(self, *display_ids):
         next_send = time.monotonic() + self.live_led_refresh
-        for display_id in display_ids or (1, 2):
+        for display_id in display_ids or tuple(self.configured_display_ids()):
             self.live_led_next_send[display_id] = next_send
 
-    def reset_led_times(self, *display_ids):
-        ids = display_ids or (1, 2)
+    def reset_led_times(self, *lanes):
+        contents = tuple("lap_a" if lane == 1 else "lap_b" for lane in (lanes or (1, 2)))
+        ids = [display_id for content in contents for display_id in self.panel_ids_for_content(content)]
         for display_id in ids:
             self.send_display_latest(display_id, "TXT:00.000")
         self.reset_live_led_schedule(*ids)
@@ -2112,18 +2211,16 @@ class PlayoffApp:
 
         current = time.monotonic() if now is None else now
         displays = (
-            (1, self.lap_running_a, self.lap_time_a),
-            (2, self.lap_running_b, self.lap_time_b),
+            ("lap_a", self.lap_running_a),
+            ("lap_b", self.lap_running_b),
         )
 
-        for display_id, running, elapsed_ms in displays:
-            if not running or current < self.live_led_next_send[display_id]:
-                continue
-            self.send_display_latest(
-                display_id,
-                f"TXT:{self.format_display_time(elapsed_ms)}"
-            )
-            self.live_led_next_send[display_id] = current + self.live_led_refresh
+        for content, running in displays:
+            for display_id in self.panel_ids_for_content(content):
+                if not running or current < self.live_led_next_send[display_id]:
+                    continue
+                self.send_display_latest(display_id, f"TXT:{self.panel_text(display_id)}")
+                self.live_led_next_send[display_id] = current + self.live_led_refresh
 
     # small helper to open the existing settings menu -> we will just show the menubar cascade
     def _open_menu_settings(self):
@@ -2316,11 +2413,11 @@ class PlayoffApp:
 
             elif line == "finish_a":
                 self.finish_a()
-                self.send_display_latest(1, f"TXT:{self.format_display_time(self.lap_time_a)}")
+                self.refresh_panels_for_content("lap_a")
 
             elif line == "finish_b":
                 self.finish_b()
-                self.send_display_latest(2, f"TXT:{self.format_display_time(self.lap_time_b)}")
+                self.refresh_panels_for_content("lap_b")
 
             elif line == "race_finished":
                 if self.view_mode == "playoff":
@@ -2378,7 +2475,7 @@ class PlayoffApp:
                     self.laps_a.insert(0, rec)
                     self.lap_id_a += 1
                     self.redraw()
-                    self.send_display_latest(1, f"TXT:{self.format_display_time(self.lap_time_a)}")
+                    self.refresh_panels_for_content("lap_a")
 
             elif line == "stop_b":
                 self._log("LAPS STOP B")
@@ -2398,7 +2495,7 @@ class PlayoffApp:
                     self.laps_b.insert(0, rec)
                     self.lap_id_b += 1
                     self.redraw() 
-                    self.send_display_latest(2, f"TXT:{self.format_display_time(self.lap_time_b)}")
+                    self.refresh_panels_for_content("lap_b")
 
         self.root.after(0, gui)        
 
@@ -3188,6 +3285,170 @@ class PlayoffApp:
         self.root.wait_window(dlg)
 
 
+    def open_usb_dialog(self):
+        """Configure the gate plus two seven-segment and two matrix panels."""
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title("USB spojení a panely")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.geometry("900x800")
+
+        outer = tk.Frame(dlg)
+        outer.pack(fill="both", expand=True, padx=12, pady=12)
+        tk.Label(
+            outer,
+            text="Každý panel má vlastní COM port. Maticové panely používají firmware MAX7219 a přijímají UTF-8 text.",
+            justify="left",
+            fg="#555555",
+        ).pack(anchor="w", pady=(0, 8))
+
+        ports = self.usb.list_ports() if self.usb else []
+        choices = [USB_PORT_DISABLED_LABEL, *ports]
+        gate_port_var = tk.StringVar(value=usb_port_choice(self.usb_port))
+        gate_baud_var = tk.StringVar(value=str(self.usb_baud))
+        timeout_var = tk.StringVar(value=str(self.usb_timeout))
+        panel_specs = (
+            (1, "Sedmisegmentový displej ID-1", "display_port_a", "display_baud_a", "display_content_a"),
+            (2, "Sedmisegmentový displej ID-2", "display_port_b", "display_baud_b", "display_content_b"),
+            (3, "Maticový displej ID-3", "matrix_port_a", "matrix_baud_a", "matrix_content_a"),
+            (4, "Maticový displej ID-4", "matrix_port_b", "matrix_baud_b", "matrix_content_b"),
+        )
+        port_vars = {}
+        baud_vars = {}
+        content_vars = {}
+        port_combos = []
+
+        gate_box = tk.LabelFrame(outer, text="Měřící brána", padx=8, pady=6)
+        gate_box.pack(fill="x", pady=(0, 6))
+        ttk.Combobox(gate_box, textvariable=gate_port_var, values=choices, state="readonly", width=18).grid(row=0, column=0, padx=4, pady=2, sticky="w")
+        tk.Label(gate_box, text="Baud:").grid(row=0, column=1, padx=(18, 2), sticky="e")
+        tk.Entry(gate_box, textvariable=gate_baud_var, width=9).grid(row=0, column=2, padx=4, sticky="w")
+        tk.Label(gate_box, text="Timeout (s):").grid(row=0, column=3, padx=(18, 2), sticky="e")
+        tk.Entry(gate_box, textvariable=timeout_var, width=7).grid(row=0, column=4, padx=4, sticky="w")
+
+        panels_box = tk.LabelFrame(outer, text="LED panely", padx=8, pady=6)
+        panels_box.pack(fill="x", pady=6)
+        tk.Label(panels_box, text="Panel", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", padx=4)
+        tk.Label(panels_box, text="COM port", font=("Arial", 9, "bold")).grid(row=0, column=1, sticky="w", padx=4)
+        tk.Label(panels_box, text="Baud", font=("Arial", 9, "bold")).grid(row=0, column=2, sticky="w", padx=4)
+        tk.Label(panels_box, text="Zobrazovat", font=("Arial", 9, "bold")).grid(row=0, column=3, sticky="w", padx=4)
+        for row, (display_id, title, port_name, baud_name, content_name) in enumerate(panel_specs, start=1):
+            port_vars[display_id] = tk.StringVar(value=usb_port_choice(getattr(self, port_name)))
+            baud_vars[display_id] = tk.StringVar(value=str(getattr(self, baud_name)))
+            content_vars[display_id] = tk.StringVar(value=PANEL_CONTENT_LABELS[self.panel_content(display_id)])
+            tk.Label(panels_box, text=title).grid(row=row, column=0, padx=4, pady=4, sticky="w")
+            combo = ttk.Combobox(panels_box, textvariable=port_vars[display_id], values=choices, state="readonly", width=18)
+            combo.grid(row=row, column=1, padx=4, pady=4, sticky="w")
+            port_combos.append(combo)
+            tk.Entry(panels_box, textvariable=baud_vars[display_id], width=9).grid(row=row, column=2, padx=4, pady=4, sticky="w")
+            ttk.Combobox(
+                panels_box,
+                textvariable=content_vars[display_id],
+                values=list(PANEL_CONTENT_LABELS.values()),
+                state="readonly",
+                width=28,
+            ).grid(row=row, column=3, padx=4, pady=4, sticky="w")
+
+        def selected_content(display_id):
+            label = content_vars[display_id].get()
+            for key, candidate in PANEL_CONTENT_LABELS.items():
+                if candidate == label:
+                    return key
+            return "countdown"
+
+        def selected_ports():
+            return (
+                normalize_usb_port_choice(gate_port_var.get()),
+                *(normalize_usb_port_choice(port_vars[display_id].get()) for display_id in range(1, 5)),
+            )
+
+        def validate_ports():
+            assigned = selected_ports()
+            conflict = find_usb_port_conflict(*assigned)
+            if conflict:
+                port, first, second = conflict
+                messagebox.showerror("Port je již použitý", f"Port {port} je zvolený pro zařízení „{first}“ i „{second}“.", parent=dlg)
+                return None
+            return assigned
+
+        def refresh_ports():
+            values = [USB_PORT_DISABLED_LABEL, *(self.usb.list_ports() if self.usb else [])]
+            for combo in port_combos:
+                combo["values"] = values
+
+        def test_panel(display_id):
+            assigned = validate_ports()
+            if assigned is None:
+                return
+            port = assigned[display_id]
+            if not port:
+                messagebox.showwarning("Panel není používán", f"Pro panel ID-{display_id} není zvolený COM port.", parent=dlg)
+                return
+            try:
+                baud = int(baud_vars[display_id].get())
+            except ValueError:
+                messagebox.showerror("Neplatná rychlost", f"Rychlost panelu ID-{display_id} musí být celé číslo.", parent=dlg)
+                return
+            if not self.usb or not self.usb.send_display_to_port(display_id, f"TXT:ID-{display_id}", port, baud):
+                detail = self.usb.display_error(display_id) if self.usb else "USB modul není dostupný."
+                messagebox.showerror("Panel se nepodařilo připojit", detail or f"Panel ID-{display_id} se nepodařilo otevřít.", parent=dlg)
+
+        test_box = tk.Frame(outer)
+        test_box.pack(fill="x", pady=8)
+        for display_id in range(1, 5):
+            tk.Button(test_box, text=f"TEST ID-{display_id}", command=lambda current=display_id: test_panel(current)).pack(side="left", padx=3)
+        tk.Button(test_box, text="Obnovit porty", command=refresh_ports).pack(side="right", padx=3)
+
+        def save_settings():
+            assigned = validate_ports()
+            if assigned is None:
+                return
+            try:
+                gate_baud = int(gate_baud_var.get())
+                panel_bauds = {display_id: int(baud_vars[display_id].get()) for display_id in range(1, 5)}
+                timeout = float(timeout_var.get())
+            except ValueError:
+                messagebox.showerror("Neplatné nastavení", "Rychlost musí být celé číslo a timeout číslo.", parent=dlg)
+                return
+            self.usb_port = assigned[0]
+            self.usb_baud = gate_baud
+            self.usb_timeout = timeout
+            for display_id, (_title, port_name, baud_name, content_name) in enumerate(
+                tuple(spec[1:] for spec in panel_specs), start=1
+            ):
+                setattr(self, port_name, assigned[display_id])
+                setattr(self, baud_name, panel_bauds[display_id])
+                setattr(self, content_name, selected_content(display_id))
+            self.persist_user_settings(
+                usb_port=self.usb_port, usb_baud=self.usb_baud, usb_timeout=self.usb_timeout,
+                display_port_a=self.display_port_a, display_port_b=self.display_port_b,
+                display_baud_a=self.display_baud_a, display_baud_b=self.display_baud_b,
+                matrix_port_a=self.matrix_port_a, matrix_port_b=self.matrix_port_b,
+                matrix_baud_a=self.matrix_baud_a, matrix_baud_b=self.matrix_baud_b,
+                display_content_a=self.display_content_a, display_content_b=self.display_content_b,
+                matrix_content_a=self.matrix_content_a, matrix_content_b=self.matrix_content_b,
+            )
+            if self.usb:
+                try:
+                    self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
+                    self.update_usb_status(self.usb.reconnect(self.on_usb_line))
+                    results = self.usb.connect_displays()
+                    failed = [str(display_id) for display_id in self.configured_display_ids() if not results[display_id]]
+                    self.refresh_panel_contents()
+                    if failed:
+                        messagebox.showwarning("USB", "Nastavení bylo uloženo, ale panel(y) ID-" + ", ".join(failed) + " se nepodařilo připojit.", parent=dlg)
+                except Exception as error:
+                    messagebox.showwarning("USB", f"Nastavení bylo uloženo, ale připojení selhalo:\n{error}", parent=dlg)
+            dlg.destroy()
+
+        buttons = tk.Frame(outer)
+        buttons.pack(pady=8)
+        tk.Button(buttons, text="Uložit", width=12, command=save_settings).pack(side="left", padx=5)
+        tk.Button(buttons, text="Zrušit", width=12, command=dlg.destroy).pack(side="left", padx=5)
+        dlg.bind("<Escape>", lambda _event: dlg.destroy())
+        self.root.wait_window(dlg)
+
     # --- bracket generation (exact number of teams) ---
     def generate_bracket_with_empty(self, n):
         # create list of n empty slots
@@ -3258,6 +3519,14 @@ class PlayoffApp:
             'display_port_b': self.display_port_b,
             'display_baud_a': self.display_baud_a,
             'display_baud_b': self.display_baud_b,
+            'matrix_port_a': self.matrix_port_a,
+            'matrix_port_b': self.matrix_port_b,
+            'matrix_baud_a': self.matrix_baud_a,
+            'matrix_baud_b': self.matrix_baud_b,
+            'display_content_a': self.display_content_a,
+            'display_content_b': self.display_content_b,
+            'matrix_content_a': self.matrix_content_a,
+            'matrix_content_b': self.matrix_content_b,
             # mode (playoff/laps)
             'view_mode': self.view_mode,
             # TEAMS names
@@ -3383,6 +3652,14 @@ class PlayoffApp:
         self.display_port_b = data.get('display_port_b', self.display_port_b)
         self.display_baud_a = data.get('display_baud_a', self.display_baud_a)
         self.display_baud_b = data.get('display_baud_b', self.display_baud_b)
+        self.matrix_port_a = data.get('matrix_port_a', self.matrix_port_a)
+        self.matrix_port_b = data.get('matrix_port_b', self.matrix_port_b)
+        self.matrix_baud_a = data.get('matrix_baud_a', self.matrix_baud_a)
+        self.matrix_baud_b = data.get('matrix_baud_b', self.matrix_baud_b)
+        self.display_content_a = normalize_panel_content(data.get('display_content_a'), 'lap_a')
+        self.display_content_b = normalize_panel_content(data.get('display_content_b'), 'lap_b')
+        self.matrix_content_a = normalize_panel_content(data.get('matrix_content_a'), 'countdown')
+        self.matrix_content_b = normalize_panel_content(data.get('matrix_content_b'), 'team_a')
         self.view_mode = data.get('view_mode', 'playoff')
         self.view_mode_var.set(self.view_mode)
         self.update_view_mode_gui()
@@ -3680,12 +3957,13 @@ class PlayoffApp:
         ))
 
     def configured_display_ids(self):
-        result = []
-        if str(getattr(self, "display_port_a", "") or "").strip():
-            result.append(1)
-        if str(getattr(self, "display_port_b", "") or "").strip():
-            result.append(2)
-        return result
+        configured = [
+            display_id
+            for display_id in range(1, 5)
+            if self.panel_settings(display_id)
+            and str(getattr(self, self.panel_settings(display_id)[0], "") or "").strip()
+        ]
+        return configured
 
     def update_promo_button_state(self):
         button = getattr(self, "promo_btn", None)
@@ -3962,6 +4240,7 @@ class PlayoffApp:
             text=self.seconds_to_time(self.laps_countdown_seconds),
             fg='white'
         )
+        self.refresh_panel_contents(*self.panel_ids_for_content("countdown"))
         if not cycle_restarted:
             self.update_laps_countdown_warning()
         self.laps_countdown_after_id = self.root.after(
@@ -4081,6 +4360,7 @@ class PlayoffApp:
         try:
             self.current_seconds = self.time_to_seconds(self.timer_value)
             self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
+            self.refresh_panel_contents(*self.panel_ids_for_content("countdown"))
             self.timer_running = True
             self.update_promo_button_state()
             # schedule tick
@@ -4109,6 +4389,7 @@ class PlayoffApp:
                 self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
             except Exception:
                 pass
+            self.refresh_panel_contents(*self.panel_ids_for_content("countdown"))
             self.countdown_after_id = self.root.after(1000, self.countdown_tick)
         except Exception:
             pass

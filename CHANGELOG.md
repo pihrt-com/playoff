@@ -1,5 +1,11 @@
 # Historie změn
 
+## Připravované změny
+
+- Přidána podpora dvou nezávislých maticových panelů MAX7219 vedle stávajících sedmisegmentových displejů.
+- V USB nastavení lze pro každý ze čtyř panelů zvolit COM port, rychlost a obsah: odpočet, stopky A/B nebo tým A/B se jménem soutěžícího.
+- Přidán firmware pro Arduino UNO/Nano s konfigurací 4, 8 nebo 12 matic 8×8, UTF-8 textem a evropskou diakritikou.
+
 ## 1.0.23 – 19. 11. 2026
 
 - Nabídka Nastavení má malé ikony u počtu týmů, načtení a uložení souboru, zámku editace, PDF exportů, nápovědy a kontroly aktualizace.

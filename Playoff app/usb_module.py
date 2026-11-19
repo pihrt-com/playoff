@@ -282,12 +282,14 @@ class USBManager:
         self.timeout = DEFAULT_SERIAL_TIMEOUT
         self.display_a = None
         self.display_b = None
+        self.matrix_a = None
+        self.matrix_b = None
         self.display_lock = threading.Lock()
         self.display_connect_lock = threading.Lock()
         self.display_pending_lock = threading.Lock()
-        self.display_pending = {1: None, 2: None}
-        self.display_workers = {1: None, 2: None}
-        self.display_errors = {1: "", 2: ""}
+        self.display_pending = {display_id: None for display_id in range(1, 5)}
+        self.display_workers = {display_id: None for display_id in range(1, 5)}
+        self.display_errors = {display_id: "" for display_id in range(1, 5)}
 
     def _log(self, msg: str):
         if self.verbose:
@@ -369,32 +371,33 @@ class USBManager:
             self.handler.start_reader(callback)
         return self.handler.is_open()
 
-    def _connect_display(self, display_id, port_override=None, baud_override=None):
-        if display_id not in (1, 2):
-            return False
+    def _display_settings(self, display_id, port_override=None, baud_override=None):
+        """Return the app settings and connection attribute for one of four panels."""
+        settings = {
+            1: ("display_port_a", "display_baud_a", "display_a"),
+            2: ("display_port_b", "display_baud_b", "display_b"),
+            3: ("matrix_port_a", "matrix_baud_a", "matrix_a"),
+            4: ("matrix_port_b", "matrix_baud_b", "matrix_b"),
+        }.get(display_id)
+        if settings is None:
+            return None
+        port_name, baud_name, connection_name = settings
+        port = str(
+            port_override if port_override is not None
+            else getattr(self.app, port_name, "") or ""
+        ).strip()
+        baud = (
+            baud_override if baud_override is not None
+            else getattr(self.app, baud_name, DEFAULT_SERIAL_BAUD)
+        )
+        return port, baud, connection_name
 
-        if display_id == 1:
-            port = str(
-                port_override if port_override is not None
-                else getattr(self.app, "display_port_a", "") or ""
-            ).strip()
-            baud = (
-                baud_override if baud_override is not None
-                else getattr(self.app, "display_baud_a", DEFAULT_SERIAL_BAUD)
-            )
-            current = self.display_a
-        elif display_id == 2:
-            port = str(
-                port_override if port_override is not None
-                else getattr(self.app, "display_port_b", "") or ""
-            ).strip()
-            baud = (
-                baud_override if baud_override is not None
-                else getattr(self.app, "display_baud_b", DEFAULT_SERIAL_BAUD)
-            )
-            current = self.display_b
-        else:
+    def _connect_display(self, display_id, port_override=None, baud_override=None):
+        settings = self._display_settings(display_id, port_override, baud_override)
+        if settings is None:
             return False
+        port, baud, connection_name = settings
+        current = getattr(self, connection_name)
 
         if not port:
             self.display_errors[display_id] = "Pro displej není zvolený COM port."
@@ -449,39 +452,32 @@ class USBManager:
                 pass
             return False
 
-        if display_id == 1:
-            self.display_a = display
-        else:
-            self.display_b = display
+        setattr(self, connection_name, display)
         self.display_errors[display_id] = ""
         return True
 
     def connect_displays(self):
         with self.display_connect_lock:
             return {
-                1: self._connect_display(1),
-                2: self._connect_display(2),
+                display_id: self._connect_display(display_id)
+                for display_id in range(1, 5)
             }
 
 
     def send_display(self, id, text):
         self._connect_display(id)
 
-        if id == 1:
-            ser = self.display_a
-        elif id == 2:
-            ser = self.display_b
-        else:
+        settings = self._display_settings(id)
+        if settings is None:
             return False
+        _port, _baud, connection_name = settings
+        ser = getattr(self, connection_name)
 
         if ser is None or not ser.is_open:
             self.disconnect_display(id)
             self._connect_display(id)
 
-            if id == 1:
-                ser = self.display_a
-            else:
-                ser = self.display_b
+            ser = getattr(self, connection_name)
 
         if ser is None:
             return False
@@ -512,12 +508,11 @@ class USBManager:
         if not self._connect_display(id, port_override=port, baud_override=baud):
             return False
 
-        if id == 1:
-            ser = self.display_a
-        elif id == 2:
-            ser = self.display_b
-        else:
+        settings = self._display_settings(id, port, baud)
+        if settings is None:
             return False
+        _selected_port, _selected_baud, connection_name = settings
+        ser = getattr(self, connection_name)
 
         try:
             msg = (str(text) + "\r\n").encode()
@@ -574,12 +569,11 @@ class USBManager:
             self.send_display(id, text)
 
     def disconnect_display(self, id):
-        if id == 1:
-            display = self.display_a
-        elif id == 2:
-            display = self.display_b
-        else:
+        settings = self._display_settings(id)
+        if settings is None:
             return
+        _port, _baud, connection_name = settings
+        display = getattr(self, connection_name)
 
         was_open = False
         try:
@@ -593,19 +587,16 @@ class USBManager:
             # Give Windows and common USB-serial drivers time to release the handle.
             time.sleep(0.2)
 
-        if id == 1:
-            self.display_a = None
-        else:
-            self.display_b = None
+        setattr(self, connection_name, None)
 
 
     def disconnect_displays(self):
         with self.display_pending_lock:
-            self.display_pending[1] = None
-            self.display_pending[2] = None
+            for display_id in self.display_pending:
+                self.display_pending[display_id] = None
 
-        self.disconnect_display(1)
-        self.disconnect_display(2)
+        for display_id in range(1, 5):
+            self.disconnect_display(display_id)
 
 
     def send_start_async(self, on_result):

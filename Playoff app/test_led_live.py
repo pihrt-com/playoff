@@ -51,6 +51,10 @@ def make_app():
     app.lap_running_b = True
     app.lap_time_a = 1234
     app.lap_time_b = 61234
+    app.display_port_a = "COM3"
+    app.display_port_b = "COM4"
+    app.display_content_a = "lap_a"
+    app.display_content_b = "lap_b"
     return app
 
 
@@ -138,6 +142,18 @@ class LiveLEDTests(unittest.TestCase):
         self.assertEqual(app.live_led_refresh, 0.8)
         self.assertEqual(app.live_led_refresh_var.get(), "0.8")
         self.assertEqual(saved["live_led_refresh"], 0.8)
+
+    def test_matrix_panel_can_show_utf8_team_and_participant(self):
+        app = make_app()
+        app.display_port_a = ""
+        app.display_port_b = ""
+        app.matrix_port_a = "COM7"
+        app.matrix_port_b = ""
+        app.matrix_content_a = "team_a"
+        app.laps_active_team_a = 1
+        app.team_names = [{"id": "1", "school": "", "participant": "Jiří Černý", "best_time": ""}]
+
+        self.assertEqual(app.panel_text(3), "Tým 1: Jiří Černý")
 
     def test_user_settings_preserve_existing_usb_values(self):
         app = make_app()

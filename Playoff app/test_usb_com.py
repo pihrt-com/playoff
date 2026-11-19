@@ -63,6 +63,10 @@ def make_manager():
         display_port_b="",
         display_baud_a=115200,
         display_baud_b=115200,
+        matrix_port_a="",
+        matrix_port_b="",
+        matrix_baud_a=115200,
+        matrix_baud_b=115200,
     )
     return USBManager(app=app, verbose=False)
 
@@ -135,7 +139,7 @@ class USBDisplayTests(unittest.TestCase):
 
     def test_invalid_display_id_is_rejected(self):
         manager = make_manager()
-        self.assertFalse(manager.send_display_latest(3, "TXT:00.000"))
+        self.assertFalse(manager.send_display_latest(5, "TXT:00.000"))
 
     def test_missing_second_display_does_not_disconnect_first_display(self):
         manager = make_manager()
@@ -171,6 +175,21 @@ class USBDisplayTests(unittest.TestCase):
         self.assertTrue(manager.display_b.is_open)
         self.assertFalse(created[0].dtr)
         self.assertFalse(created[0].rts)
+
+    def test_matrix_panel_connects_independently_from_seven_segment_panels(self):
+        manager = make_manager()
+        manager.app.matrix_port_a = "COM3"
+
+        with mock.patch.object(usb_module, "PY_SERIAL_AVAILABLE", True), \
+             mock.patch.object(usb_module, "serial", SimpleNamespace(Serial=OpeningSerial)), \
+             mock.patch.object(usb_module.time, "sleep"):
+            connected = manager.connect_displays()
+
+        self.assertTrue(connected[3])
+        self.assertFalse(connected[1])
+        self.assertFalse(connected[2])
+        self.assertFalse(connected[4])
+        self.assertTrue(manager.matrix_a.is_open)
 
     def test_reconnect_replaces_a_running_gate_reader(self):
         manager = make_manager()
