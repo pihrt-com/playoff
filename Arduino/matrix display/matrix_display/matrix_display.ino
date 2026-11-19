@@ -105,7 +105,9 @@ uint16_t messageWidth() {
 void render() {
   byte columns[MAX_COLUMNS];
   memset(columns, 0, sizeof(columns));
-  int cursor = -scrollOffset;
+  // Rolování vždy přivádí první znak zprava a posouvá jej doleva.
+  // Počáteční mezery příkazu SCR: tak zůstávají vědomým odsazením.
+  int cursor = forceScroll ? MAX_COLUMNS - scrollOffset : 0;
   const char *p = message;
   while (*p) {
     Glyph glyph = latinGlyph(utf8Char(p));
@@ -133,7 +135,9 @@ void render() {
     // Sending them in the same order prevents a horizontally mirrored message.
     for (byte module = 0; module < MATRIX_MODULES; module++) {
       byte value = 0;
-      for (byte col = 0; col < 8; col++) value |= ((columns[module * 8 + col] >> row) & 1) << col;
+      // This MAX7219 panel is wired with column 0 on the right when viewed
+      // from the LEDs. Keep module order, but reverse columns inside a module.
+      for (byte col = 0; col < 8; col++) value |= ((columns[module * 8 + col] >> row) & 1) << (7 - col);
       SPI.transfer(row + 1); SPI.transfer(value);
     }
     digitalWrite(CS_PIN, HIGH);
