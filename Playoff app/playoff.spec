@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
+import certifi
 
 # PyInstaller onefile extrahuje do MEIPASS
 project_dir = os.path.abspath(os.getcwd())
@@ -16,8 +17,9 @@ a = Analysis(
         ('settings.ico', '.'),    # IKONA nastavení
         ('usb_module.py', '.'),   # USB modul
         ('DejaVuSans.ttf', '.'),   # PDF font
+        (certifi.where(), 'certifi'),  # CA certifikáty pro HTTPS v one-file EXE
     ],
-    hiddenimports=['PIL', 'PIL.Image', 'serial'],
+    hiddenimports=['PIL', 'PIL.Image', 'serial', 'certifi'],
     hookspath=[],
     runtime_hooks=[],
     excludes=[],

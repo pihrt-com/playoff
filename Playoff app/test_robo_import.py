@@ -1,6 +1,7 @@
 import tempfile
 import tkinter as tk
 import unittest
+import os
 from unittest import mock
 
 from pypdf import PdfReader
@@ -30,6 +31,14 @@ def make_app():
 
 
 class RoboImportTests(unittest.TestCase):
+    def test_tls_configuration_uses_existing_ca_file(self):
+        with tempfile.NamedTemporaryFile() as certificate:
+            with mock.patch.dict(os.environ, {"SSL_CERT_FILE": "missing.pem"}):
+                selected = playoff.configure_tls_certificates(certificate.name)
+
+                self.assertEqual(selected, certificate.name)
+                self.assertEqual(os.environ["SSL_CERT_FILE"], certificate.name)
+
     def test_dialog_icon_is_applied_to_the_specific_window(self):
         class IconWindow:
             def __init__(self):

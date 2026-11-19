@@ -1,5 +1,9 @@
 # Historie změn
 
+## 1.0.22 – 19. 11. 2026
+
+- Portable verze a instalátor nyní obsahují certifikáty pro HTTPS, takže funguje Kontrola aktualizace i stažení JSON z ROBO.
+
 ## 1.0.21 – 18. 11. 2026
 
 - Opraveno přiřazení ikony programu všem hlavním i dialogovým oknům Playoffu.

@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.21"                                         # current version of the application
-APP_date          = "18.11.2026"                                     # current version date
+APP_current       = "1.0.22"                                         # current version of the application
+APP_date          = "19.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -16,8 +16,10 @@ import subprocess
 import urllib.request
 import urllib.parse
 import urllib.error
+import ssl
 import time
 from datetime import datetime
+import certifi
 
 try:
     from reportlab.pdfgen import canvas as rl_canvas
@@ -44,6 +46,42 @@ if getattr(sys, 'frozen', False):
     BASE_PATH = sys._MEIPASS
 else:
     BASE_PATH = os.path.abspath(os.path.dirname(__file__))
+
+
+def configure_tls_certificates(cert_path=None):
+    """Point frozen Python at a bundled CA file before its first HTTPS request."""
+    candidates = [cert_path] if cert_path else []
+    candidates.extend((
+        os.path.join(BASE_PATH, "certifi", "cacert.pem"),
+        os.path.join(BASE_PATH, "cacert.pem"),
+        certifi.where(),
+    ))
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            os.environ["SSL_CERT_FILE"] = candidate
+            return candidate
+    return ""
+
+
+configure_tls_certificates()
+
+
+class BundledSSLContext(ssl.SSLContext):
+    """SSLContext for one-file builds whose patched stdlib looks beside a zip file."""
+    def __new__(cls, protocol):
+        return ssl._SSLContext.__new__(cls, protocol)
+
+
+def tls_context():
+    certificate = configure_tls_certificates()
+    context = BundledSSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = True
+    context.verify_mode = ssl.CERT_REQUIRED
+    if certificate:
+        context.load_verify_locations(cafile=certificate)
+    else:
+        context.set_default_verify_paths()
+    return context
 
 
 def build_updater_command(updater_path, target_exe, update_info):
@@ -339,7 +377,11 @@ def download_robo_import(endpoint, api_key):
         headers={"Accept": "application/json", "User-Agent": "Playoff"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=ROBO_IMPORT_TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(
+            request,
+            timeout=ROBO_IMPORT_TIMEOUT_SECONDS,
+            context=tls_context(),
+        ) as response:
             data = response.read(ROBO_IMPORT_MAX_RESPONSE_BYTES + 1)
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         raise ValueError(f"JSON z ROBO se nepodařilo stáhnout: {error}") from None
@@ -1684,7 +1726,7 @@ class PlayoffApp:
 
     def check_for_update(self):
         try:
-            with urllib.request.urlopen(update_check_link, timeout=3) as r:
+            with urllib.request.urlopen(update_check_link, timeout=3, context=tls_context()) as r:
                 info = json.loads(r.read().decode('utf-8'))
         except:
             messagebox.showwarning("Aktualizace programu", "Nepodařilo se stáhnout data z Internetu.")

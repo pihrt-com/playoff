@@ -3,6 +3,7 @@ import hashlib
 import os
 import queue
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -11,10 +12,45 @@ import urllib.error
 import urllib.request
 import tkinter as tk
 from tkinter import messagebox, ttk
+import certifi
 
 
 CHUNK_SIZE = 256 * 1024
 DOWNLOAD_TIMEOUT = 30
+
+
+def configure_tls_certificates():
+    """Provide a CA bundle when this one-file updater runs from its temp folder."""
+    candidates = (
+        os.path.join(getattr(sys, "_MEIPASS", ""), "certifi", "cacert.pem"),
+        certifi.where(),
+    )
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            os.environ["SSL_CERT_FILE"] = candidate
+            return candidate
+    return ""
+
+
+configure_tls_certificates()
+
+
+class BundledSSLContext(ssl.SSLContext):
+    """SSLContext for one-file builds whose patched stdlib looks beside a zip file."""
+    def __new__(cls, protocol):
+        return ssl._SSLContext.__new__(cls, protocol)
+
+
+def tls_context():
+    certificate = configure_tls_certificates()
+    context = BundledSSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = True
+    context.verify_mode = ssl.CERT_REQUIRED
+    if certificate:
+        context.load_verify_locations(cafile=certificate)
+    else:
+        context.set_default_verify_paths()
+    return context
 
 
 def resource_path(filename):
@@ -94,6 +130,7 @@ def download_installer(
     timeout=DOWNLOAD_TIMEOUT,
     opener=None,
 ):
+    uses_default_opener = opener is None
     opener = opener or urllib.request.urlopen
     expected_sha256 = (expected_sha256 or "").strip().lower()
     expected_size = int(expected_size or 0)
@@ -112,7 +149,10 @@ def download_installer(
         digest = hashlib.sha256()
         received = 0
 
-        with opener(request, timeout=timeout) as response:
+        kwargs = {"timeout": timeout}
+        if uses_default_opener:
+            kwargs["context"] = tls_context()
+        with opener(request, **kwargs) as response:
             total = expected_size or _content_length(response)
             if progress_callback:
                 progress_callback(received, total)

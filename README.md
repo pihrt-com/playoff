@@ -9,9 +9,9 @@ Zde naleznete aplikaci pro MS Windows (instalace i portable verze), dokumentaci 
 
 V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadáváme číslo nebo název týmu, pravým tlačítkem postupujeme tým do dalšího kola. Výsledný pavouk lze uložit, načíst, exportovat do PDF a propojit se startovními semafory. Nebo se lze přepnout do řežimu měření časů jednotlivých kol. Pokud je kolo kratší než 10 vteřin je podbarvené pole červené. Nejkratší čas v kolech je podbarven zeleně.
 
-## Aktuální změny – 18. 11. 2026
+## Aktuální změny – 19. 11. 2026
 
-Verze 1.0.21 opravuje ikonu programu ve všech oknech Playoffu. Kontrola aktualizace z verze 1.0.20 nyní používá ověřený součet zveřejněného instalátoru.
+Verze 1.0.22 přidává do portable i instalační verze důvěryhodné certifikáty pro HTTPS. Proto nyní funguje kontrola aktualizace i načtení JSON z ROBO přímo v jednosouborové aplikaci.
 
 Nastavení obsahuje samostatný oddíl Import online z ROBO. Po zadání HTTPS adresy a API klíče lze nastavit klíč pro všech šestnáct pozic předkola a osmifinále, stáhnout jednorázový náhled pořadí a teprve potom zaplnit pavouka. Import vyžaduje zapnuté předkolo a pavouka pro 16 týmů; při vypnutém předkole zůstává nastavení dostupné, ale stahování je vypnuté.
 
