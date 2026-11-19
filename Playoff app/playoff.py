@@ -2202,7 +2202,9 @@ class PlayoffApp:
     def refresh_panel_contents(self, *display_ids):
         ids = display_ids or tuple(self.configured_display_ids())
         for display_id in ids:
-            self.send_display_latest(display_id, f"TXT:{self.panel_text(display_id)}")
+            content = self.panel_content(display_id)
+            command = "SCR" if display_id in (3, 4) and content in ("team_a", "team_b") else "TXT"
+            self.send_display_latest(display_id, f"{command}:{self.panel_text(display_id)}")
 
     def refresh_panels_for_content(self, content):
         self.refresh_panel_contents(*self.panel_ids_for_content(content))
@@ -5808,6 +5810,8 @@ class PlayoffApp:
         self.laps_b = state_b["records"]
         self.lap_id_a = max(1, int(state_a.get("next_ride", 1)))
         self.lap_id_b = max(1, int(state_b.get("next_ride", 1)))
+        self.refresh_panels_for_content("team_a")
+        self.refresh_panels_for_content("team_b")
         if redraw:
             self.redraw()
 
