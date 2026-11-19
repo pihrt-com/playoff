@@ -115,6 +115,7 @@ void render() {
   // Rolování vždy přivádí první znak zprava a posouvá jej doleva.
   // Počáteční mezery příkazu SCR: tak zůstávají vědomým odsazením.
   int cursor = forceScroll ? MAX_COLUMNS - scrollOffset : 0;
+  int scrollStart = 0;
   if (fixedPrefix[0]) {
     const char *prefix = fixedPrefix;
     int fixedCursor = 0;
@@ -126,6 +127,7 @@ void render() {
       fixedCursor += 6;
     }
     cursor = fixedCursor - scrollOffset;
+    scrollStart = fixedCursor;
   }
   const char *p = message;
   while (*p) {
@@ -135,7 +137,7 @@ void render() {
     if (base < 32 || base > 126) base = '?';
     for (byte col = 0; col < 5; col++) {
       int x = cursor + col;
-      if (x >= 0 && x < MAX_COLUMNS) columns[x] = pgm_read_byte(&font5x7[base - 32][col]);
+      if (x >= scrollStart && x < MAX_COLUMNS) columns[x] = pgm_read_byte(&font5x7[base - 32][col]);
     }
     if (glyph.accent != ACCENT_NONE) {
       int accentX = cursor + 2;
