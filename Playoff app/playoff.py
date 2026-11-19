@@ -446,6 +446,8 @@ PANEL_CONTENT_LABELS = {
     "lap_b": "Stopky B",
     "team_a": "Tým A a soutěžící",
     "team_b": "Tým B a soutěžící",
+    "team_a_fixed": "Tým A a soutěžící – statický tým",
+    "team_b_fixed": "Tým B a soutěžící – statický tým",
 }
 PANEL_CONTENT_KEYS = tuple(PANEL_CONTENT_LABELS)
 
@@ -2189,9 +2191,9 @@ class PlayoffApp:
             text = self.format_display_time(getattr(self, "lap_time_a", 0))
         elif content == "lap_b":
             text = self.format_display_time(getattr(self, "lap_time_b", 0))
-        elif content == "team_a":
+        elif content in ("team_a", "team_a_fixed"):
             text = self.panel_team_text("a")
-        elif content == "team_b":
+        elif content in ("team_b", "team_b_fixed"):
             text = self.panel_team_text("b")
         else:
             text = self.panel_countdown_text()
@@ -2203,8 +2205,15 @@ class PlayoffApp:
         ids = display_ids or tuple(self.configured_display_ids())
         for display_id in ids:
             content = self.panel_content(display_id)
-            command = "SCR" if display_id in (3, 4) and content in ("team_a", "team_b") else "TXT"
-            self.send_display_latest(display_id, f"{command}:{self.panel_text(display_id)}")
+            if display_id in (3, 4) and content in ("team_a_fixed", "team_b_fixed"):
+                lane = "a" if content == "team_a_fixed" else "b"
+                team_id = int(getattr(self, "laps_active_team_a", 1)) + (1 if lane == "b" else 0)
+                record = self.team_record_by_id(team_id)
+                participant = str((record or {}).get("participant", "") or "").strip()
+                self.send_display_latest(display_id, f"FIX:Tým {team_id}: |{participant}")
+            else:
+                command = "SCR" if display_id in (3, 4) and content in ("team_a", "team_b") else "TXT"
+                self.send_display_latest(display_id, f"{command}:{self.panel_text(display_id)}")
 
     def refresh_panels_for_content(self, content):
         self.refresh_panel_contents(*self.panel_ids_for_content(content))
@@ -5810,8 +5819,8 @@ class PlayoffApp:
         self.laps_b = state_b["records"]
         self.lap_id_a = max(1, int(state_a.get("next_ride", 1)))
         self.lap_id_b = max(1, int(state_b.get("next_ride", 1)))
-        self.refresh_panels_for_content("team_a")
-        self.refresh_panels_for_content("team_b")
+        for content in ("team_a", "team_b", "team_a_fixed", "team_b_fixed"):
+            self.refresh_panels_for_content(content)
         if redraw:
             self.redraw()
 

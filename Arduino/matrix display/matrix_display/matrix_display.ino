@@ -24,6 +24,7 @@ const byte MAX_COLUMNS = MATRIX_MODULES * 8;
 const byte MAX_TEXT_BYTES = 160;
 
 char message[MAX_TEXT_BYTES] = "";
+char fixedPrefix[40] = "";
 char rxBuffer[MAX_TEXT_BYTES] = "";
 byte rxLength = 0;
 uint16_t scrollPeriod = 65;
@@ -102,12 +103,30 @@ uint16_t messageWidth() {
   return width;
 }
 
+uint16_t textWidth(const char *text) {
+  uint16_t width = 0;
+  while (*text && width < 1000) { utf8Char(text); width += 6; }
+  return width;
+}
+
 void render() {
   byte columns[MAX_COLUMNS];
   memset(columns, 0, sizeof(columns));
   // Rolování vždy přivádí první znak zprava a posouvá jej doleva.
   // Počáteční mezery příkazu SCR: tak zůstávají vědomým odsazením.
   int cursor = forceScroll ? MAX_COLUMNS - scrollOffset : 0;
+  if (fixedPrefix[0]) {
+    const char *prefix = fixedPrefix;
+    int fixedCursor = 0;
+    while (*prefix) {
+      Glyph glyph = latinGlyph(utf8Char(prefix));
+      char base = glyph.base >= 'a' && glyph.base <= 'z' ? glyph.base - 32 : glyph.base;
+      if (base < 32 || base > 126) base = '?';
+      for (byte col = 0; col < 5; col++) if (fixedCursor + col < MAX_COLUMNS) columns[fixedCursor + col] = pgm_read_byte(&font5x7[base - 32][col]);
+      fixedCursor += 6;
+    }
+    cursor = fixedCursor - scrollOffset;
+  }
   const char *p = message;
   while (*p) {
     Glyph glyph = latinGlyph(utf8Char(p));
@@ -145,10 +164,24 @@ void render() {
 }
 
 void setMessage(const char *text, bool scrolling) {
+  fixedPrefix[0] = 0;
   strncpy(message, text, sizeof(message) - 1);
   message[sizeof(message) - 1] = 0;
   scrollOffset = 0;
   forceScroll = scrolling;
+  render();
+}
+
+void setFixedMessage(char *text) {
+  char *separator = strchr(text, '|');
+  if (!separator) { setMessage(text, true); return; }
+  *separator = 0;
+  strncpy(fixedPrefix, text, sizeof(fixedPrefix) - 1);
+  fixedPrefix[sizeof(fixedPrefix) - 1] = 0;
+  strncpy(message, separator + 1, sizeof(message) - 1);
+  message[sizeof(message) - 1] = 0;
+  scrollOffset = 0;
+  forceScroll = true;
   render();
 }
 
@@ -159,6 +192,7 @@ void processCommand(char *command) {
   if (!strcmp(command, "VER")) { Serial.println(F("MATRIX FW 1.0")); return; }
   if (!strncmp(command, "TXT:", 4)) { setMessage(command + 4, false); Serial.println(F("OK")); return; }
   if (!strncmp(command, "SCR:", 4)) { setMessage(command + 4, true); Serial.println(F("OK")); return; }
+  if (!strncmp(command, "FIX:", 4)) { setFixedMessage(command + 4); Serial.println(F("OK")); return; }
   if (!strncmp(command, "SPD:", 4)) { scrollPeriod = constrain(atoi(command + 4), 20, 2000); Serial.println(F("OK")); return; }
   if (!strncmp(command, "BRI:", 4)) { sendAll(0x0A, constrain(atoi(command + 4), 0, 15)); Serial.println(F("OK")); return; }
   Serial.println(F("ERR"));
