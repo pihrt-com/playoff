@@ -13,7 +13,7 @@
 #include <SPI.h>
 
 // Change only this value before upload. The same firmware supports 4, 8 and 12 modules.
-#define MATRIX_MODULES 8
+#define MATRIX_MODULES 12
 
 #if MATRIX_MODULES < 4 || MATRIX_MODULES > 12
 #error "MATRIX_MODULES must be between 4 and 12"
@@ -126,7 +126,9 @@ void render() {
       for (byte col = 0; col < 5; col++) if (fixedCursor + col < MAX_COLUMNS) columns[fixedCursor + col] = pgm_read_byte(&font5x7[base - 32][col]);
       fixedCursor += 6;
     }
-    cursor = fixedCursor - scrollOffset;
+    // The participant always enters from the invisible right edge, never next
+    // to or across the fixed team label.
+    cursor = MAX_COLUMNS - scrollOffset;
     scrollStart = fixedCursor;
   }
   const char *p = message;
@@ -142,9 +144,9 @@ void render() {
     if (glyph.accent != ACCENT_NONE) {
       int accentX = cursor + 2;
       if (accentX >= 0 && accentX < MAX_COLUMNS) {
-        if (glyph.accent == ACCENT_UMLAUT) columns[accentX - 1 >= 0 ? accentX - 1 : accentX] |= 0x80;
-        columns[accentX] |= glyph.accent == ACCENT_CARON ? 0x40 : 0x80;
-        if (glyph.accent == ACCENT_UMLAUT && accentX + 1 < MAX_COLUMNS) columns[accentX + 1] |= 0x80;
+        if (glyph.accent == ACCENT_UMLAUT) columns[accentX - 1 >= 0 ? accentX - 1 : accentX] |= 0x01;
+        columns[accentX] |= glyph.accent == ACCENT_CARON ? 0x03 : 0x01;
+        if (glyph.accent == ACCENT_UMLAUT && accentX + 1 < MAX_COLUMNS) columns[accentX + 1] |= 0x01;
       }
     }
     cursor += 6;

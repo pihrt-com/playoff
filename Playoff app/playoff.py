@@ -2281,6 +2281,9 @@ class PlayoffApp:
         self.race_active = False
         self.view_mode = new_mode
         self.update_view_mode_gui()
+        if self.view_mode == "laps":
+            for content in ("team_a", "team_b", "team_a_fixed", "team_b_fixed"):
+                self.refresh_panels_for_content(content)
         self._log(f"VIEW MODE = {self.view_mode}")
         self.redraw()
         try:
@@ -2315,6 +2318,9 @@ class PlayoffApp:
         self.view_mode_var.set(new_mode)
         self.update_view_mode_buttons()
         self.update_view_mode_gui()
+        if self.view_mode == "laps":
+            for content in ("team_a", "team_b", "team_a_fixed", "team_b_fixed"):
+                self.refresh_panels_for_content(content)
         self._log(f"VIEW MODE = {self.view_mode}")
         if new_mode == "laps":
             self.status_var.set("")
