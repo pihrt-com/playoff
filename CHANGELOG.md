@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.30 – 20. 11. 2026
+
+- Každý panel ID-1 až ID-4 má vlastní uloženou rychlost posunu v milisekundách.
+- PROMO používá vlastní rychlost a při skončení obnoví rychlost zvolenou pro jednotlivé LED a maticové panely.
+
 ## 1.0.29 – 20. 11. 2026
 
 - Odpočet obnovuje jen panely nastavené na odpočet v právě aktivním režimu; statický tým a rolované jméno v druhém režimu se už každou sekundu neresetují.

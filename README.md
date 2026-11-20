@@ -45,6 +45,8 @@ Nastavení se ukládá do uživatelského souboru `.playoff_settings.json` i do 
 
 V dialogu `Nastavení → USB spojení a panely` má každý panel vlastní volbu obsahu pro režim `PLAYOFF` i `LAPS`. Přepnutí režimu ihned odešle nově zvolený obsah na všechny připojené panely. U maticových panelů ID-3 a ID-4 lze navíc zvolit `Odpočet + stopky A` nebo `Odpočet + stopky B`; na dvanáctimodulovém panelu je odpočet vlevo a čas příslušné dráhy vpravo.
 
+Každý panel ID-1 až ID-4 má v témže dialogu samostatnou volbu `Posun (ms)` pro vlastní rolování a animace firmware. Rychlost propagačního textu se nastavuje nezávisle. Po skončení PROMO aplikace obnoví uloženou rychlost každého panelu, takže PROMO ani přepnutí režimu nezpomalí jméno soutěžícího na maticovém panelu.
+
 Firmware maticového panelu vyhrazuje horní řádek pro české háčky a čárky a znaky kreslí o řádek níže. Při volbě statického týmu se akcent rolovaného jména nepřekryje přes pevný název týmu vlevo.
 
 ## Propagační text na LED displejích

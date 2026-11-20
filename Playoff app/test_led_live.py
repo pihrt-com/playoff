@@ -155,6 +155,26 @@ class LiveLEDTests(unittest.TestCase):
 
         self.assertEqual(app.panel_text(3), "Tým 1: Jiří Černý")
 
+    def test_each_panel_has_an_independent_saved_scroll_speed(self):
+        app = make_app()
+        app.matrix_port_a = "COM7"
+        app.matrix_port_b = "COM8"
+        app.display_scroll_ms_a = 200
+        app.display_scroll_ms_b = 300
+        app.matrix_scroll_ms_a = 65
+        app.matrix_scroll_ms_b = 150
+
+        app.apply_panel_scroll_speeds()
+
+        self.assertEqual(
+            app.usb.messages,
+            [(1, "SPD:200"), (2, "SPD:300"), (3, "SPD:65"), (4, "SPD:150")],
+        )
+
+    def test_panel_scroll_speed_is_normalized_to_supported_values(self):
+        self.assertEqual(playoff.normalize_panel_scroll_ms("64", 250), 65)
+        self.assertEqual(playoff.normalize_panel_scroll_ms("invalid", 250), 250)
+
     def test_panel_content_can_differ_between_playoff_and_laps(self):
         app = make_app()
         app.matrix_port_a = "COM7"

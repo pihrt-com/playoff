@@ -1,7 +1,7 @@
 {
-  "version": "1.0.29",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.29/PlayoffSetup_1.0.29.exe",
-  "sha256": "58dcbc09ba27a1c7f8f205840aa710cab94eabb2889cace9308f9918322c212a",
-  "size": 52456052,
-  "notes": "Odpočet v jednom režimu už nerestartuje rolování jména na panelu nastaveném pro druhý režim."
+  "version": "1.0.30",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.30/PlayoffSetup_1.0.30.exe",
+  "sha256": "c4bd01a1f8d9a470166e9b6a2c86ca24dfef607647a3aef1c78a501bd4396685",
+  "size": 52455331,
+  "notes": "Každý LED a maticový panel má vlastní rychlost posunu nezávislou na rychlosti PROMO."
 }

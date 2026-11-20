@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.29"                                         # current version of the application
+APP_current       = "1.0.30"                                         # current version of the application
 APP_date          = "20.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -456,6 +456,9 @@ PANEL_COMBINED_CONTENTS = {
     "countdown_lap_a": ("countdown", "lap_a"),
     "countdown_lap_b": ("countdown", "lap_b"),
 }
+PANEL_SCROLL_MS_OPTIONS = (20, 50, 65, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000)
+DEFAULT_SEVEN_SEGMENT_SCROLL_MS = 250
+DEFAULT_MATRIX_SCROLL_MS = 65
 
 LED_REFRESH_OPTIONS        = tuple(round(value / 10, 1) for value in range(1, 11))
 DEFAULT_LED_REFRESH        = 0.1
@@ -577,6 +580,15 @@ def normalize_promo_mode(value):
 def normalize_panel_content(value, default="countdown"):
     content = str(value or "").strip().lower()
     return content if content in PANEL_CONTENT_KEYS else default
+
+
+def normalize_panel_scroll_ms(value, default):
+    """Return a panel scrolling period supported by both display firmwares."""
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return default
+    return min(PANEL_SCROLL_MS_OPTIONS, key=lambda option: abs(option - value))
 
 
 def load_panel_content_modes(data, name, default):
@@ -888,6 +900,10 @@ class PlayoffApp:
         self.matrix_content_a_laps = self.matrix_content_a
         self.matrix_content_b_playoff = self.matrix_content_b
         self.matrix_content_b_laps = self.matrix_content_b
+        self.display_scroll_ms_a = DEFAULT_SEVEN_SEGMENT_SCROLL_MS
+        self.display_scroll_ms_b = DEFAULT_SEVEN_SEGMENT_SCROLL_MS
+        self.matrix_scroll_ms_a = DEFAULT_MATRIX_SCROLL_MS
+        self.matrix_scroll_ms_b = DEFAULT_MATRIX_SCROLL_MS
 
         # view mode
         self.view_mode = "playoff"
@@ -1439,6 +1455,10 @@ class PlayoffApp:
                 self.matrix_port_b = s.get('matrix_port_b', self.matrix_port_b)
                 self.matrix_baud_a = s.get('matrix_baud_a', self.matrix_baud_a)
                 self.matrix_baud_b = s.get('matrix_baud_b', self.matrix_baud_b)
+                self.display_scroll_ms_a = normalize_panel_scroll_ms(s.get('display_scroll_ms_a'), DEFAULT_SEVEN_SEGMENT_SCROLL_MS)
+                self.display_scroll_ms_b = normalize_panel_scroll_ms(s.get('display_scroll_ms_b'), DEFAULT_SEVEN_SEGMENT_SCROLL_MS)
+                self.matrix_scroll_ms_a = normalize_panel_scroll_ms(s.get('matrix_scroll_ms_a'), DEFAULT_MATRIX_SCROLL_MS)
+                self.matrix_scroll_ms_b = normalize_panel_scroll_ms(s.get('matrix_scroll_ms_b'), DEFAULT_MATRIX_SCROLL_MS)
                 self.display_content_a = normalize_panel_content(s.get('display_content_a'), 'lap_a')
                 self.display_content_b = normalize_panel_content(s.get('display_content_b'), 'lap_b')
                 self.matrix_content_a = normalize_panel_content(s.get('matrix_content_a'), 'countdown')
@@ -2187,6 +2207,28 @@ class PlayoffApp:
             4: ("matrix_port_b", "matrix_content_b"),
         }
         return settings.get(display_id)
+
+    def panel_scroll_speed(self, display_id):
+        settings = {
+            1: ("display_scroll_ms_a", DEFAULT_SEVEN_SEGMENT_SCROLL_MS),
+            2: ("display_scroll_ms_b", DEFAULT_SEVEN_SEGMENT_SCROLL_MS),
+            3: ("matrix_scroll_ms_a", DEFAULT_MATRIX_SCROLL_MS),
+            4: ("matrix_scroll_ms_b", DEFAULT_MATRIX_SCROLL_MS),
+        }
+        name, default = settings.get(display_id, (None, DEFAULT_MATRIX_SCROLL_MS))
+        return normalize_panel_scroll_ms(getattr(self, name, default), default) if name else default
+
+    def apply_panel_scroll_speeds(self, *display_ids):
+        """Restore each panel's own speed after a PROMO or reconnection."""
+        if not self.usb:
+            return
+        sender = getattr(self.usb, "send_display", None)
+        for display_id in display_ids or tuple(self.configured_display_ids()):
+            command = f"SPD:{self.panel_scroll_speed(display_id)}"
+            if callable(sender):
+                sender(display_id, command)
+            else:
+                self.send_display_latest(display_id, command)
 
     def panel_content(self, display_id, view_mode=None):
         settings = self.panel_settings(display_id)
@@ -3375,7 +3417,7 @@ class PlayoffApp:
         dlg.title("USB spojení a panely")
         dlg.transient(self.root)
         dlg.grab_set()
-        dlg.geometry("900x800")
+        dlg.geometry("1080x800")
 
         outer = tk.Frame(dlg)
         outer.pack(fill="both", expand=True, padx=12, pady=12)
@@ -3399,6 +3441,7 @@ class PlayoffApp:
         )
         port_vars = {}
         baud_vars = {}
+        scroll_speed_vars = {}
         playoff_content_vars = {}
         laps_content_vars = {}
         port_combos = []
@@ -3416,11 +3459,13 @@ class PlayoffApp:
         tk.Label(panels_box, text="Panel", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", padx=4)
         tk.Label(panels_box, text="COM port", font=("Arial", 9, "bold")).grid(row=0, column=1, sticky="w", padx=4)
         tk.Label(panels_box, text="Baud", font=("Arial", 9, "bold")).grid(row=0, column=2, sticky="w", padx=4)
-        tk.Label(panels_box, text="PLAYOFF", font=("Arial", 9, "bold")).grid(row=0, column=3, sticky="w", padx=4)
-        tk.Label(panels_box, text="LAPS", font=("Arial", 9, "bold")).grid(row=0, column=4, sticky="w", padx=4)
+        tk.Label(panels_box, text="Posun (ms)", font=("Arial", 9, "bold")).grid(row=0, column=3, sticky="w", padx=4)
+        tk.Label(panels_box, text="PLAYOFF", font=("Arial", 9, "bold")).grid(row=0, column=4, sticky="w", padx=4)
+        tk.Label(panels_box, text="LAPS", font=("Arial", 9, "bold")).grid(row=0, column=5, sticky="w", padx=4)
         for row, (display_id, title, port_name, baud_name, content_name) in enumerate(panel_specs, start=1):
             port_vars[display_id] = tk.StringVar(value=usb_port_choice(getattr(self, port_name)))
             baud_vars[display_id] = tk.StringVar(value=str(getattr(self, baud_name)))
+            scroll_speed_vars[display_id] = tk.StringVar(value=str(self.panel_scroll_speed(display_id)))
             playoff_content_vars[display_id] = tk.StringVar(value=PANEL_CONTENT_LABELS[self.panel_content(display_id, "playoff")])
             laps_content_vars[display_id] = tk.StringVar(value=PANEL_CONTENT_LABELS[self.panel_content(display_id, "laps")])
             content_labels = list(PANEL_CONTENT_LABELS.values())
@@ -3433,18 +3478,25 @@ class PlayoffApp:
             tk.Entry(panels_box, textvariable=baud_vars[display_id], width=9).grid(row=row, column=2, padx=4, pady=4, sticky="w")
             ttk.Combobox(
                 panels_box,
+                textvariable=scroll_speed_vars[display_id],
+                values=[str(value) for value in PANEL_SCROLL_MS_OPTIONS],
+                state="readonly",
+                width=8,
+            ).grid(row=row, column=3, padx=4, pady=4, sticky="w")
+            ttk.Combobox(
+                panels_box,
                 textvariable=playoff_content_vars[display_id],
                 values=content_labels,
                 state="readonly",
                 width=28,
-            ).grid(row=row, column=3, padx=4, pady=4, sticky="w")
+            ).grid(row=row, column=4, padx=4, pady=4, sticky="w")
             ttk.Combobox(
                 panels_box,
                 textvariable=laps_content_vars[display_id],
                 values=content_labels,
                 state="readonly",
                 width=28,
-            ).grid(row=row, column=4, padx=4, pady=4, sticky="w")
+            ).grid(row=row, column=5, padx=4, pady=4, sticky="w")
 
         def selected_content(display_id, mode):
             label = (playoff_content_vars if mode == "playoff" else laps_content_vars)[display_id].get()
@@ -3503,6 +3555,7 @@ class PlayoffApp:
             try:
                 gate_baud = int(gate_baud_var.get())
                 panel_bauds = {display_id: int(baud_vars[display_id].get()) for display_id in range(1, 5)}
+                panel_speeds = {display_id: int(scroll_speed_vars[display_id].get()) for display_id in range(1, 5)}
                 timeout = float(timeout_var.get())
             except ValueError:
                 messagebox.showerror("Neplatné nastavení", "Rychlost musí být celé číslo a timeout číslo.", parent=dlg)
@@ -3513,6 +3566,9 @@ class PlayoffApp:
             for display_id, (_title, port_name, baud_name, content_name) in enumerate(tuple(spec[1:] for spec in panel_specs), start=1):
                 setattr(self, port_name, assigned[display_id])
                 setattr(self, baud_name, panel_bauds[display_id])
+                speed_name = {1: "display_scroll_ms_a", 2: "display_scroll_ms_b", 3: "matrix_scroll_ms_a", 4: "matrix_scroll_ms_b"}[display_id]
+                speed_default = DEFAULT_SEVEN_SEGMENT_SCROLL_MS if display_id in (1, 2) else DEFAULT_MATRIX_SCROLL_MS
+                setattr(self, speed_name, normalize_panel_scroll_ms(panel_speeds[display_id], speed_default))
                 playoff_content = selected_content(display_id, "playoff")
                 laps_content = selected_content(display_id, "laps")
                 setattr(self, content_name, playoff_content)
@@ -3524,6 +3580,8 @@ class PlayoffApp:
                 display_baud_a=self.display_baud_a, display_baud_b=self.display_baud_b,
                 matrix_port_a=self.matrix_port_a, matrix_port_b=self.matrix_port_b,
                 matrix_baud_a=self.matrix_baud_a, matrix_baud_b=self.matrix_baud_b,
+                display_scroll_ms_a=self.display_scroll_ms_a, display_scroll_ms_b=self.display_scroll_ms_b,
+                matrix_scroll_ms_a=self.matrix_scroll_ms_a, matrix_scroll_ms_b=self.matrix_scroll_ms_b,
                 display_content_a=self.display_content_a, display_content_b=self.display_content_b,
                 matrix_content_a=self.matrix_content_a, matrix_content_b=self.matrix_content_b,
                 display_content_a_playoff=self.display_content_a_playoff, display_content_a_laps=self.display_content_a_laps,
@@ -3537,6 +3595,7 @@ class PlayoffApp:
                     self.update_usb_status(self.usb.reconnect(self.on_usb_line))
                     results = self.usb.connect_displays()
                     failed = [str(display_id) for display_id in self.configured_display_ids() if not results[display_id]]
+                    self.apply_panel_scroll_speeds()
                     self.refresh_panel_contents()
                     if failed:
                         messagebox.showwarning("USB", "Nastavení bylo uloženo, ale panel(y) ID-" + ", ".join(failed) + " se nepodařilo připojit.", parent=dlg)
@@ -3625,6 +3684,10 @@ class PlayoffApp:
             'matrix_port_b': self.matrix_port_b,
             'matrix_baud_a': self.matrix_baud_a,
             'matrix_baud_b': self.matrix_baud_b,
+            'display_scroll_ms_a': self.display_scroll_ms_a,
+            'display_scroll_ms_b': self.display_scroll_ms_b,
+            'matrix_scroll_ms_a': self.matrix_scroll_ms_a,
+            'matrix_scroll_ms_b': self.matrix_scroll_ms_b,
             'display_content_a': self.display_content_a,
             'display_content_b': self.display_content_b,
             'matrix_content_a': self.matrix_content_a,
@@ -3766,6 +3829,10 @@ class PlayoffApp:
         self.matrix_port_b = data.get('matrix_port_b', self.matrix_port_b)
         self.matrix_baud_a = data.get('matrix_baud_a', self.matrix_baud_a)
         self.matrix_baud_b = data.get('matrix_baud_b', self.matrix_baud_b)
+        self.display_scroll_ms_a = normalize_panel_scroll_ms(data.get('display_scroll_ms_a'), DEFAULT_SEVEN_SEGMENT_SCROLL_MS)
+        self.display_scroll_ms_b = normalize_panel_scroll_ms(data.get('display_scroll_ms_b'), DEFAULT_SEVEN_SEGMENT_SCROLL_MS)
+        self.matrix_scroll_ms_a = normalize_panel_scroll_ms(data.get('matrix_scroll_ms_a'), DEFAULT_MATRIX_SCROLL_MS)
+        self.matrix_scroll_ms_b = normalize_panel_scroll_ms(data.get('matrix_scroll_ms_b'), DEFAULT_MATRIX_SCROLL_MS)
         self.display_content_a = normalize_panel_content(data.get('display_content_a'), 'lap_a')
         self.display_content_b = normalize_panel_content(data.get('display_content_b'), 'lap_b')
         self.matrix_content_a = normalize_panel_content(data.get('matrix_content_a'), 'countdown')
@@ -4195,6 +4262,7 @@ class PlayoffApp:
 
         for display_id in self.configured_display_ids():
             self.send_display_latest(display_id, "CLS")
+        self.apply_panel_scroll_speeds()
         self.promo_active = False
         status_var = getattr(self, "status_var", None)
         if status_var is not None and str(status_var.get()).startswith("PROMO:"):
