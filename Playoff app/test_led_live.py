@@ -155,6 +155,50 @@ class LiveLEDTests(unittest.TestCase):
 
         self.assertEqual(app.panel_text(3), "Tým 1: Jiří Černý")
 
+    def test_panel_content_can_differ_between_playoff_and_laps(self):
+        app = make_app()
+        app.matrix_port_a = "COM7"
+        app.matrix_content_a = "countdown"
+        app.matrix_content_a_playoff = "countdown"
+        app.matrix_content_a_laps = "team_a_fixed"
+        app.view_mode = "playoff"
+
+        self.assertEqual(app.panel_content(3), "countdown")
+        self.assertEqual(app.panel_content(3, "laps"), "team_a_fixed")
+
+    def test_older_single_panel_content_is_used_in_both_modes(self):
+        playoff_content, laps_content = playoff.load_panel_content_modes(
+            {"matrix_content_a": "team_a"}, "matrix_content_a", "countdown"
+        )
+
+        self.assertEqual((playoff_content, laps_content), ("team_a", "team_a"))
+
+    def test_matrix_combined_countdown_and_lane_a_uses_both_sides(self):
+        app = make_app()
+        app.display_port_a = ""
+        app.display_port_b = ""
+        app.matrix_port_a = "COM7"
+        app.matrix_port_b = ""
+        app.matrix_content_a = "countdown_lap_a"
+        app.matrix_content_a_playoff = "countdown_lap_a"
+        app.view_mode = "playoff"
+        app.timer_value = "02:30"
+        app.timer_running = False
+
+        self.assertEqual(app.panel_command(3), "TXT:02:30     01.234")
+        self.assertEqual(app.panel_ids_for_content("countdown"), [3])
+        self.assertEqual(app.panel_ids_for_content("lap_a"), [3])
+
+    def test_matrix_firmware_reserves_top_row_for_diacritics(self):
+        firmware = (
+            Path(__file__).resolve().parents[1]
+            / "Arduino" / "matrix display" / "matrix_display" / "matrix_display.ino"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("font5x7[base - 32][col]) << 1", firmware)
+        self.assertIn("accentX >= scrollStart", firmware)
+        self.assertIn("Bit 0 is the newly reserved top row", firmware)
+
     def test_user_settings_preserve_existing_usb_values(self):
         app = make_app()
         with tempfile.TemporaryDirectory() as temp_dir:

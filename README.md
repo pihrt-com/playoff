@@ -41,6 +41,12 @@ Položka „Rychlost obnovování“ nabízí intervaly od 0,1 s do 1,0 s. Každ
 
 Nastavení se ukládá do uživatelského souboru `.playoff_settings.json` i do uloženého projektu `.setup`.
 
+## Maticové panely MAX7219
+
+V dialogu `Nastavení → USB spojení a panely` má každý panel vlastní volbu obsahu pro režim `PLAYOFF` i `LAPS`. Přepnutí režimu ihned odešle nově zvolený obsah na všechny připojené panely. U maticových panelů ID-3 a ID-4 lze navíc zvolit `Odpočet + stopky A` nebo `Odpočet + stopky B`; na dvanáctimodulovém panelu je odpočet vlevo a čas příslušné dráhy vpravo.
+
+Firmware maticového panelu vyhrazuje horní řádek pro české háčky a čárky a znaky kreslí o řádek níže. Při volbě statického týmu se akcent rolovaného jména nepřekryje přes pevný název týmu vlevo.
+
 ## Propagační text na LED displejích
 
 Položka „Nastavit propagační text“ v nabídce Nastavení uloží text o délce nejvýše 79 základních znaků bez diakritiky. Tlačítko `PROMO` v horní liště odešle text na všechny nastavené LED displeje, pokud právě neběží závod, odpočet ani měření času.

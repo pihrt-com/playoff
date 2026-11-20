@@ -123,7 +123,7 @@ void render() {
       Glyph glyph = latinGlyph(utf8Char(prefix));
       char base = glyph.base >= 'a' && glyph.base <= 'z' ? glyph.base - 32 : glyph.base;
       if (base < 32 || base > 126) base = '?';
-      for (byte col = 0; col < 5; col++) if (fixedCursor + col < MAX_COLUMNS) columns[fixedCursor + col] = pgm_read_byte(&font5x7[base - 32][col]);
+      for (byte col = 0; col < 5; col++) if (fixedCursor + col < MAX_COLUMNS) columns[fixedCursor + col] = pgm_read_byte(&font5x7[base - 32][col]) << 1;
       fixedCursor += 6;
     }
     // The participant always enters from the invisible right edge, never next
@@ -139,14 +139,23 @@ void render() {
     if (base < 32 || base > 126) base = '?';
     for (byte col = 0; col < 5; col++) {
       int x = cursor + col;
-      if (x >= scrollStart && x < MAX_COLUMNS) columns[x] = pgm_read_byte(&font5x7[base - 32][col]);
+      if (x >= scrollStart && x < MAX_COLUMNS) columns[x] = pgm_read_byte(&font5x7[base - 32][col]) << 1;
     }
     if (glyph.accent != ACCENT_NONE) {
       int accentX = cursor + 2;
-      if (accentX >= 0 && accentX < MAX_COLUMNS) {
-        if (glyph.accent == ACCENT_UMLAUT) columns[accentX - 1 >= 0 ? accentX - 1 : accentX] |= 0x01;
-        columns[accentX] |= glyph.accent == ACCENT_CARON ? 0x03 : 0x01;
-        if (glyph.accent == ACCENT_UMLAUT && accentX + 1 < MAX_COLUMNS) columns[accentX + 1] |= 0x01;
+      if (accentX >= scrollStart && accentX >= 0 && accentX < MAX_COLUMNS) {
+        // Bit 0 is the newly reserved top row. Glyphs use rows 1..7, so
+        // every Czech accent stays above its own letter and cannot overwrite
+        // the fixed team label while the participant text scrolls in.
+        if (glyph.accent == ACCENT_CARON) {
+          if (accentX - 1 >= scrollStart) columns[accentX - 1] |= 0x01;
+          if (accentX + 1 < MAX_COLUMNS) columns[accentX + 1] |= 0x01;
+        } else if (glyph.accent == ACCENT_UMLAUT) {
+          if (accentX - 1 >= scrollStart) columns[accentX - 1] |= 0x01;
+          if (accentX + 1 < MAX_COLUMNS) columns[accentX + 1] |= 0x01;
+        } else {
+          columns[accentX] |= 0x01;
+        }
       }
     }
     cursor += 6;

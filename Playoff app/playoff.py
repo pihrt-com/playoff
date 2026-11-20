@@ -444,12 +444,18 @@ PANEL_CONTENT_LABELS = {
     "countdown": "Odpočet 00:00",
     "lap_a": "Stopky A",
     "lap_b": "Stopky B",
+    "countdown_lap_a": "Odpočet + stopky A",
+    "countdown_lap_b": "Odpočet + stopky B",
     "team_a": "Tým A a soutěžící",
     "team_b": "Tým B a soutěžící",
     "team_a_fixed": "Tým A a soutěžící – statický tým",
     "team_b_fixed": "Tým B a soutěžící – statický tým",
 }
 PANEL_CONTENT_KEYS = tuple(PANEL_CONTENT_LABELS)
+PANEL_COMBINED_CONTENTS = {
+    "countdown_lap_a": ("countdown", "lap_a"),
+    "countdown_lap_b": ("countdown", "lap_b"),
+}
 
 LED_REFRESH_OPTIONS        = tuple(round(value / 10, 1) for value in range(1, 11))
 DEFAULT_LED_REFRESH        = 0.1
@@ -571,6 +577,19 @@ def normalize_promo_mode(value):
 def normalize_panel_content(value, default="countdown"):
     content = str(value or "").strip().lower()
     return content if content in PANEL_CONTENT_KEYS else default
+
+
+def load_panel_content_modes(data, name, default):
+    """Load separate PLAYOFF/LAPS choices while keeping older saved files valid."""
+    legacy = normalize_panel_content(data.get(name), default)
+    playoff_content = normalize_panel_content(data.get(f"{name}_playoff"), legacy)
+    laps_content = normalize_panel_content(data.get(f"{name}_laps"), legacy)
+    return playoff_content, laps_content
+
+
+def panel_uses_content(content, target):
+    """Return whether one configured panel needs updates of a source value."""
+    return target == content or target in PANEL_COMBINED_CONTENTS.get(content, ())
 
 
 def normalize_promo_scroll_ms(value):
@@ -861,6 +880,14 @@ class PlayoffApp:
         self.display_content_b = "lap_b"
         self.matrix_content_a = "countdown"
         self.matrix_content_b = "team_a"
+        self.display_content_a_playoff = self.display_content_a
+        self.display_content_a_laps = self.display_content_a
+        self.display_content_b_playoff = self.display_content_b
+        self.display_content_b_laps = self.display_content_b
+        self.matrix_content_a_playoff = self.matrix_content_a
+        self.matrix_content_a_laps = self.matrix_content_a
+        self.matrix_content_b_playoff = self.matrix_content_b
+        self.matrix_content_b_laps = self.matrix_content_b
 
         # view mode
         self.view_mode = "playoff"
@@ -1416,6 +1443,10 @@ class PlayoffApp:
                 self.display_content_b = normalize_panel_content(s.get('display_content_b'), 'lap_b')
                 self.matrix_content_a = normalize_panel_content(s.get('matrix_content_a'), 'countdown')
                 self.matrix_content_b = normalize_panel_content(s.get('matrix_content_b'), 'team_a')
+                self.display_content_a_playoff, self.display_content_a_laps = load_panel_content_modes(s, 'display_content_a', 'lap_a')
+                self.display_content_b_playoff, self.display_content_b_laps = load_panel_content_modes(s, 'display_content_b', 'lap_b')
+                self.matrix_content_a_playoff, self.matrix_content_a_laps = load_panel_content_modes(s, 'matrix_content_a', 'countdown')
+                self.matrix_content_b_playoff, self.matrix_content_b_laps = load_panel_content_modes(s, 'matrix_content_b', 'team_a')
                 self.enable_timer = bool(s.get('enable_timer', self.enable_timer))
                 self.timer_menu_var.set(self.enable_timer)
                 saved_timer_value = str(s.get('timer_value', self.timer_value))
@@ -2157,19 +2188,23 @@ class PlayoffApp:
         }
         return settings.get(display_id)
 
-    def panel_content(self, display_id):
+    def panel_content(self, display_id, view_mode=None):
         settings = self.panel_settings(display_id)
         if settings is None:
             return ""
         _port_name, content_name = settings
         default = "lap_a" if display_id == 1 else "lap_b" if display_id == 2 else "countdown"
-        return normalize_panel_content(getattr(self, content_name, default), default)
+        mode = view_mode or getattr(self, "view_mode", "playoff")
+        if mode not in ("playoff", "laps"):
+            mode = "playoff"
+        legacy = normalize_panel_content(getattr(self, content_name, default), default)
+        return normalize_panel_content(getattr(self, f"{content_name}_{mode}", legacy), legacy)
 
     def panel_ids_for_content(self, content):
         return [
             display_id
             for display_id in self.configured_display_ids()
-            if self.panel_content(display_id) == content
+            if panel_uses_content(self.panel_content(display_id), content)
         ]
 
     def panel_team_text(self, lane):
@@ -2201,19 +2236,29 @@ class PlayoffApp:
             text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
         return text
 
+    def panel_command(self, display_id, lap_a=None, lap_b=None):
+        """Build the serial command for one panel in the active application mode."""
+        content = self.panel_content(display_id)
+        if display_id in (3, 4) and content in PANEL_COMBINED_CONTENTS:
+            lap_content = PANEL_COMBINED_CONTENTS[content][1]
+            lap_value = lap_a if lap_content == "lap_a" else lap_b
+            if lap_value is None:
+                lap_value = getattr(self, "lap_time_a" if lap_content == "lap_a" else "lap_time_b", 0)
+            lap_text = self.format_display_time(lap_value)
+            return f"TXT:{self.panel_countdown_text()}     {lap_text}"
+        if display_id in (3, 4) and content in ("team_a_fixed", "team_b_fixed"):
+            lane = "a" if content == "team_a_fixed" else "b"
+            team_id = int(getattr(self, "laps_active_team_a", 1)) + (1 if lane == "b" else 0)
+            record = self.team_record_by_id(team_id)
+            participant = str((record or {}).get("participant", "") or "").strip()
+            return f"FIX:Tým {team_id}: |{participant}"
+        command = "SCR" if display_id in (3, 4) and content in ("team_a", "team_b") else "TXT"
+        return f"{command}:{self.panel_text(display_id)}"
+
     def refresh_panel_contents(self, *display_ids):
         ids = display_ids or tuple(self.configured_display_ids())
         for display_id in ids:
-            content = self.panel_content(display_id)
-            if display_id in (3, 4) and content in ("team_a_fixed", "team_b_fixed"):
-                lane = "a" if content == "team_a_fixed" else "b"
-                team_id = int(getattr(self, "laps_active_team_a", 1)) + (1 if lane == "b" else 0)
-                record = self.team_record_by_id(team_id)
-                participant = str((record or {}).get("participant", "") or "").strip()
-                self.send_display_latest(display_id, f"FIX:Tým {team_id}: |{participant}")
-            else:
-                command = "SCR" if display_id in (3, 4) and content in ("team_a", "team_b") else "TXT"
-                self.send_display_latest(display_id, f"{command}:{self.panel_text(display_id)}")
+            self.send_display_latest(display_id, self.panel_command(display_id))
 
     def refresh_panels_for_content(self, content):
         self.refresh_panel_contents(*self.panel_ids_for_content(content))
@@ -2227,7 +2272,18 @@ class PlayoffApp:
         contents = tuple("lap_a" if lane == 1 else "lap_b" for lane in (lanes or (1, 2)))
         ids = [display_id for content in contents for display_id in self.panel_ids_for_content(content)]
         for display_id in ids:
-            self.send_display_latest(display_id, "TXT:00.000")
+            content = self.panel_content(display_id)
+            if content in PANEL_COMBINED_CONTENTS:
+                self.send_display_latest(
+                    display_id,
+                    self.panel_command(
+                        display_id,
+                        lap_a=0 if "lap_a" in contents else None,
+                        lap_b=0 if "lap_b" in contents else None,
+                    ),
+                )
+            else:
+                self.send_display_latest(display_id, "TXT:00.000")
         self.reset_live_led_schedule(*ids)
 
     def send_live_led_times(self, now=None):
@@ -2244,7 +2300,7 @@ class PlayoffApp:
             for display_id in self.panel_ids_for_content(content):
                 if not running or current < self.live_led_next_send[display_id]:
                     continue
-                self.send_display_latest(display_id, f"TXT:{self.panel_text(display_id)}")
+                self.send_display_latest(display_id, self.panel_command(display_id))
                 self.live_led_next_send[display_id] = current + self.live_led_refresh
 
     # small helper to open the existing settings menu -> we will just show the menubar cascade
@@ -2281,9 +2337,7 @@ class PlayoffApp:
         self.race_active = False
         self.view_mode = new_mode
         self.update_view_mode_gui()
-        if self.view_mode == "laps":
-            for content in ("team_a", "team_b", "team_a_fixed", "team_b_fixed"):
-                self.refresh_panels_for_content(content)
+        self.refresh_panel_contents()
         self._log(f"VIEW MODE = {self.view_mode}")
         self.redraw()
         try:
@@ -2318,9 +2372,7 @@ class PlayoffApp:
         self.view_mode_var.set(new_mode)
         self.update_view_mode_buttons()
         self.update_view_mode_gui()
-        if self.view_mode == "laps":
-            for content in ("team_a", "team_b", "team_a_fixed", "team_b_fixed"):
-                self.refresh_panels_for_content(content)
+        self.refresh_panel_contents()
         self._log(f"VIEW MODE = {self.view_mode}")
         if new_mode == "laps":
             self.status_var.set("")
@@ -3343,7 +3395,8 @@ class PlayoffApp:
         )
         port_vars = {}
         baud_vars = {}
-        content_vars = {}
+        playoff_content_vars = {}
+        laps_content_vars = {}
         port_combos = []
 
         gate_box = tk.LabelFrame(outer, text="Měřící brána", padx=8, pady=6)
@@ -3359,11 +3412,16 @@ class PlayoffApp:
         tk.Label(panels_box, text="Panel", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", padx=4)
         tk.Label(panels_box, text="COM port", font=("Arial", 9, "bold")).grid(row=0, column=1, sticky="w", padx=4)
         tk.Label(panels_box, text="Baud", font=("Arial", 9, "bold")).grid(row=0, column=2, sticky="w", padx=4)
-        tk.Label(panels_box, text="Zobrazovat", font=("Arial", 9, "bold")).grid(row=0, column=3, sticky="w", padx=4)
+        tk.Label(panels_box, text="PLAYOFF", font=("Arial", 9, "bold")).grid(row=0, column=3, sticky="w", padx=4)
+        tk.Label(panels_box, text="LAPS", font=("Arial", 9, "bold")).grid(row=0, column=4, sticky="w", padx=4)
         for row, (display_id, title, port_name, baud_name, content_name) in enumerate(panel_specs, start=1):
             port_vars[display_id] = tk.StringVar(value=usb_port_choice(getattr(self, port_name)))
             baud_vars[display_id] = tk.StringVar(value=str(getattr(self, baud_name)))
-            content_vars[display_id] = tk.StringVar(value=PANEL_CONTENT_LABELS[self.panel_content(display_id)])
+            playoff_content_vars[display_id] = tk.StringVar(value=PANEL_CONTENT_LABELS[self.panel_content(display_id, "playoff")])
+            laps_content_vars[display_id] = tk.StringVar(value=PANEL_CONTENT_LABELS[self.panel_content(display_id, "laps")])
+            content_labels = list(PANEL_CONTENT_LABELS.values())
+            if display_id in (1, 2):
+                content_labels = [PANEL_CONTENT_LABELS[key] for key in PANEL_CONTENT_LABELS if key not in PANEL_COMBINED_CONTENTS]
             tk.Label(panels_box, text=title).grid(row=row, column=0, padx=4, pady=4, sticky="w")
             combo = ttk.Combobox(panels_box, textvariable=port_vars[display_id], values=choices, state="readonly", width=18)
             combo.grid(row=row, column=1, padx=4, pady=4, sticky="w")
@@ -3371,14 +3429,21 @@ class PlayoffApp:
             tk.Entry(panels_box, textvariable=baud_vars[display_id], width=9).grid(row=row, column=2, padx=4, pady=4, sticky="w")
             ttk.Combobox(
                 panels_box,
-                textvariable=content_vars[display_id],
-                values=list(PANEL_CONTENT_LABELS.values()),
+                textvariable=playoff_content_vars[display_id],
+                values=content_labels,
                 state="readonly",
                 width=28,
             ).grid(row=row, column=3, padx=4, pady=4, sticky="w")
+            ttk.Combobox(
+                panels_box,
+                textvariable=laps_content_vars[display_id],
+                values=content_labels,
+                state="readonly",
+                width=28,
+            ).grid(row=row, column=4, padx=4, pady=4, sticky="w")
 
-        def selected_content(display_id):
-            label = content_vars[display_id].get()
+        def selected_content(display_id, mode):
+            label = (playoff_content_vars if mode == "playoff" else laps_content_vars)[display_id].get()
             for key, candidate in PANEL_CONTENT_LABELS.items():
                 if candidate == label:
                     return key
@@ -3441,12 +3506,14 @@ class PlayoffApp:
             self.usb_port = assigned[0]
             self.usb_baud = gate_baud
             self.usb_timeout = timeout
-            for display_id, (_title, port_name, baud_name, content_name) in enumerate(
-                tuple(spec[1:] for spec in panel_specs), start=1
-            ):
+            for display_id, (_title, port_name, baud_name, content_name) in enumerate(tuple(spec[1:] for spec in panel_specs), start=1):
                 setattr(self, port_name, assigned[display_id])
                 setattr(self, baud_name, panel_bauds[display_id])
-                setattr(self, content_name, selected_content(display_id))
+                playoff_content = selected_content(display_id, "playoff")
+                laps_content = selected_content(display_id, "laps")
+                setattr(self, content_name, playoff_content)
+                setattr(self, f"{content_name}_playoff", playoff_content)
+                setattr(self, f"{content_name}_laps", laps_content)
             self.persist_user_settings(
                 usb_port=self.usb_port, usb_baud=self.usb_baud, usb_timeout=self.usb_timeout,
                 display_port_a=self.display_port_a, display_port_b=self.display_port_b,
@@ -3455,6 +3522,10 @@ class PlayoffApp:
                 matrix_baud_a=self.matrix_baud_a, matrix_baud_b=self.matrix_baud_b,
                 display_content_a=self.display_content_a, display_content_b=self.display_content_b,
                 matrix_content_a=self.matrix_content_a, matrix_content_b=self.matrix_content_b,
+                display_content_a_playoff=self.display_content_a_playoff, display_content_a_laps=self.display_content_a_laps,
+                display_content_b_playoff=self.display_content_b_playoff, display_content_b_laps=self.display_content_b_laps,
+                matrix_content_a_playoff=self.matrix_content_a_playoff, matrix_content_a_laps=self.matrix_content_a_laps,
+                matrix_content_b_playoff=self.matrix_content_b_playoff, matrix_content_b_laps=self.matrix_content_b_laps,
             )
             if self.usb:
                 try:
@@ -3554,6 +3625,14 @@ class PlayoffApp:
             'display_content_b': self.display_content_b,
             'matrix_content_a': self.matrix_content_a,
             'matrix_content_b': self.matrix_content_b,
+            'display_content_a_playoff': self.display_content_a_playoff,
+            'display_content_a_laps': self.display_content_a_laps,
+            'display_content_b_playoff': self.display_content_b_playoff,
+            'display_content_b_laps': self.display_content_b_laps,
+            'matrix_content_a_playoff': self.matrix_content_a_playoff,
+            'matrix_content_a_laps': self.matrix_content_a_laps,
+            'matrix_content_b_playoff': self.matrix_content_b_playoff,
+            'matrix_content_b_laps': self.matrix_content_b_laps,
             # mode (playoff/laps)
             'view_mode': self.view_mode,
             # TEAMS names
@@ -3687,6 +3766,10 @@ class PlayoffApp:
         self.display_content_b = normalize_panel_content(data.get('display_content_b'), 'lap_b')
         self.matrix_content_a = normalize_panel_content(data.get('matrix_content_a'), 'countdown')
         self.matrix_content_b = normalize_panel_content(data.get('matrix_content_b'), 'team_a')
+        self.display_content_a_playoff, self.display_content_a_laps = load_panel_content_modes(data, 'display_content_a', 'lap_a')
+        self.display_content_b_playoff, self.display_content_b_laps = load_panel_content_modes(data, 'display_content_b', 'lap_b')
+        self.matrix_content_a_playoff, self.matrix_content_a_laps = load_panel_content_modes(data, 'matrix_content_a', 'countdown')
+        self.matrix_content_b_playoff, self.matrix_content_b_laps = load_panel_content_modes(data, 'matrix_content_b', 'team_a')
         self.view_mode = data.get('view_mode', 'playoff')
         self.view_mode_var.set(self.view_mode)
         self.update_view_mode_gui()
