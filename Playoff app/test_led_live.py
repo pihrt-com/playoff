@@ -189,6 +189,24 @@ class LiveLEDTests(unittest.TestCase):
         self.assertEqual(app.panel_ids_for_content("countdown"), [3])
         self.assertEqual(app.panel_ids_for_content("lap_a"), [3])
 
+    def test_unselected_countdown_never_resets_static_team_scrolling(self):
+        app = make_app()
+        app.display_port_a = ""
+        app.display_port_b = ""
+        app.matrix_port_a = "COM7"
+        app.matrix_port_b = ""
+        app.matrix_content_a = "countdown"
+        app.matrix_content_a_playoff = "countdown"
+        app.matrix_content_a_laps = "team_a_fixed"
+        app.view_mode = "laps"
+        app.laps_active_team_a = 1
+        app.team_names = [{"id": "1", "school": "", "participant": "Anna Černá", "best_time": ""}]
+
+        app.refresh_panels_for_content("countdown")
+        app.reset_led_times(1, 2)
+
+        self.assertEqual(app.usb.messages, [])
+
     def test_matrix_firmware_reserves_top_row_for_diacritics(self):
         firmware = (
             Path(__file__).resolve().parents[1]

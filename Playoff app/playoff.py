@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.28"                                         # current version of the application
+APP_current       = "1.0.29"                                         # current version of the application
 APP_date          = "20.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -2261,10 +2261,14 @@ class PlayoffApp:
             self.send_display_latest(display_id, self.panel_command(display_id))
 
     def refresh_panels_for_content(self, content):
-        self.refresh_panel_contents(*self.panel_ids_for_content(content))
+        display_ids = self.panel_ids_for_content(content)
+        if display_ids:
+            self.refresh_panel_contents(*display_ids)
 
     def reset_live_led_schedule(self, *display_ids):
-        next_send = time.monotonic() + self.live_led_refresh
+        next_send = time.monotonic() + getattr(self, "live_led_refresh", DEFAULT_LED_REFRESH)
+        if not hasattr(self, "live_led_next_send"):
+            self.live_led_next_send = {}
         for display_id in display_ids or tuple(self.configured_display_ids()):
             self.live_led_next_send[display_id] = next_send
 
@@ -4350,7 +4354,7 @@ class PlayoffApp:
             text=self.seconds_to_time(self.laps_countdown_seconds),
             fg='white'
         )
-        self.refresh_panel_contents(*self.panel_ids_for_content("countdown"))
+        self.refresh_panels_for_content("countdown")
         if not cycle_restarted:
             self.update_laps_countdown_warning()
         self.laps_countdown_after_id = self.root.after(
@@ -4470,7 +4474,10 @@ class PlayoffApp:
         try:
             self.current_seconds = self.time_to_seconds(self.timer_value)
             self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
-            self.refresh_panel_contents(*self.panel_ids_for_content("countdown"))
+            # Reset only panels explicitly configured for a lane in the active
+            # mode. A LAPS panel with a fixed team must keep its own scrolling.
+            self.reset_led_times(1, 2)
+            self.refresh_panels_for_content("countdown")
             self.timer_running = True
             self.update_promo_button_state()
             # schedule tick
@@ -4499,7 +4506,7 @@ class PlayoffApp:
                 self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
             except Exception:
                 pass
-            self.refresh_panel_contents(*self.panel_ids_for_content("countdown"))
+            self.refresh_panels_for_content("countdown")
             self.countdown_after_id = self.root.after(1000, self.countdown_tick)
         except Exception:
             pass

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.28",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.28/PlayoffSetup_1.0.28.exe",
-  "sha256": "cecde3456dc673809e6a3d88959352912489ebad536c2f8b64ac5cece84adbbf",
-  "size": 52456961,
-  "notes": "Samostatné nastavení panelů pro PLAYOFF a LAPS, kombinace odpočtu se stopkami a opravená diakritika maticového panelu."
+  "version": "1.0.29",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.29/PlayoffSetup_1.0.29.exe",
+  "sha256": "58dcbc09ba27a1c7f8f205840aa710cab94eabb2889cace9308f9918322c212a",
+  "size": 52456052,
+  "notes": "Odpočet v jednom režimu už nerestartuje rolování jména na panelu nastaveném pro druhý režim."
 }

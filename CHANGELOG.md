@@ -1,5 +1,9 @@
 # Historie změn
 
+## 1.0.29 – 20. 11. 2026
+
+- Odpočet obnovuje jen panely nastavené na odpočet v právě aktivním režimu; statický tým a rolované jméno v druhém režimu se už každou sekundu neresetují.
+
 ## 1.0.28 – 20. 11. 2026
 
 - Každý USB panel má samostatnou volbu obsahu pro PLAYOFF a LAPS; přepnutí režimu panely ihned obnoví.
