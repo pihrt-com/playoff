@@ -1,5 +1,11 @@
 # Historie změn
 
+## 1.0.28 – 20. 11. 2026
+
+- Každý USB panel má samostatnou volbu obsahu pro PLAYOFF a LAPS; přepnutí režimu panely ihned obnoví.
+- Maticové panely ID-3 a ID-4 umí na dvanácti modulech zobrazit odpočet vlevo a stopky A nebo B vpravo.
+- Firmware maticového panelu posouvá znaky o řádek dolů a vyhrazuje horní řádek pro háčky a čárky bez překrytí statického týmu.
+
 ## 1.0.27 – 19. 11. 2026
 
 - Při přepnutí do LAPS se týmové maticové panely ihned obnoví pro aktivní dvojici týmů.
