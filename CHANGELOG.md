@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.37 – 23. 11. 2026
+
+- Firmware měřicí brány před novým startem, změnou režimu i obnovou USB bezpečně ukončí rozběhnutý semafor a vrátí jej do klidového stavu; po návratu USB proto už není nutný ruční RESET Arduina.
+- Brána po přijetí aktivního režimu vrací potvrzení `ready_playoff` nebo `ready_laps`. GATE zůstává žlutý až do tohoto potvrzení a při neúspěšné obnově se správně vrátí na červenou.
+
 ## 1.0.36 – 23. 11. 2026
 
 - Po návratu USB měřicí brány aplikace čeká déle na dokončení startu Arduina a aktivní režim PLAYOFF nebo LAPS odešle třikrát s odstupem.

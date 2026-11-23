@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.36"                                         # current version of the application
+APP_current       = "1.0.37"                                         # current version of the application
 APP_date          = "23.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -890,6 +890,8 @@ class PlayoffApp:
         # Gate and panels are restored independently after a USB reconnect.
         self.gate_sync_state = "disconnected"
         self.gate_sync_pending = False
+        self.gate_sync_ack_event = None
+        self.gate_sync_expected = ""
         # A panel is green only after its current content has been resent.
         # A reconnect is asynchronous so that one unavailable panel never
         # blocks the Tkinter interface or the remaining panels.
@@ -1587,8 +1589,10 @@ class PlayoffApp:
                                 self.usb_timeout
                             )
 
-                            # Apply the loaded port even when a prior initialization is active.
-                            self.finish_gate_resync(self.usb.reconnect(self.on_usb_line))
+                            # The gate is marked ready only after firmware
+                            # confirms the active mode through the reopened port.
+                            self.gate_sync_state = "disconnected"
+                            self.schedule_gate_resync()
                             self._log(f"USB AUTO CONNECT: port {self.usb_port} speed {self.usb_baud}")
                         else:
                             self.usb.disconnect()
@@ -1597,12 +1601,6 @@ class PlayoffApp:
                         # LED displays are independent of the measuring gate.
                         self.usb.connect_displays()
                         self.schedule_configured_panel_resync()
-                        if self.usb_port:
-                            if self.view_mode == "laps":
-                                self.usb.handler.send(b"mode_laps\n")
-                            else:
-                                self.usb.handler.send(b"mode_playoff\n")
-
                     except Exception as e:
                         self._log("USB AUTO CONNECT ERROR:", e)
                         self.finish_gate_resync(False)
@@ -2581,16 +2579,29 @@ class PlayoffApp:
             if success:
                 # A physically reconnected Arduino may still be finishing its
                 # boot even though Windows has already reopened the COM port.
-                # The gate firmware does not acknowledge mode commands, so
-                # wait for the Mega to finish booting and repeat the mode.
+                # Current gate firmware confirms the active mode, so a green GATE LED
+                # means the Arduino has received and applied it.
                 time.sleep(3.0)
                 mode_command = b"mode_laps\n" if self.view_mode == "laps" else b"mode_playoff\n"
+                expected = "ready_laps" if self.view_mode == "laps" else "ready_playoff"
+                ack_event = threading.Event()
+                self.gate_sync_expected = expected
+                self.gate_sync_ack_event = ack_event
+                success = False
                 for _attempt in range(3):
+                    ack_event.clear()
+                    self.usb.handler.send(b"sync\n")
+                    time.sleep(0.2)
                     self.usb.handler.send(mode_command)
-                    time.sleep(0.5)
+                    if ack_event.wait(1.5):
+                        success = True
+                        break
         except Exception as exc:
             self._log(f"GATE SYNC ERROR: {exc}")
             success = False
+        finally:
+            self.gate_sync_ack_event = None
+            self.gate_sync_expected = ""
 
         try:
             self.root.after(0, lambda: self.finish_gate_resync(success))
@@ -2790,6 +2801,11 @@ class PlayoffApp:
     def on_usb_line(self, line):
         line = line.strip().lower()
         self._log(f"USB RX: {repr(line)}")
+
+        if line == getattr(self, "gate_sync_expected", ""):
+            ack_event = getattr(self, "gate_sync_ack_event", None)
+            if ack_event is not None:
+                ack_event.set()
 
         def gui():
             if line == "ok":
@@ -3607,7 +3623,8 @@ class PlayoffApp:
             try:
                 if self.usb:
                     self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
-                    self.finish_gate_resync(self.usb.reconnect(self.on_usb_line))
+                    self.gate_sync_state = "disconnected"
+                    self.schedule_gate_resync()
             except Exception as e:
                 messagebox.showwarning("USB", f"Port nastaven, ale spojení selhalo:\n{e}")
                 self.finish_gate_resync(False)
@@ -3846,7 +3863,8 @@ class PlayoffApp:
             if self.usb:
                 try:
                     self.usb.validate_and_set(self.usb_port, self.usb_baud, self.usb_timeout)
-                    self.finish_gate_resync(self.usb.reconnect(self.on_usb_line))
+                    self.gate_sync_state = "disconnected"
+                    self.schedule_gate_resync()
                     results = self.usb.connect_displays()
                     failed = [str(display_id) for display_id in self.configured_display_ids() if not results[display_id]]
                     self.apply_panel_scroll_speeds()

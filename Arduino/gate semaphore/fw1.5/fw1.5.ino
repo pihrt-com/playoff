@@ -2,7 +2,7 @@
 
 /*
  Martin Pihrt
- FW: 1.5 23.06.2026
+ FW: 1.5 23.11.2026
  Dva semafory + laserové brány + false-start logic
  Přidaná podpora pro počítadla kol v app
  Odesílání:
@@ -16,6 +16,10 @@
 prepnuti rezimu playoff/laps
 PYTHON ---> mode_playoff ----> ARDUINO
 PYTHON ---> mode_laps ----> ARDUINO
+PYTHON ---> sync ----------> ARDUINO
+
+ARDUINO ---> ready_playoff -> PYTHON
+ARDUINO ---> ready_laps ----> PYTHON
 
 komunikace playoff
 PYTHON ---> start ----> ARDUINO
@@ -320,6 +324,24 @@ struct TrafficLight {
     else
       sumBeepB = false;
     updateSumPiezo();
+  }
+
+  void cancelToIdle() {
+    state = IDLE;
+    stateTimer = 0;
+    fadeTimer = 0;
+    fadeLevel = 0;
+    currentLED = 0;
+    fadeBeepStarted = false;
+    beepActive = false;
+    beepEnd = 0;
+    warnActive = false;
+    warnEnd = 0;
+    warnTick = 0;
+    warnPhase = 0;
+    completedLong = false;
+    finishedForOk = false;
+    resetOutputs();
   }
 
   void start() {
@@ -688,11 +710,7 @@ void rs485Send(String msg) {
 String rx0 = "";
 String rx1 = "";
 
-void startRace() {
-  tlA.resetOutputs();
-  tlB.resetOutputs();
-  tlA.start();
-  tlB.start();
+void resetGateState() {
   okSent = false;
   raceRunning = false;
   finishASent = false;
@@ -703,66 +721,87 @@ void startRace() {
   beamCountB = 0;
   falseStartA = false;
   falseStartB = false;
+  lapRunningA = false;
+  lapRunningB = false;
+  tlA.cancelToIdle();
+  tlB.cancelToIdle();
+  lastButtonState = digitalRead(button);
+  lastBeamStateA = isBeamBrokenRaw(beamA);
+  lastBeamStateB = isBeamBrokenRaw(beamB);
+}
+
+void sendReady() {
+  if (runMode == MODE_LAPS) {
+    Serial.println(F("ready_laps"));
+    rs485Send("ready_laps\n");
+  } else {
+    Serial.println(F("ready_playoff"));
+    rs485Send("ready_playoff\n");
+  }
+}
+
+void setRunMode(RunMode mode) {
+  resetGateState();
+  runMode = mode;
+  if (runMode == MODE_LAPS) {
+    tlA.showLapIdle();
+    tlB.showLapIdle();
+  }
+  sendReady();
+}
+
+void startRace() {
+  resetGateState();
+  tlA.start();
+  tlB.start();
   if (DEBUG) {
     Serial.println(F("[RACE] START"));
   }
 }
 
+void handleCommand(String &rx) {
+  rx.trim();
+  if (rx.equalsIgnoreCase("start")) {
+    startRace();
+  }
+  else if (rx.equalsIgnoreCase("mode_playoff")) {
+    setRunMode(MODE_PLAYOFF);
+  }
+  else if (rx.equalsIgnoreCase("mode_laps")) {
+    setRunMode(MODE_LAPS);
+  }
+  else if (rx.equalsIgnoreCase("sync")) {
+    resetGateState();
+    if (runMode == MODE_LAPS) {
+      tlA.showLapIdle();
+      tlB.showLapIdle();
+    }
+    Serial.println(F("synced"));
+    rs485Send("synced\n");
+  }
+  rx = "";
+}
+
+void readCommand(Stream &port, String &rx) {
+  while (port.available()) {
+    char c = port.read();
+    if (c == '\r') {
+      continue;
+    }
+    if (c == '\n') {
+      handleCommand(rx);
+    } else if (rx.length() < 48) {
+      rx += c;
+    } else {
+      // A damaged or incomplete UART packet must not block later commands.
+      rx = "";
+    }
+  }
+}
+
 void handleUART() {
-  while (Serial.available()) {
-    char c = Serial.read();
-    if (c == '\n') {
-      rx0.trim();
-      if (rx0.equalsIgnoreCase("start"))
-      {
-        startRace();
-      }
-      else if (rx0.equalsIgnoreCase("mode_playoff"))
-      {
-        runMode = MODE_PLAYOFF;
-      }
-      else if (rx0.equalsIgnoreCase("mode_laps"))
-      {
-        runMode = MODE_LAPS;
-        lapRunningA = false;
-        lapRunningB = false;
-        lastFinishA = 0;
-        lastFinishB = 0;
-        tlA.showLapIdle();
-        tlB.showLapIdle();
-      }
-      rx0 = "";
-    } else {
-      rx0 += c;
-    }
-  }
-  while (Serial1.available()) {
-    char c = Serial1.read();
-    if (c == '\n') {
-      rx1.trim();
-      if (rx1.equalsIgnoreCase("start"))
-      {
-        startRace();
-      }
-      else if (rx1.equalsIgnoreCase("mode_playoff"))
-      {
-        runMode = MODE_PLAYOFF;
-      }
-      else if (rx1.equalsIgnoreCase("mode_laps"))
-      {
-        runMode = MODE_LAPS;
-        lapRunningA = false;
-        lapRunningB = false;
-        lastFinishA = 0;
-        lastFinishB = 0; 
-        tlA.showLapIdle();
-        tlB.showLapIdle();       
-      }
-      rx1 = "";
-    } else {
-      rx1 += c;
-    }
-  }
+  readCommand(Serial, rx0);
+  readCommand(Serial1, rx1);
 }
 
 // ============================================================================

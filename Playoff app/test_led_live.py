@@ -88,12 +88,15 @@ class FakeGateHandler:
     def __init__(self):
         self.open = True
         self.messages = []
+        self.on_send = None
 
     def is_open(self):
         return self.open
 
     def send(self, payload):
         self.messages.append(payload)
+        if self.on_send and payload in (b"mode_playoff\n", b"mode_laps\n"):
+            self.on_send("ready_" + payload.decode().strip().split("_", 1)[1])
 
 
 class FakeGateUSB:
@@ -113,6 +116,7 @@ class FakeGateUSB:
     def reconnect(self, callback):
         self.reconnect_calls.append(callback)
         self.handler.open = True
+        self.handler.on_send = callback
         return True
 
 
@@ -121,6 +125,17 @@ class ImmediateZeroRoot:
         if delay == 0:
             callback()
         return "after-id"
+
+
+class NeverAckEvent:
+    def clear(self):
+        pass
+
+    def wait(self, _timeout):
+        return False
+
+    def set(self):
+        pass
 
 
 def make_app():
@@ -313,11 +328,34 @@ class LiveLEDTests(unittest.TestCase):
             app.auto_check_usb()
 
         self.assertEqual(len(app.usb.reconnect_calls), 1)
-        self.assertEqual(app.usb.handler.messages, [b"mode_laps\n"] * 3)
-        self.assertEqual(sleep.call_args_list, [mock.call(3.0), mock.call(0.5), mock.call(0.5), mock.call(0.5)])
+        self.assertEqual(app.usb.handler.messages, [b"sync\n", b"mode_laps\n"])
+        self.assertEqual(sleep.call_args_list, [mock.call(3.0), mock.call(0.2)])
         self.assertEqual(app.gate_sync_state, "ready")
         self.assertIn("#fbc02d", app.usb_status_canvas.colors)
         self.assertEqual(app.usb_status_canvas.colors[-1], "green")
+
+    def test_gate_stays_red_when_firmware_does_not_confirm_active_mode(self):
+        app = make_app()
+        app.usb = FakeGateUSB()
+        app.usb_port = "COM9"
+        app.view_mode = "playoff"
+        app.root = ImmediateZeroRoot()
+        app.gate_sync_state = "syncing"
+        app.gate_sync_pending = True
+        app.usb_status_canvas = FakeCanvas()
+        app.usb_status_id = 1
+        app.usb.reconnect = lambda _callback: True
+
+        with mock.patch.object(playoff.threading, "Event", NeverAckEvent), \
+             mock.patch.object(playoff.time, "sleep"):
+            app._resync_gate_worker()
+
+        self.assertEqual(
+            app.usb.handler.messages,
+            [b"sync\n", b"mode_playoff\n"] * 3,
+        )
+        self.assertEqual(app.gate_sync_state, "disconnected")
+        self.assertEqual(app.usb_status_canvas.colors[-1], "red")
 
     def test_panel_scroll_speed_is_normalized_to_supported_values(self):
         self.assertEqual(playoff.normalize_panel_scroll_ms("64", 250), 65)
