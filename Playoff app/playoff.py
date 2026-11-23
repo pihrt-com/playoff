@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.31"                                         # current version of the application
+APP_current       = "1.0.32"                                         # current version of the application
 APP_date          = "23.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -121,6 +121,12 @@ def is_newer_version(candidate, current):
     candidate_parts += (0,) * (length - len(candidate_parts))
     current_parts += (0,) * (length - len(current_parts))
     return candidate_parts > current_parts
+
+
+def update_notes_text(update_info):
+    """Return the release summary shown before the user starts an update."""
+    notes = str((update_info or {}).get("notes", "") or "").strip()
+    return notes or "Popis změn této verze není k dispozici."
 
 
 TEAM_TABLE_DEFAULT_TITLE = "Účastníci soutěže"
@@ -2042,7 +2048,7 @@ class PlayoffApp:
         url = info.get("url")
 
         if is_newer_version(latest, APP_current):
-            if messagebox.askyesno("Aktualizace programu", f"Dostupná verze {latest}. Aktualizovat?"):
+            if self.ask_update_confirmation(latest, update_notes_text(info)):
                 # path to the file to be updated
                 if getattr(sys, 'frozen', False):
                     # runs as EXE
@@ -2069,6 +2075,43 @@ class PlayoffApp:
 
         else:
             messagebox.showinfo("Aktualizace", "Máte nejnovější verzi :-)")
+
+    def ask_update_confirmation(self, latest, notes):
+        """Show the release notes before the user starts the installer download."""
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title("Aktualizace programu")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.resizable(False, False)
+
+        body = tk.Frame(dlg, padx=16, pady=14)
+        body.pack(fill="both", expand=True)
+        tk.Label(
+            body,
+            text=f"Dostupná je verze {latest} (nyní používáte {APP_current}).",
+            font=("Arial", 11, "bold"),
+            anchor="w",
+        ).pack(fill="x", pady=(0, 8))
+        tk.Label(body, text="Co se změnilo:", anchor="w").pack(fill="x")
+        notes_box = tk.Text(body, width=64, height=7, wrap="word", padx=7, pady=6)
+        notes_box.insert("1.0", notes)
+        notes_box.config(state="disabled")
+        notes_box.pack(fill="both", expand=True, pady=(3, 12))
+
+        result = {"update": False}
+
+        def choose_update():
+            result["update"] = True
+            dlg.destroy()
+
+        buttons = tk.Frame(body)
+        buttons.pack(fill="x")
+        tk.Button(buttons, text="Později", width=12, command=dlg.destroy).pack(side="right")
+        tk.Button(buttons, text="Aktualizovat", width=12, command=choose_update).pack(side="right", padx=(0, 8))
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+        dlg.wait_window()
+        return result["update"]
 
     def edit_pre_title(self):
         if self.lock_edit:

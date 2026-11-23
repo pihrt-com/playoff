@@ -13,7 +13,7 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 23. 11. 2026
 
-Nastavení má nové barevné ikony u pojmenování týmů, importu ROBO, vzhledu, USB a celé obrazovky. Nápověda obsahuje klikací odkaz na tento GitHub projekt. Sloupec nejlepšího času se při velkém písmu vykreslí kompaktně v jednom řádku.
+Aktualizace přes Setup EXE zachová existující zástupce Playoffu na ploše Windows, včetně jeho umístění. Při nové instalaci se zástupce vytvoří a při odinstalaci odstraní. Před stažením aktualizace aplikace ukáže popis změn nové verze.
 
 ## Aplikace
 

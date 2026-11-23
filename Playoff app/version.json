@@ -1,7 +1,7 @@
 {
-  "version": "1.0.31",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.31/PlayoffSetup_1.0.31.exe",
-  "sha256": "359aa5a89c171f91e1bc136d1f6fa830a6066a4bf03b3b63e2d8a9a851f00e9a",
-  "size": 52454675,
-  "notes": "Nastavení má nové barevné ikony, nápověda obsahuje odkaz na projekt a nejlepší časy se při velkém písmu vejdou do řádků tabulky."
+  "version": "1.0.32",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.32/PlayoffSetup_1.0.32.exe",
+  "sha256": "3aa57d3039c229bea6df81362b3c8ec044c532e1716fe5bbfa1f9d86d89feb58",
+  "size": 52461325,
+  "notes": "Aktualizace zachová existující zástupce Playoffu na ploše Windows včetně jeho umístění. Před stažením aplikace zobrazí popis změn nové verze."
 }

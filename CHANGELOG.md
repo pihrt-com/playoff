@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.32 – 23. 11. 2026
+
+- Aktualizace přes Setup EXE zachová existující zástupce Playoffu na ploše Windows, včetně jeho umístění; při nové instalaci se zástupce vytvoří a při odinstalaci odstraní.
+- Před stažením aktualizace okno zobrazí popis změn nové verze a umožní zvolit Aktualizovat nebo Později.
+
 ## 1.0.31 – 23. 11. 2026
 
 - Nabídka Nastavení má barevné ikony u pojmenování týmů, importu ROBO, práce s pozadím, velikosti písma, tloušťky čar, USB panelů a celé obrazovky.
