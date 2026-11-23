@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.37"                                         # current version of the application
+APP_current       = "1.0.38"                                         # current version of the application
 APP_date          = "23.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -2613,6 +2613,15 @@ class PlayoffApp:
         self.gate_sync_state = "ready" if success else "disconnected"
         self.update_usb_status("ready" if success else False)
 
+    def gate_ready_for_start(self):
+        """A configured gate may start only after its latest sync completed."""
+        if not (self.usb and str(getattr(self, "usb_port", "") or "").strip()):
+            return True
+        return (
+            not getattr(self, "gate_sync_pending", False)
+            and getattr(self, "gate_sync_state", "disconnected") == "ready"
+        )
+
     def on_view_mode_change(self):
         new_mode = self.view_mode_var.get()
         if new_mode == self.view_mode:
@@ -2910,6 +2919,11 @@ class PlayoffApp:
         self.root.after(0, gui)        
 
     def on_start(self):
+        if not self.gate_ready_for_start():
+            self.status_var.set("Brána se synchronizuje, vyčkejte na zelený GATE")
+            self.status_label.config(fg="#f57c00")
+            return
+
         self.stop_promo()
         self.race_active = True
         self.update_promo_button_state()
@@ -2952,7 +2966,6 @@ class PlayoffApp:
                     # WAITING FOR "ok" FROM ARDUINO
                     self.status_var.set('START odeslán')
                     self.status_label.config(fg='orange')
-                    self.finish_gate_resync(True)
 
                 else:
                     if reason == 'timeout':
@@ -3033,8 +3046,6 @@ class PlayoffApp:
                 )
 
                 self.usb.send_start_async(on_result)
-
-                self.finish_gate_resync(True)
 
             else:
 

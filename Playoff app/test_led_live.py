@@ -357,6 +357,26 @@ class LiveLEDTests(unittest.TestCase):
         self.assertEqual(app.gate_sync_state, "disconnected")
         self.assertEqual(app.usb_status_canvas.colors[-1], "red")
 
+    def test_start_requires_completed_gate_sync_when_a_gate_port_is_configured(self):
+        app = playoff.PlayoffApp.__new__(playoff.PlayoffApp)
+        app.usb = object()
+        app.usb_port = "COM9"
+        app.gate_sync_pending = True
+        app.gate_sync_state = "syncing"
+
+        self.assertFalse(app.gate_ready_for_start())
+
+        app.gate_sync_pending = False
+        app.gate_sync_state = "ready"
+        self.assertTrue(app.gate_ready_for_start())
+
+    def test_start_does_not_require_a_gate_when_no_gate_port_is_configured(self):
+        app = playoff.PlayoffApp.__new__(playoff.PlayoffApp)
+        app.usb = object()
+        app.usb_port = ""
+
+        self.assertTrue(app.gate_ready_for_start())
+
     def test_panel_scroll_speed_is_normalized_to_supported_values(self):
         self.assertEqual(playoff.normalize_panel_scroll_ms("64", 250), 65)
         self.assertEqual(playoff.normalize_panel_scroll_ms("invalid", 250), 250)

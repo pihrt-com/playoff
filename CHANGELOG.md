@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.38 – 23. 11. 2026
+
+- START nelze odeslat během probíhající obnovy USB brány; aplikace vyčká na potvrzený stav GATE.
+- Samotné úspěšné zapsání příkazu START už nemění stav GATE, takže nedokončená synchronizace nemůže následně příkaz START zrušit.
+
 ## 1.0.37 – 23. 11. 2026
 
 - Firmware měřicí brány před novým startem, změnou režimu i obnovou USB bezpečně ukončí rozběhnutý semafor a vrátí jej do klidového stavu; po návratu USB proto už není nutný ruční RESET Arduina.

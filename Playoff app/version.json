@@ -1,7 +1,7 @@
 {
-  "version": "1.0.37",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.37/PlayoffSetup_1.0.37.exe",
-  "sha256": "5470405f8e8ebb83cc180e06f2d13217ca0954ebb99572d64e7175dd01113eee",
-  "size": 52513542,
-  "notes": "Obnovena brána po výpadku USB již nevyžaduje ruční RESET Arduina. GATE se rozsvítí zeleně až po potvrzení režimu PLAYOFF nebo LAPS přímo z brány."
+  "version": "1.0.38",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.38/PlayoffSetup_1.0.38.exe",
+  "sha256": "fb42e8e1a684ecc463ce799e079d2f6721e0b0700e39034ad698c6c887cd24b9",
+  "size": 52511858,
+  "notes": "Opraveno předčasné spuštění STARTu během obnovy USB brány. Tlačítko nyní čeká na dokončenou synchronizaci a samotné odeslání STARTu už nemění stav GATE."
 }

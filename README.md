@@ -13,7 +13,7 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 23. 11. 2026
 
-Po návratu USB měřicí brány aplikace obnoví komunikaci, nejprve bráně odešle synchronizaci a potom aktivní režim PLAYOFF nebo LAPS. Firmware potvrdí připravenost zprávou `ready_playoff` nebo `ready_laps`; GATE proto zůstává žlutý až do potvrzení a při neúspěchu je červený. Firmware zároveň před obnovením bezpečně ukončí případný rozběhnutý semafor, takže po odpojení USB není nutný ruční RESET Arduina. Aktuální firmware nahrajte ze souboru `Arduino/gate semaphore/fw1.5/fw1.5.ino`. Panely zůstávají označené ID1 až ID4 a každý se po návratu obnovuje samostatně.
+Po návratu USB měřicí brány aplikace obnoví komunikaci, nejprve bráně odešle synchronizaci a potom aktivní režim PLAYOFF nebo LAPS. Firmware potvrdí připravenost zprávou `ready_playoff` nebo `ready_laps`; GATE proto zůstává žlutý až do potvrzení a při neúspěchu je červený. Tlačítko START během synchronizace příkaz neodešle, takže pozdější obnova nemůže právě zahájenou jízdu zrušit. Firmware zároveň před obnovením bezpečně ukončí případný rozběhnutý semafor, takže po odpojení USB není nutný ruční RESET Arduina. Aktuální firmware nahrajte ze souboru `Arduino/gate semaphore/fw1.5/fw1.5.ino`. Panely zůstávají označené ID1 až ID4 a každý se po návratu obnovuje samostatně.
 
 ## Aplikace
 
