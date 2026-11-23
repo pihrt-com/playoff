@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.34 – 23. 11. 2026
+
+- Po návratu odpojené měřicí brány aplikace zavře staré spojení, znovu otevře port, obnoví čtení událostí a odešle aktivní režim PLAYOFF nebo LAPS.
+- Indikátor měřicí brány v horní liště se jmenuje GATE; při výpadku je červený, během obnovy žlutý a po úspěšném obnovení zelený.
+
 ## 1.0.33 – 23. 11. 2026
 
 - Po návratu odpojeného USB panelu aplikace obnoví pouze tento panel: vyčistí jeho obsah, nastaví uloženou rychlost a odešle aktuální čas nebo text.

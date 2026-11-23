@@ -13,7 +13,7 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 23. 11. 2026
 
-Po návratu USB panelu aplikace obnoví jeho právě platný čas nebo text. Indikátor ID-1 až ID-4 je při odpojení červený, při obnově žlutý a zelený až po úspěšném obnovení rychlosti i obsahu konkrétního panelu.
+Po návratu USB měřicí brány aplikace obnoví její komunikaci, čtení událostí i právě zvolený režim PLAYOFF nebo LAPS. Indikátor brány se v horní liště jmenuje `GATE`; panely zůstávají označené ID1 až ID4 a každý se po návratu obnovuje samostatně.
 
 ## Aplikace
 
