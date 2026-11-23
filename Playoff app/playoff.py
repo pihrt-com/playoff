@@ -18,6 +18,7 @@ import urllib.parse
 import urllib.error
 import ssl
 import time
+import threading
 import unicodedata
 import webbrowser
 from datetime import datetime
@@ -886,6 +887,11 @@ class PlayoffApp:
                 self.usb = None
         else:
             self.usb = None
+        # A panel is green only after its current content has been resent.
+        # A reconnect is asynchronous so that one unavailable panel never
+        # blocks the Tkinter interface or the remaining panels.
+        self.panel_sync_state = {display_id: "disconnected" for display_id in range(1, 5)}
+        self.panel_sync_pending = set()
         # store usb settings for saving into setup file
         self.usb_port = DEFAULT_USB_PORT
         self.usb_baud = DEFAULT_USB_BAUD
@@ -1564,16 +1570,10 @@ class PlayoffApp:
                 except:
                     pass
 
-                # LED panel status
-                if self.display_port_a:
-                    self.update_display_status(1, True)
-                else:
-                    self.update_display_status(1, False)
-
-                if self.display_port_b:
-                    self.update_display_status(2, True)
-                else:
-                    self.update_display_status(2, False)                
+                # A configured panel is yellow until its actual current
+                # content is restored after the serial connection opens.
+                for display_id in range(1, 5):
+                    self.update_display_status(display_id, False)
 
                 if self.usb:
                     try:
@@ -1593,22 +1593,7 @@ class PlayoffApp:
 
                         # LED displays are independent of the measuring gate.
                         self.usb.connect_displays()
-                        self.root.after(
-                            2500,
-                            lambda: self.usb.send_display(1, "TXT:ID-1")
-                        )
-                        self.root.after(
-                            2600,
-                            lambda: self.usb.send_display(2, "TXT:ID-2")
-                        )                
-                        self.root.after(
-                            7000,
-                            lambda: self.usb.send_display(1, "TXT:-------")
-                        )
-                        self.root.after(
-                            7200,
-                            lambda: self.usb.send_display(2, "TXT:-------")
-                        )                        
+                        self.schedule_configured_panel_resync()
                         if self.usb_port:
                             if self.view_mode == "laps":
                                 self.usb.handler.send(b"mode_laps\n")
@@ -2438,6 +2423,75 @@ class PlayoffApp:
         for display_id in ids:
             self.send_display_latest(display_id, self.panel_command(display_id))
 
+    def panel_resync_commands(self, display_id):
+        """Return the ordered commands that restore one panel after reconnect."""
+        return (
+            "CLS",
+            f"SPD:{self.panel_scroll_speed(display_id)}",
+            self.panel_command(display_id),
+        )
+
+    def schedule_configured_panel_resync(self):
+        for display_id in self.configured_display_ids():
+            self.schedule_panel_resync(display_id)
+
+    def schedule_panel_resync(self, display_id):
+        """Reset and restore one panel without blocking the GUI or other ports."""
+        if not self.usb or display_id not in self.configured_display_ids():
+            return False
+        pending = getattr(self, "panel_sync_pending", None)
+        if pending is None:
+            pending = self.panel_sync_pending = set()
+        if display_id in pending:
+            return True
+
+        pending.add(display_id)
+        if not hasattr(self, "panel_sync_state"):
+            self.panel_sync_state = {}
+        self.panel_sync_state[display_id] = "syncing"
+        self.update_display_status(display_id, "syncing")
+        commands = self.panel_resync_commands(display_id)
+        threading.Thread(
+            target=self._resync_panel_worker,
+            args=(display_id, commands),
+            daemon=True,
+        ).start()
+        return True
+
+    def _resync_panel_worker(self, display_id, commands):
+        """Give a reset panel time to boot, then restore its speed and content."""
+        success = False
+        try:
+            sender = getattr(self.usb, "send_display", None)
+            if not callable(sender):
+                raise RuntimeError("USB modul neumí přímé odeslání panelu.")
+            success = bool(sender(display_id, commands[0]))
+            if success:
+                # After USB reconnect the Arduino can still be completing its boot.
+                time.sleep(0.4)
+                success = bool(sender(display_id, commands[1]))
+            if success:
+                success = bool(sender(display_id, commands[2]))
+        except Exception as exc:
+            self._log(f"PANEL ID-{display_id} SYNC ERROR: {exc}")
+            success = False
+
+        try:
+            self.root.after(
+                0,
+                lambda: self.finish_panel_resync(display_id, success),
+            )
+        except Exception:
+            self.finish_panel_resync(display_id, success)
+
+    def finish_panel_resync(self, display_id, success):
+        pending = getattr(self, "panel_sync_pending", set())
+        pending.discard(display_id)
+        if not hasattr(self, "panel_sync_state"):
+            self.panel_sync_state = {}
+        self.panel_sync_state[display_id] = "ready" if success else "disconnected"
+        self.update_display_status(display_id, "ready" if success else False)
+
     def refresh_panels_for_content(self, content):
         display_ids = self.panel_ids_for_content(content)
         if display_ids:
@@ -2603,9 +2657,12 @@ class PlayoffApp:
         if self.view_mode == "playoff":
             self.start_btn.pack(side='right', padx=4)               
 
-    def update_display_status(self, disp_id, connected):
+    def update_display_status(self, disp_id, state):
         try:
-            color = "green" if connected else "red"
+            color = {
+                "ready": "green",
+                "syncing": "#fbc02d",
+            }.get(state, "green" if state is True else "red")
             if disp_id == 1:
                 self.disp1_status_canvas.itemconfig(self.disp1_status_id, fill=color, outline=color)
             elif disp_id == 2:
@@ -2632,7 +2689,24 @@ class PlayoffApp:
                 connected = bool(port and port in ports and connection and connection.is_open)
             except Exception:
                 connected = False
-            self.update_display_status(display_id, connected)
+                port = ""
+
+            if not port or port not in ports:
+                # Drop a stale serial handle, otherwise a reappearing COM port
+                # could be shown as connected without receiving current content.
+                disconnect = getattr(self.usb, "disconnect_display", None) if self.usb else None
+                if callable(disconnect):
+                    disconnect(display_id)
+                if hasattr(self, "panel_sync_state"):
+                    self.panel_sync_state[display_id] = "disconnected"
+                self.update_display_status(display_id, False)
+                continue
+
+            state = getattr(self, "panel_sync_state", {}).get(display_id, "disconnected")
+            if connected and state == "ready":
+                self.update_display_status(display_id, "ready")
+            else:
+                self.schedule_panel_resync(display_id)
 
     def auto_check_usb(self):
         """Automatic USB port check."""
@@ -3484,13 +3558,15 @@ class PlayoffApp:
                 display_ports = {
                     1: self.display_port_a,
                     2: self.display_port_b,
+                    3: self.matrix_port_a,
+                    4: self.matrix_port_b,
                 }
                 failures = []
                 for display_id, port in display_ports.items():
                     if port and not display_results[display_id]:
                         detail = self.usb.display_error(display_id)
                         failures.append(
-                            f"LED displej ID-{display_id} ({port})"
+                            f"Panel ID-{display_id} ({port})"
                             + (f": {detail}" if detail else "")
                         )
 
@@ -3504,24 +3580,7 @@ class PlayoffApp:
                     )
                     return
 
-                if self.display_port_a:
-                    self.root.after(
-                        2500,
-                        lambda: self.usb.send_display(1, "TXT:ID-1")
-                    )
-                    self.root.after(
-                        7000,
-                        lambda: self.usb.send_display(1, "TXT:-------")
-                    )
-                if self.display_port_b:
-                    self.root.after(
-                        2600,
-                        lambda: self.usb.send_display(2, "TXT:ID-2")
-                    )
-                    self.root.after(
-                        7200,
-                        lambda: self.usb.send_display(2, "TXT:-------")
-                    )
+                self.schedule_configured_panel_resync()
             except Exception as e:
                 messagebox.showerror(
                     "Displej chyba",

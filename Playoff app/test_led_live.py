@@ -15,6 +15,10 @@ class FakeUSB:
         self.messages.append((display_id, text))
         return True
 
+    def send_display(self, display_id, text):
+        self.messages.append((display_id, text))
+        return True
+
 
 class FakeVar:
     def __init__(self, value):
@@ -39,6 +43,45 @@ class ImmediateRoot:
     def after(self, delay, callback):
         callback()
         return "after-id"
+
+
+class InlineThread:
+    def __init__(self, target, args=(), daemon=False):
+        self.target = target
+        self.args = args
+
+    def start(self):
+        self.target(*self.args)
+
+
+class FakeCanvas:
+    def __init__(self):
+        self.colors = []
+
+    def itemconfig(self, _item_id, **options):
+        self.colors.append(options["fill"])
+
+
+class FakeConnection:
+    def __init__(self):
+        self.is_open = True
+
+
+class FakeReconnectUSB(FakeUSB):
+    def __init__(self):
+        super().__init__()
+        self.ports = []
+        self.display_a = FakeConnection()
+        self.display_b = None
+        self.matrix_a = None
+        self.matrix_b = None
+
+    def list_ports(self):
+        return self.ports
+
+    def disconnect_display(self, display_id):
+        if display_id == 1:
+            self.display_a.is_open = False
 
 
 def make_app():
@@ -170,6 +213,45 @@ class LiveLEDTests(unittest.TestCase):
             app.usb.messages,
             [(1, "SPD:200"), (2, "SPD:300"), (3, "SPD:65"), (4, "SPD:150")],
         )
+
+    def test_reconnected_panel_resets_and_restores_current_content_before_green(self):
+        app = make_app()
+        app.root = ImmediateRoot()
+        app.panel_sync_state = {display_id: "disconnected" for display_id in range(1, 5)}
+        app.panel_sync_pending = set()
+        app.disp1_status_canvas = FakeCanvas()
+        app.disp1_status_id = 1
+
+        with mock.patch.object(playoff.threading, "Thread", InlineThread), mock.patch.object(playoff.time, "sleep"):
+            self.assertTrue(app.schedule_panel_resync(1))
+
+        self.assertEqual(
+            app.usb.messages,
+            [(1, "CLS"), (1, "SPD:250"), (1, "TXT:01.234")],
+        )
+        self.assertEqual(app.panel_sync_state[1], "ready")
+        self.assertIn("#fbc02d", app.disp1_status_canvas.colors)
+        self.assertEqual(app.disp1_status_canvas.colors[-1], "green")
+
+    def test_port_return_resynchronizes_panel_after_disconnect(self):
+        app = make_app()
+        app.usb = FakeReconnectUSB()
+        app.root = ImmediateRoot()
+        app.panel_sync_state = {display_id: "ready" for display_id in range(1, 5)}
+        app.panel_sync_pending = set()
+        app.disp1_status_canvas = FakeCanvas()
+        app.disp1_status_id = 1
+
+        app.auto_check_displays()
+        self.assertEqual(app.panel_sync_state[1], "disconnected")
+        self.assertEqual(app.disp1_status_canvas.colors[-1], "red")
+
+        app.usb.ports = ["COM3"]
+        with mock.patch.object(playoff.threading, "Thread", InlineThread), mock.patch.object(playoff.time, "sleep"):
+            app.auto_check_displays()
+
+        self.assertEqual(app.usb.messages, [(1, "CLS"), (1, "SPD:250"), (1, "TXT:01.234")])
+        self.assertEqual(app.panel_sync_state[1], "ready")
 
     def test_panel_scroll_speed_is_normalized_to_supported_values(self):
         self.assertEqual(playoff.normalize_panel_scroll_ms("64", 250), 65)
