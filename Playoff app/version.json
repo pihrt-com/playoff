@@ -1,7 +1,7 @@
 {
-  "version": "1.0.34",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.34/PlayoffSetup_1.0.34.exe",
-  "sha256": "5e411de6f613c13f2d521742796455ee3730e6fe8146811a51ad89825b5f1516",
-  "size": 52462882,
-  "notes": "Po návratu USB měřicí brány se obnoví její komunikace i aktivní režim PLAYOFF nebo LAPS. Indikátor brány se nově jmenuje GATE a je během obnovy žlutý."
+  "version": "1.0.35",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.35/PlayoffSetup_1.0.35.exe",
+  "sha256": "6de8e62909dad5cfa5d768b4f4091ac00c2e812099e1f9e723b74ad5fe0998e5",
+  "size": 52463653,
+  "notes": "Po návratu USB brány aplikace s odstupem dvakrát obnoví aktivní režim PLAYOFF nebo LAPS, aby se LAPS správně vrátil i po pozdějším startu Arduina."
 }

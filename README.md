@@ -13,7 +13,7 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 23. 11. 2026
 
-Po návratu USB měřicí brány aplikace obnoví její komunikaci, čtení událostí i právě zvolený režim PLAYOFF nebo LAPS. Indikátor brány se v horní liště jmenuje `GATE`; panely zůstávají označené ID1 až ID4 a každý se po návratu obnovuje samostatně.
+Po návratu USB měřicí brány aplikace obnoví její komunikaci, čtení událostí i právě zvolený režim PLAYOFF nebo LAPS. Po startu Arduina se režim odešle dvakrát s krátkým odstupem, protože firmware jeho převzetí nepotvrzuje. Indikátor brány se v horní liště jmenuje `GATE`; panely zůstávají označené ID1 až ID4 a každý se po návratu obnovuje samostatně.
 
 ## Aplikace
 

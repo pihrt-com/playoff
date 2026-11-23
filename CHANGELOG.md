@@ -1,5 +1,9 @@
 # Historie změn
 
+## 1.0.35 – 23. 11. 2026
+
+- Po návratu USB brány aplikace počká na start Arduina a dvakrát obnoví aktivní režim PLAYOFF nebo LAPS, aby se správně vrátilo měření LAPS.
+
 ## 1.0.34 – 23. 11. 2026
 
 - Po návratu odpojené měřicí brány aplikace zavře staré spojení, znovu otevře port, obnoví čtení událostí a odešle aktivní režim PLAYOFF nebo LAPS.
