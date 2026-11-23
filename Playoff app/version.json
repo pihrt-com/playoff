@@ -1,7 +1,7 @@
 {
-  "version": "1.0.32",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.32/PlayoffSetup_1.0.32.exe",
-  "sha256": "3aa57d3039c229bea6df81362b3c8ec044c532e1716fe5bbfa1f9d86d89feb58",
-  "size": 52461325,
-  "notes": "Aktualizace zachová existující zástupce Playoffu na ploše Windows včetně jeho umístění. Před stažením aplikace zobrazí popis změn nové verze."
+  "version": "1.0.33",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.33/PlayoffSetup_1.0.33.exe",
+  "sha256": "5ea204aa6cc1cbd4405abb9b54c413dd2aa65a1ea0c2ea083b0fff8d443cbc06",
+  "size": 52461449,
+  "notes": "Po návratu USB panelu se obnoví jeho aktuální obsah. Indikátor panelu je během obnovy žlutý a zezelená až po odeslání nastavené rychlosti a obsahu."
 }

@@ -13,7 +13,7 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 23. 11. 2026
 
-Aktualizace přes Setup EXE zachová existující zástupce Playoffu na ploše Windows, včetně jeho umístění. Při nové instalaci se zástupce vytvoří a při odinstalaci odstraní. Před stažením aktualizace aplikace ukáže popis změn nové verze.
+Po návratu USB panelu aplikace obnoví jeho právě platný čas nebo text. Indikátor ID-1 až ID-4 je při odpojení červený, při obnově žlutý a zelený až po úspěšném obnovení rychlosti i obsahu konkrétního panelu.
 
 ## Aplikace
 

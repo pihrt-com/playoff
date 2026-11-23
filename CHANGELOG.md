@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.33 – 23. 11. 2026
+
+- Po návratu odpojeného USB panelu aplikace obnoví pouze tento panel: vyčistí jeho obsah, nastaví uloženou rychlost a odešle aktuální čas nebo text.
+- Indikátor ID-1 až ID-4 je při nedostupném portu červený, během obnovy žlutý a zelený až po úspěšném odeslání aktuálního obsahu.
+
 ## 1.0.32 – 23. 11. 2026
 
 - Aktualizace přes Setup EXE zachová existující zástupce Playoffu na ploše Windows, včetně jeho umístění; při nové instalaci se zástupce vytvoří a při odinstalaci odstraní.
