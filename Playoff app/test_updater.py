@@ -29,10 +29,10 @@ class UpdateManifestTests(unittest.TestCase):
             (app_dir / "version.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(manifest["version"], "1.0.35")
+        self.assertEqual(manifest["version"], "1.0.36")
         self.assertEqual(playoff.APP_current, manifest["version"])
-        self.assertIn("/releases/download/1.0.35/", manifest["url"])
-        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.35.exe"))
+        self.assertIn("/releases/download/1.0.36/", manifest["url"])
+        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.36.exe"))
         self.assertEqual(len(manifest["sha256"]), 64)
         self.assertTrue(all(char in "0123456789abcdef" for char in manifest["sha256"]))
         self.assertGreater(manifest["size"], 0)
@@ -40,8 +40,8 @@ class UpdateManifestTests(unittest.TestCase):
         installer = (app_dir / "installer_playoff.iss").read_text(
             encoding="utf-8"
         )
-        self.assertIn("AppVersion=1.0.35", installer)
-        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.35", installer)
+        self.assertIn("AppVersion=1.0.36", installer)
+        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.36", installer)
 
     def test_installer_preserves_existing_desktop_shortcut_during_update(self):
         installer = (Path(__file__).resolve().parent / "installer_playoff.iss").read_text(
@@ -52,6 +52,14 @@ class UpdateManifestTests(unittest.TestCase):
         self.assertIn("Flags: uninsneveruninstall", installer)
         self.assertIn("Type: files; Name: \"{userdesktop}\\Playoff.lnk\"", installer)
         self.assertIn("Result := not FileExists(ExpandConstant('{userdesktop}\\Playoff.lnk'));", installer)
+
+    def test_installer_offers_to_launch_playoff_after_interactive_setup(self):
+        installer = (Path(__file__).resolve().parent / "installer_playoff.iss").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('Description: "Spustit Playoff"', installer)
+        self.assertIn("Flags: nowait postinstall skipifsilent", installer)
 
     def test_build_specs_keep_playoff_icon(self):
         app_dir = Path(__file__).resolve().parent

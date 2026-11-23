@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.36 – 23. 11. 2026
+
+- Po návratu USB měřicí brány aplikace čeká déle na dokončení startu Arduina a aktivní režim PLAYOFF nebo LAPS odešle třikrát s odstupem.
+- Dokončovací stránka instalačního Setupu nabízí předvolenou volbu Spustit Playoff.
+
 ## 1.0.35 – 23. 11. 2026
 
 - Po návratu USB brány aplikace počká na start Arduina a dvakrát obnoví aktivní režim PLAYOFF nebo LAPS, aby se správně vrátilo měření LAPS.

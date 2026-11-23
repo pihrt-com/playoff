@@ -1,10 +1,10 @@
 [Setup]
 AppName=Playoff
-AppVersion=1.0.35
+AppVersion=1.0.36
 DefaultDirName={pf}\Playoff
 DefaultGroupName=Playoff
 OutputDir=output_installer
-OutputBaseFilename=PlayoffSetup_1.0.35
+OutputBaseFilename=PlayoffSetup_1.0.36
 Compression=lzma
 SolidCompression=yes
 AppPublisher=Martin Pihrt
@@ -30,6 +30,9 @@ Name: "{userdesktop}\Playoff"; Filename: "{app}\playoff.exe"; IconFilename: "{ap
 
 [Tasks]
 Name: "desktopicon"; Description: "Vytvořit zástupce na ploše"; GroupDescription: "Další volby:"; Flags: unchecked
+
+[Run]
+Filename: "{app}\playoff.exe"; Description: "Spustit Playoff"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: files; Name: "{userdesktop}\Playoff.lnk"

@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.35"                                         # current version of the application
+APP_current       = "1.0.36"                                         # current version of the application
 APP_date          = "23.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -2582,12 +2582,12 @@ class PlayoffApp:
                 # A physically reconnected Arduino may still be finishing its
                 # boot even though Windows has already reopened the COM port.
                 # The gate firmware does not acknowledge mode commands, so
-                # send the active mode twice before reporting a ready gate.
-                time.sleep(0.75)
+                # wait for the Mega to finish booting and repeat the mode.
+                time.sleep(3.0)
                 mode_command = b"mode_laps\n" if self.view_mode == "laps" else b"mode_playoff\n"
-                self.usb.handler.send(mode_command)
-                time.sleep(0.25)
-                self.usb.handler.send(mode_command)
+                for _attempt in range(3):
+                    self.usb.handler.send(mode_command)
+                    time.sleep(0.5)
         except Exception as exc:
             self._log(f"GATE SYNC ERROR: {exc}")
             success = False
