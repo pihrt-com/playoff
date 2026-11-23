@@ -309,11 +309,11 @@ class LiveLEDTests(unittest.TestCase):
         self.assertEqual(app.usb_status_canvas.colors[-1], "red")
 
         app.usb.ports = ["COM9"]
-        with mock.patch.object(playoff.threading, "Thread", InlineThread):
+        with mock.patch.object(playoff.threading, "Thread", InlineThread), mock.patch.object(playoff.time, "sleep"):
             app.auto_check_usb()
 
         self.assertEqual(len(app.usb.reconnect_calls), 1)
-        self.assertEqual(app.usb.handler.messages, [b"mode_laps\n"])
+        self.assertEqual(app.usb.handler.messages, [b"mode_laps\n", b"mode_laps\n"])
         self.assertEqual(app.gate_sync_state, "ready")
         self.assertIn("#fbc02d", app.usb_status_canvas.colors)
         self.assertEqual(app.usb_status_canvas.colors[-1], "green")

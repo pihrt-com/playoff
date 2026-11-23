@@ -2579,7 +2579,14 @@ class PlayoffApp:
         try:
             success = bool(self.usb.reconnect(self.on_usb_line))
             if success:
+                # A physically reconnected Arduino may still be finishing its
+                # boot even though Windows has already reopened the COM port.
+                # The gate firmware does not acknowledge mode commands, so
+                # send the active mode twice before reporting a ready gate.
+                time.sleep(0.75)
                 mode_command = b"mode_laps\n" if self.view_mode == "laps" else b"mode_playoff\n"
+                self.usb.handler.send(mode_command)
+                time.sleep(0.25)
                 self.usb.handler.send(mode_command)
         except Exception as exc:
             self._log(f"GATE SYNC ERROR: {exc}")
