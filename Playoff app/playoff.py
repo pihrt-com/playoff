@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.30"                                         # current version of the application
-APP_date          = "20.11.2026"                                     # current version date
+APP_current       = "1.0.31"                                         # current version of the application
+APP_date          = "23.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -19,6 +19,7 @@ import urllib.error
 import ssl
 import time
 import unicodedata
+import webbrowser
 from datetime import datetime
 import certifi
 
@@ -1124,7 +1125,12 @@ class PlayoffApp:
             command=self.ask_team_count,
         )
         self.settings_menu.add_command(label='Generovat týmy', command=self.generate_from_entry)
-        self.settings_menu.add_command(label='Pojmenování týmů', command=self.open_team_naming_dialog)
+        self.settings_menu.add_command(
+            label='Pojmenování týmů',
+            image=self.menu_icons['teams'],
+            compound='left',
+            command=self.open_team_naming_dialog,
+        )
         self.settings_menu.add_command(label='Smazat jen obsah', command=self.reset_values)
         self.settings_menu.add_command(label='Vymazat všechno', command=self.clear_all)
         self.settings_menu.add_checkbutton(label='Používat předkolo', variable=self.pre_round_var, command=self.toggle_pre_round)
@@ -1166,7 +1172,12 @@ class PlayoffApp:
         )
 
         self.robo_import_menu = tk.Menu(self.settings_menu, tearoff=0)
-        self.settings_menu.add_cascade(label='Import online z ROBO', menu=self.robo_import_menu)
+        self.settings_menu.add_cascade(
+            label='Import online z ROBO',
+            image=self.menu_icons['teams'],
+            compound='left',
+            menu=self.robo_import_menu,
+        )
         self.robo_import_menu.add_command(
             label='Nastavení importu…',
             command=self.open_robo_import_settings,
@@ -1180,12 +1191,22 @@ class PlayoffApp:
         self.update_robo_import_menu_state()
 
         self.settings_menu.add_separator()
-        self.settings_menu.add_command(label='Načíst pozadí', command=self.load_bg_image)
+        self.settings_menu.add_command(
+            label='Načíst pozadí',
+            image=self.menu_icons['background_image'],
+            compound='left',
+            command=self.load_bg_image,
+        )
         self.settings_menu.add_command(label='Smazat pozadí', command=self.remove_bg)
 
         # font submenu
         font_menu = tk.Menu(self.settings_menu, tearoff=0)
-        self.settings_menu.add_cascade(label='Velikost písma', menu=font_menu)        
+        self.settings_menu.add_cascade(
+            label='Velikost písma',
+            image=self.menu_icons['font'],
+            compound='left',
+            menu=font_menu,
+        )
         font_menu.add_radiobutton(
             label='Malé',
             variable=self.font_scale_var,
@@ -1207,11 +1228,21 @@ class PlayoffApp:
             command=lambda: self.set_font_scale('large')
         )
     
-        self.settings_menu.add_command(label='Barva pozadí', command=self.choose_canvas_bg)
+        self.settings_menu.add_command(
+            label='Barva pozadí',
+            image=self.menu_icons['palette'],
+            compound='left',
+            command=self.choose_canvas_bg,
+        )
 
         # line width submenu
         lw_menu = tk.Menu(self.settings_menu, tearoff=0)
-        self.settings_menu.add_cascade(label='Tloušťka čar', menu=lw_menu)
+        self.settings_menu.add_cascade(
+            label='Tloušťka čar',
+            image=self.menu_icons['line'],
+            compound='left',
+            menu=lw_menu,
+        )
         lw_menu.add_radiobutton(
             label='Normální',
             variable=self.line_width_var,
@@ -1296,7 +1327,12 @@ class PlayoffApp:
             )
 
         self.settings_menu.add_separator()
-        self.settings_menu.add_command(label='USB nastavení', command=self.open_usb_dialog)
+        self.settings_menu.add_command(
+            label='USB nastavení – brána a panely',
+            image=self.menu_icons['usb'],
+            compound='left',
+            command=self.open_usb_dialog,
+        )
 
         self.settings_menu.add_separator()
         self.settings_menu.add_command(
@@ -1316,6 +1352,8 @@ class PlayoffApp:
         self.fullscreen_var = tk.BooleanVar(value=self.projector_mode)
         self.settings_menu.add_checkbutton(
             label='Celá obrazovka',
+            image=self.menu_icons['fullscreen'],
+            compound='left',
             variable=self.fullscreen_var,
             command=self.toggle_projector
         )
@@ -1610,6 +1648,56 @@ class PlayoffApp:
         circle(teams, 4, 11, 3, '#64b5f6')
         circle(teams, 12, 11, 3, '#64b5f6')
         icons['teams'] = teams
+
+        background_image = image()
+        rectangle(background_image, 1, 2, 14, 14, '#64b5f6')
+        rectangle(background_image, 2, 9, 13, 13, '#81c784')
+        for x, y in ((3, 8), (4, 7), (5, 6), (6, 5), (7, 4), (8, 3), (9, 2)):
+            background_image.put('#ffffff', (x, y))
+        for x, y in ((10, 4), (11, 5), (12, 6), (12, 7), (11, 8), (10, 8)):
+            background_image.put('#fdd835', (x, y))
+        icons['background_image'] = background_image
+
+        font_icon = image()
+        for x, y in ((2, 13), (3, 9), (4, 5), (5, 2), (6, 5), (7, 9), (8, 13), (4, 9), (5, 9), (6, 9)):
+            font_icon.put('#1565c0', (x, y))
+        for x, y in ((10, 8), (11, 6), (12, 5), (13, 6), (14, 8), (10, 9), (14, 9), (10, 10), (11, 11), (12, 11), (13, 11), (14, 10), (14, 12)):
+            font_icon.put('#ef6c00', (x, y))
+        icons['font'] = font_icon
+
+        line = image()
+        rectangle(line, 1, 3, 14, 4, '#1565c0')
+        rectangle(line, 1, 7, 14, 9, '#42a5f5')
+        rectangle(line, 1, 12, 14, 14, '#0d47a1')
+        icons['line'] = line
+
+        palette = image()
+        circle(palette, 8, 8, 7, '#f8d66d')
+        circle(palette, 12, 12, 3, '#ffffff')
+        circle(palette, 5, 5, 2, '#e53935')
+        circle(palette, 10, 4, 2, '#1e88e5')
+        circle(palette, 4, 10, 2, '#43a047')
+        icons['palette'] = palette
+
+        usb = image()
+        rectangle(usb, 6, 1, 9, 11, '#455a64')
+        rectangle(usb, 4, 3, 11, 7, '#78909c')
+        rectangle(usb, 7, 1, 8, 3, '#bbdefb')
+        rectangle(usb, 3, 10, 6, 12, '#26a69a')
+        rectangle(usb, 10, 10, 13, 12, '#ffb300')
+        rectangle(usb, 7, 11, 8, 15, '#455a64')
+        icons['usb'] = usb
+
+        fullscreen = image()
+        rectangle(fullscreen, 1, 1, 6, 3, '#1565c0')
+        rectangle(fullscreen, 1, 1, 3, 6, '#1565c0')
+        rectangle(fullscreen, 10, 1, 14, 3, '#1565c0')
+        rectangle(fullscreen, 12, 1, 14, 6, '#1565c0')
+        rectangle(fullscreen, 1, 12, 6, 14, '#1565c0')
+        rectangle(fullscreen, 1, 10, 3, 14, '#1565c0')
+        rectangle(fullscreen, 10, 12, 14, 14, '#1565c0')
+        rectangle(fullscreen, 12, 10, 14, 14, '#1565c0')
+        icons['fullscreen'] = fullscreen
 
         open_icon = image()
         rectangle(open_icon, 1, 4, 15, 14, '#f6b73c')
@@ -4988,6 +5076,7 @@ class PlayoffApp:
         help_text = (
             "NÁPOVĚDA – PLAYOFF GENERÁTOR\n"
             "Autor: Martin Pihrt © www.pihrt.com\n\n"
+            "Zdrojový kód projektu: https://github.com/pihrt-com/playoff\n\n"
 
             "=== ZÁKLADNÍ OVLÁDÁNÍ ===\n"
             "- Počet týmů: Nastavení → Počet týmů max 24\n"
@@ -5045,7 +5134,7 @@ class PlayoffApp:
             "Nastavení → Smazat pozadí\n\n"
 
             "=== USB SEMAFOR ===\n"
-            "Nastavení → USB nastavení\n"
+            "Nastavení → USB nastavení – brána a panely\n"
             "- Bránu i každý LED displej lze samostatně vypnout volbou Nepoužívat\n"
             "- Jeden COM port nelze současně přiřadit více zařízením\n"
             "- Pravá část dialogu ukazuje nalezenou bránu a LED displeje\n"
@@ -5140,6 +5229,15 @@ class PlayoffApp:
         )
 
         text.insert("1.0", help_text)
+        repository_url = "https://github.com/pihrt-com/playoff"
+        link_start = text.search(repository_url, "1.0", tk.END)
+        if link_start:
+            link_end = f"{link_start}+{len(repository_url)}c"
+            text.tag_add("repository_link", link_start, link_end)
+            text.tag_config("repository_link", foreground="#1565c0", underline=True)
+            text.tag_bind("repository_link", "<Button-1>", lambda _event: webbrowser.open_new_tab(repository_url))
+            text.tag_bind("repository_link", "<Enter>", lambda _event: text.config(cursor="hand2"))
+            text.tag_bind("repository_link", "<Leave>", lambda _event: text.config(cursor=""))
         text.config(state="disabled")
 
         btn = tk.Button(dlg, text="Zavřít", command=dlg.destroy)

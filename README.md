@@ -11,6 +11,10 @@ V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadávám
 
 Import pro předkolo používá výsledky soutěžního systému [ROBO](https://github.com/pihrt-com/robo).
 
+## Aktuální změny – 23. 11. 2026
+
+Nastavení má nové barevné ikony u pojmenování týmů, importu ROBO, vzhledu, USB a celé obrazovky. Nápověda obsahuje klikací odkaz na tento GitHub projekt. Sloupec nejlepšího času se při velkém písmu vykreslí kompaktně v jednom řádku.
+
 ## Aplikace
 
 Magnetická tabule (takto to nemá vypadat)

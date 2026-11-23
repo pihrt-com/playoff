@@ -218,6 +218,12 @@ class LapsMenuAndSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as profile:
             app = self.make_real_app(self.root, profile)
             app.laps_max_teams = 6
+            app.team_names = [{
+                "id": "1",
+                "school": "SPŠ elektrotechnická",
+                "participant": "Anna Nováková, Petr Malý",
+                "best_time": "",
+            }]
             app.laps_a.append({
                 "id": 1,
                 "ride": 1,
@@ -247,6 +253,8 @@ class LapsMenuAndSetupTests(unittest.TestCase):
             self.assertEqual(saved["laps_active_team_a"], 3)
             self.assertEqual(saved["laps_teams"]["1"]["records"][0]["ms"], 12000)
             self.assertEqual(saved["laps_teams"]["4"]["next_ride"], 2)
+            self.assertEqual(saved["team_names"][0]["school"], "SPŠ elektrotechnická")
+            self.assertEqual(saved["team_names"][0]["participant"], "Anna Nováková, Petr Malý")
 
             app.clear_all_laps_history(confirm=False)
             app.laps_max_teams = 40
@@ -258,6 +266,8 @@ class LapsMenuAndSetupTests(unittest.TestCase):
             self.assertEqual(app.lap_id_b, 2)
             app.change_laps_team_pair(-1)
             self.assertEqual(app.laps_a[0]["ms"], 12000)
+            self.assertEqual(app.team_names[0]["participant"], "Anna Nováková, Petr Malý")
+            self.assertEqual(app.team_best_time_display("1"), "00:12:000 (12000)")
 
     def test_laps_canvas_uses_blue_team_controls_and_matching_header_fonts(self):
         with tempfile.TemporaryDirectory() as profile:

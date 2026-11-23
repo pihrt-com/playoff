@@ -181,18 +181,26 @@ class RoboImportMenuTests(unittest.TestCase):
             }
             labels = (
                 "Počet týmů",
+                "Pojmenování týmů",
+                "Import online z ROBO",
+                "Načíst pozadí",
+                "Velikost písma",
+                "Barva pozadí",
+                "Tloušťka čar",
                 "Zamknout editaci týmů",
                 "Načíst ze souboru",
                 "Uložit do souboru",
+                "USB nastavení – brána a panely",
                 "Export do PDF PLAYOFF",
                 "Export do PDF LAPS",
+                "Celá obrazovka",
                 "Nápověda",
                 "Kontrola aktualizace",
             )
             for label in labels:
                 self.assertIn(label, entries)
                 self.assertTrue(app.settings_menu.entrycget(entries[label], "image"))
-            self.assertEqual(len(app.menu_icons), 7)
+            self.assertEqual(len(app.menu_icons), 13)
 
     def test_usb_defaults_use_115200_for_gate_and_displays(self):
         with tempfile.TemporaryDirectory() as profile:

@@ -1,5 +1,11 @@
 # Historie změn
 
+## 1.0.31 – 23. 11. 2026
+
+- Nabídka Nastavení má barevné ikony u pojmenování týmů, importu ROBO, práce s pozadím, velikosti písma, tloušťky čar, USB panelů a celé obrazovky.
+- Položka USB nastavení nyní uvádí, že zahrnuje bránu i panely, a nápověda obsahuje klikací odkaz na GitHub projektu.
+- Nejlepší čas v tabulce účastníků používá při velkém písmu kompaktní velikost, takže nezasahuje do sousedních řádků.
+
 ## 1.0.30 – 20. 11. 2026
 
 - Každý panel ID-1 až ID-4 má vlastní uloženou rychlost posunu v milisekundách.

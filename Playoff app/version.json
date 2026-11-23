@@ -1,7 +1,7 @@
 {
-  "version": "1.0.30",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.30/PlayoffSetup_1.0.30.exe",
-  "sha256": "c4bd01a1f8d9a470166e9b6a2c86ca24dfef607647a3aef1c78a501bd4396685",
-  "size": 52455331,
-  "notes": "Každý LED a maticový panel má vlastní rychlost posunu nezávislou na rychlosti PROMO."
+  "version": "1.0.31",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.31/PlayoffSetup_1.0.31.exe",
+  "sha256": "359aa5a89c171f91e1bc136d1f6fa830a6066a4bf03b3b63e2d8a9a851f00e9a",
+  "size": 52454675,
+  "notes": "Nastavení má nové barevné ikony, nápověda obsahuje odkaz na projekt a nejlepší časy se při velkém písmu vejdou do řádků tabulky."
 }
