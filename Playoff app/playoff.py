@@ -160,6 +160,11 @@ def normalize_team_table_headers(headers):
     return [str(value or default) for value, default in zip(values, TEAM_TABLE_DEFAULT_HEADERS)]
 
 
+def team_table_best_time_font_size(table_font_size, row_height):
+    """Keep the complete derived time on one compact row at every UI scale."""
+    return max(9, min(12, table_font_size, row_height - 14))
+
+
 def lap_is_eligible_for_best(record):
     try:
         return not bool(record.get("invalid", False)) and int(record.get("ms", 0)) >= 10000
@@ -5022,7 +5027,7 @@ class PlayoffApp:
             "- Zobrazuje ID, školu, soutěžícího a nejlepší čas jízdy\n"
             "- Nadpis Účastníci soutěže lze kliknutím změnit\n"
             "- Řazení je číselně vzestupně\n"
-            "- Velikost písma odpovídá nastavení velikosti pavouka\n\n"
+            "- Velikost písma odpovídá nastavení velikosti pavouka; nejlepší čas používá kompaktní velikost, aby zůstal v jednom řádku\n\n"
 
             "=== LICHÝ POČET TÝMŮ ===\n"
             "Nastavení → Chování při lichém počtu vítězů\n"
@@ -5676,9 +5681,12 @@ class PlayoffApp:
                     )
                     x = table_x1
                     for header_index, (column_width, header) in enumerate(zip(column_widths, column_headers)):
+                        header_font_size = min(14, table_font_size)
+                        if header_index == 3:
+                            header_font_size = team_table_best_time_font_size(table_font_size, row_h)
                         header_id = self.canvas.create_text(
                             x + column_width / 2, header_y + row_h / 2,
-                            text=header, font=("Arial", min(14, table_font_size), "bold"),
+                            text=header, font=("Arial", header_font_size, "bold"),
                             width=max(20, column_width - 8), justify="center",
                         )
                         if not self.lock_edit:
@@ -5718,6 +5726,8 @@ class PlayoffApp:
                                     if value_font.measure(value) <= column_width - 16:
                                         break
                                     value_font_size -= 1
+                            elif value_index == 3:
+                                value_font_size = team_table_best_time_font_size(table_font_size, row_h)
                             self.canvas.create_text(
                                 x + (column_width / 2 if x == table_x1 else 8), y + row_h / 2,
                                 text=value, font=("Arial", value_font_size),

@@ -46,6 +46,11 @@ class TeamParticipantDataTests(unittest.TestCase):
             "id": "8", "school": "", "participant": "Jan Nový", "best_time": "",
         })
 
+    def test_best_time_font_stays_compact_at_large_scale(self):
+        self.assertEqual(playoff.team_table_best_time_font_size(18, 28), 12)
+        self.assertLess(playoff.team_table_best_time_font_size(18, 28), 18)
+        self.assertLessEqual(playoff.team_table_best_time_font_size(11, 26), 11)
+
 
 if __name__ == "__main__":
     unittest.main()
