@@ -1,6 +1,9 @@
 /*
-  Playoff Matrix Display 1.0
+  Playoff Matrix Display
   Arduino UNO/Nano + 4, 8 or 12 MAX7219 8x8 modules.
+
+  FW 1.0
+  First version
 
   Serial commands at 115200 Bd:
     TXT:Text in UTF-8
@@ -216,7 +219,9 @@ void setup() {
   SPI.begin();
   initializeMatrices();
   Serial.begin(115200);
-  Serial.println(F("MATRIX READY"));
+  delay(1000);
+  setMessage("", false);
+  Serial.println(F("OK"));
 }
 
 void loop() {
