@@ -2,7 +2,8 @@
 
 /*
  Martin Pihrt
-  FW: 1.6 24.11.2026
+ FW: 1.6 24.11.2026
+ 
  Dva semafory + laserové brány + false-start logic
  Přidaná podpora pro počítadla kol v app
  Odesílání:
@@ -836,8 +837,6 @@ void handleSwitch(){
 // SETUP
 // ============================================================================
 void setup() {
-  Serial.begin(BAUD);
-  Serial1.begin(BAUD);
   pinMode(RS485_EN, OUTPUT);
   digitalWrite(RS485_EN, LOW);
   pinMode(piezoA, OUTPUT);
@@ -866,10 +865,13 @@ void setup() {
   wsA.show();
   wsB.show();
 
+  Serial.begin(BAUD);
+  Serial1.begin(BAUD);
+  delay(1000);
   if (DEBUG) {
     Serial.println(F("[BOOT] READY"));
   }
-}
+} //end setup
 
 // ============================================================================
 // LOOP
