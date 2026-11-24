@@ -63,10 +63,14 @@ def make_manager():
         display_port_b="",
         display_baud_a=115200,
         display_baud_b=115200,
+        display_timeout_a=1.0,
+        display_timeout_b=1.0,
         matrix_port_a="",
         matrix_port_b="",
         matrix_baud_a=115200,
         matrix_baud_b=115200,
+        matrix_timeout_a=1.0,
+        matrix_timeout_b=1.0,
     )
     return USBManager(app=app, verbose=False)
 
@@ -281,6 +285,103 @@ class USBDisplayTests(unittest.TestCase):
         self.assertFalse(connected)
         self.assertTrue(current.closed)
         self.assertIsNone(manager.display_a)
+
+    def test_manual_reset_closes_only_the_selected_panel(self):
+        manager = make_manager()
+        first = OpeningSerial(port="COM3", baudrate=115200)
+        second = OpeningSerial(port="COM4", baudrate=115200)
+        first.open()
+        second.open()
+        manager.display_a = first
+        manager.display_b = second
+
+        with mock.patch.object(usb_module.time, "sleep"):
+            self.assertTrue(manager.reset_display(1))
+
+        self.assertTrue(first.closed)
+        self.assertIsNone(manager.display_a)
+        self.assertIs(manager.display_b, second)
+        self.assertTrue(second.is_open)
+
+    def test_manual_reset_gate_closes_only_the_gate_connection(self):
+        manager = make_manager()
+        gate = FakeSerial()
+        panel = OpeningSerial(port="COM3", baudrate=115200)
+        panel.open()
+        manager.handler.ser = gate
+        manager.display_a = panel
+
+        self.assertTrue(manager.reset_gate())
+
+        self.assertTrue(gate.closed)
+        self.assertIs(manager.display_a, panel)
+        self.assertTrue(panel.is_open)
+
+    def test_display_timeout_is_used_when_opening_panel_port(self):
+        manager = make_manager()
+        manager.app.display_port_a = "COM3"
+        manager.app.display_timeout_a = 2.5
+        created = []
+
+        def make_serial(**kwargs):
+            serial_port = OpeningSerial(**kwargs)
+            created.append(serial_port)
+            return serial_port
+
+        with mock.patch.object(usb_module, "PY_SERIAL_AVAILABLE", True), \
+             mock.patch.object(usb_module, "serial", SimpleNamespace(Serial=make_serial)), \
+             mock.patch.object(usb_module.time, "sleep"):
+            self.assertTrue(manager._connect_display(1))
+
+        self.assertEqual(created[0].timeout, 2.5)
+        self.assertEqual(created[0].write_timeout, 2.5)
+
+    def test_diagnostic_snapshot_reports_all_four_independent_panels(self):
+        manager = make_manager()
+        manager.app.display_port_a = "COM13"
+        manager.app.display_port_b = "COM14"
+        manager.app.matrix_port_a = "COM16"
+        manager.app.matrix_port_b = "COM17"
+
+        with mock.patch.object(manager, "list_port_details", return_value=[]):
+            snapshot = manager.diagnostic_snapshot()
+
+        self.assertEqual(snapshot["panels"][1]["port"], "COM13")
+        self.assertEqual(snapshot["panels"][2]["port"], "COM14")
+        self.assertEqual(snapshot["panels"][3]["port"], "COM16")
+        self.assertEqual(snapshot["panels"][4]["port"], "COM17")
+
+    def test_probe_display_reads_pong_without_changing_other_panels(self):
+        manager = make_manager()
+        manager.app.display_port_a = "COM13"
+        display = OpeningSerial(port="COM13", baudrate=115200)
+        display.open()
+        manager.display_a = display
+
+        with mock.patch.object(usb_module.time, "sleep"):
+            success, detail = manager.probe_display(1)
+
+        self.assertFalse(success)
+        self.assertEqual(detail, "OK")
+        self.assertEqual(display.writes, [b"PING\r\n"])
+        self.assertTrue(display.closed)
+        self.assertIsNone(manager.display_a)
+
+    def test_probe_display_accepts_pong_after_earlier_command_acknowledgements(self):
+        manager = make_manager()
+        manager.app.display_port_a = "COM13"
+        display = OpeningSerial(port="COM13", baudrate=115200)
+        display.open()
+        display.read = mock.Mock(return_value=b"OK\r\nOK\r\nPONG\r\n")
+        manager.display_a = display
+
+        with mock.patch.object(usb_module.time, "sleep"):
+            success, detail = manager.probe_display(1)
+
+        self.assertTrue(success)
+        self.assertIn("PONG", detail)
+        self.assertIs(manager.display_a, display)
+        self.assertFalse(display.closed)
 
 
 if __name__ == "__main__":

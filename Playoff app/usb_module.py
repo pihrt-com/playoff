@@ -9,6 +9,7 @@ __author__ = 'Martin Pihrt'
 import threading
 import time
 import sys
+from datetime import datetime
 
 try:
     import serial
@@ -34,7 +35,7 @@ def _dbg(msg: str):
 
 
 class SerialHandler:
-    def __init__(self, verbose: bool = False, prevent_reset: bool = True):
+    def __init__(self, verbose: bool = False, prevent_reset: bool = True, event_sink=None):
         self.ser = None
         self.port = DEFAULT_SERIAL_PORT
         self.baud = DEFAULT_SERIAL_BAUD
@@ -43,11 +44,18 @@ class SerialHandler:
         self.prevent_reset = prevent_reset
         self.rx_thread = None
         self.rx_running = False
+        self.rx_stop_event = None
         self.rx_callback = None
         self.write_lock = threading.Lock()
         self.open_lock = threading.Lock()
+        self.event_sink = event_sink
 
     def _log(self, msg: str):
+        try:
+            if self.event_sink is not None:
+                self.event_sink(f"USB {msg}")
+        except Exception:
+            pass
         if self.verbose:
             _dbg(msg)
 
@@ -96,9 +104,7 @@ class SerialHandler:
             for attempt in range(1, retries + 1):
                 try:
 
-                    self._log(
-                        f"open {self.port} {self.baud} attempt {attempt}"
-                    )
+                    self._log(f"GATE open {self.port} {self.baud} attempt {attempt}")
 
                     ser = serial.Serial(
                         port=None,
@@ -127,7 +133,7 @@ class SerialHandler:
                     time.sleep(2)
 
                     self.ser = ser
-                    self._log("opened")
+                    self._log(f"GATE opened {self.port}")
 
                     return
 
@@ -163,7 +169,7 @@ class SerialHandler:
             self._log("PORT CLOSED -> OPEN")
             self.open()
 
-        self._log(f"TX {payload!r}")
+        self._log(f"GATE {self.port} TX {payload.decode(errors='replace').strip()}")
         with self.write_lock:
             self.ser.write(payload)
             try:
@@ -178,17 +184,23 @@ class SerialHandler:
         self.send(b"finish\n")
 
     def start_reader(self, callback):
-
-        if self.rx_running:
-            return
-
+        self.stop_reader()
         self.rx_callback = callback
         self.rx_running = True
+        stop_event = threading.Event()
+        self.rx_stop_event = stop_event
+        serial_connection = self.ser
 
         def worker():
             buffer = b""
-            while self.rx_running:
+            while not stop_event.is_set():
                 try:
+                    if serial_connection is None or not getattr(serial_connection, "is_open", False):
+                        self._log("GATE reader stopped because its connection closed")
+                        break
+                    if self.ser is not serial_connection:
+                        self._log("GATE reader stopped because a newer connection replaced it")
+                        break
                     if not self.is_open():
                         time.sleep(0.05)
                         continue
@@ -196,7 +208,7 @@ class SerialHandler:
                     waiting = 0
 
                     try:
-                        waiting = self.ser.in_waiting
+                        waiting = serial_connection.in_waiting
                     except Exception:
                         pass
 
@@ -204,7 +216,7 @@ class SerialHandler:
                         time.sleep(0.01)
                         continue
 
-                    chunk = self.ser.read(waiting)
+                    chunk = serial_connection.read(waiting)
 
                     if not chunk:
                         time.sleep(0.01)
@@ -228,7 +240,7 @@ class SerialHandler:
                         self._log(f"RX {text}")
 
                         try:
-                            if self.rx_callback:
+                            if self.rx_callback and not stop_event.is_set():
                                 self.rx_callback(text)
 
                         except Exception as e:
@@ -249,14 +261,17 @@ class SerialHandler:
 
     def stop_reader(self):
         self.rx_running = False
+        if self.rx_stop_event is not None:
+            self.rx_stop_event.set()
         try:
             if self.rx_thread and self.rx_thread.is_alive():
-                self.rx_thread.join(timeout=0.3)
+                self.rx_thread.join(timeout=1.0)
 
         except Exception:
             pass
 
         self.rx_thread = None
+        self.rx_stop_event = None
 
 
 class USBManager:
@@ -274,7 +289,8 @@ class USBManager:
 
         self.handler = SerialHandler(
             verbose=verbose,
-            prevent_reset=prevent_reset
+            prevent_reset=prevent_reset,
+            event_sink=getattr(app, "record_debug_event", None),
         )
 
         self.port = DEFAULT_SERIAL_PORT
@@ -286,14 +302,49 @@ class USBManager:
         self.matrix_b = None
         self.display_lock = threading.Lock()
         self.display_connect_lock = threading.Lock()
+        self.display_connect_locks = {display_id: threading.Lock() for display_id in range(1, 5)}
+        self.display_locks = {display_id: threading.Lock() for display_id in range(1, 5)}
         self.display_pending_lock = threading.Lock()
         self.display_pending = {display_id: None for display_id in range(1, 5)}
         self.display_workers = {display_id: None for display_id in range(1, 5)}
         self.display_errors = {display_id: "" for display_id in range(1, 5)}
 
     def _log(self, msg: str):
+        try:
+            if self.app is not None and hasattr(self.app, "record_debug_event"):
+                self.app.record_debug_event(f"USB {msg}")
+        except Exception:
+            pass
         if self.verbose:
             _dbg(msg)
+
+    def diagnostic_snapshot(self):
+        """Return only read-only state for the in-application debug window."""
+        panels = {}
+        for display_id in range(1, 5):
+            settings = self._display_settings(display_id)
+            port, baud, connection_name = settings or ("", "", "")
+            connection = getattr(self, connection_name, None) if connection_name else None
+            panels[display_id] = {
+                "port": port,
+                "baud": baud,
+                "open": bool(connection and getattr(connection, "is_open", False)),
+                "error": self.display_error(display_id),
+                "pending": self.display_pending.get(display_id) is not None,
+                "worker": bool(self.display_workers.get(display_id) and self.display_workers[display_id].is_alive()),
+            }
+        return {
+            "at": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+            "available_ports": self.list_port_details(),
+            "gate": {
+                "port": self.port,
+                "baud": self.baud,
+                "timeout": self.timeout,
+                "open": self.handler.is_open(),
+                "reader": bool(self.handler.rx_thread and self.handler.rx_thread.is_alive()),
+            },
+            "panels": panels,
+        }
 
     def list_ports(self):
         return self.handler.list_ports()
@@ -371,6 +422,12 @@ class USBManager:
             self.handler.start_reader(callback)
         return self.handler.is_open()
 
+    def reset_gate(self):
+        """Release only the gate COM handle; the caller starts its normal resync."""
+        self._log("GATE manual reset requested")
+        self.disconnect()
+        return True
+
     def _display_settings(self, display_id, port_override=None, baud_override=None):
         """Return the app settings and connection attribute for one of four panels."""
         settings = {
@@ -392,7 +449,30 @@ class USBManager:
         )
         return port, baud, connection_name
 
-    def _connect_display(self, display_id, port_override=None, baud_override=None):
+    def _display_timeout(self, display_id, timeout_override=None):
+        if timeout_override is not None:
+            value = timeout_override
+        else:
+            timeout_name = {
+                1: "display_timeout_a",
+                2: "display_timeout_b",
+                3: "matrix_timeout_a",
+                4: "matrix_timeout_b",
+            }.get(display_id)
+            value = getattr(self.app, timeout_name, 1.0) if timeout_name else 1.0
+        try:
+            return min(30.0, max(0.05, float(value)))
+        except (TypeError, ValueError):
+            return 1.0
+
+    def _connect_display(self, display_id, port_override=None, baud_override=None, timeout_override=None):
+        lock = self.display_connect_locks.get(display_id)
+        if lock is None:
+            return False
+        with lock:
+            return self._connect_display_locked(display_id, port_override, baud_override, timeout_override)
+
+    def _connect_display_locked(self, display_id, port_override=None, baud_override=None, timeout_override=None):
         settings = self._display_settings(display_id, port_override, baud_override)
         if settings is None:
             return False
@@ -409,6 +489,7 @@ class USBManager:
             baud = int(baud)
         except (TypeError, ValueError):
             baud = DEFAULT_SERIAL_BAUD
+        timeout = self._display_timeout(display_id, timeout_override)
 
         if current is not None and current.is_open:
             if current.port == port and current.baudrate == baud:
@@ -428,8 +509,8 @@ class USBManager:
             display = serial.Serial(
                 port=None,
                 baudrate=baud,
-                timeout=1,
-                write_timeout=1
+                timeout=timeout,
+                write_timeout=timeout
             )
             display.port = port
             if self.prevent_reset:
@@ -465,47 +546,42 @@ class USBManager:
 
 
     def send_display(self, id, text):
-        self._connect_display(id)
-
-        settings = self._display_settings(id)
-        if settings is None:
-            return False
-        _port, _baud, connection_name = settings
-        ser = getattr(self, connection_name)
-
-        if ser is None or not ser.is_open:
-            self.disconnect_display(id)
+        with self.display_locks[id]:
             self._connect_display(id)
-
+            settings = self._display_settings(id)
+            if settings is None:
+                return False
+            _port, _baud, connection_name = settings
             ser = getattr(self, connection_name)
-
-        if ser is None:
-            return False
-
-        try:
+            if ser is None or not ser.is_open:
+                self.disconnect_display(id)
+                self._connect_display(id)
+                ser = getattr(self, connection_name)
+            if ser is None:
+                return False
             msg = (str(text) + "\r\n").encode()
-            self._log(f"Display msg: {msg}")
-            with self.display_lock:
+            self._log(f"ID-{id} {_port} TX {msg.decode(errors='replace').strip()}")
+            try:
                 try:
                     waiting = ser.in_waiting
                     if waiting:
-                        ser.read(waiting)
+                        reply = ser.read(waiting)
+                        self._log(f"ID-{id} {_port} RX {reply.decode(errors='replace').strip()}")
                 except Exception:
                     pass
                 ser.write(msg)
                 ser.flush()
-            self.display_errors[id] = ""
-            return True
+                self.display_errors[id] = ""
+                return True
+            except Exception as e:
+                self.display_errors[id] = str(e)
+                self._log(f"Display {id} error {e}")
+                self.disconnect_display(id)
+                return False
 
-        except Exception as e:
-            self.display_errors[id] = str(e)
-            self._log(f"Display error {e}")
-            self.disconnect_display(id)
-            return False
-
-    def send_display_to_port(self, id, text, port, baud):
+    def send_display_to_port(self, id, text, port, baud, timeout=None):
         """Send a test command using the current values shown in the dialog."""
-        if not self._connect_display(id, port_override=port, baud_override=baud):
+        if not self._connect_display(id, port_override=port, baud_override=baud, timeout_override=timeout):
             return False
 
         settings = self._display_settings(id, port, baud)
@@ -536,6 +612,58 @@ class USBManager:
 
     def display_error(self, id):
         return self.display_errors.get(id, "")
+
+    def probe_display(self, id):
+        """Send the firmware's harmless PING request and record its reply."""
+        if id not in self.display_locks:
+            return False, "Neplatné ID panelu."
+        with self.display_locks[id]:
+            if not self._connect_display(id):
+                return False, self.display_error(id) or "Panel nelze otevřít."
+            settings = self._display_settings(id)
+            _port, _baud, connection_name = settings
+            ser = getattr(self, connection_name)
+            try:
+                try:
+                    waiting = ser.in_waiting
+                    if waiting:
+                        ser.read(waiting)
+                except Exception:
+                    pass
+                self._log(f"ID-{id} {_port} TX PING")
+                ser.write(b"PING\r\n")
+                ser.flush()
+                deadline = time.monotonic() + self._display_timeout(id)
+                reply_bytes = b""
+                while time.monotonic() < deadline:
+                    waiting = getattr(ser, "in_waiting", 0)
+                    if waiting:
+                        reply_bytes += ser.read(waiting)
+                        break
+                    time.sleep(0.02)
+                if not reply_bytes:
+                    # One final bounded read also supports serial adapters
+                    # whose in_waiting counter is updated just after PING.
+                    reply_bytes = ser.read(1)
+                reply = reply_bytes.decode(errors="replace").strip()
+                self._log(f"ID-{id} {_port} RX {reply or '(bez odpovědi)'}")
+                # CLS, SPD and TXT each acknowledge with OK. A USB read can
+                # contain those earlier acknowledgements together with the
+                # PONG for this probe, so inspect complete response lines.
+                reply_lines = [line.strip().upper() for line in reply.splitlines()]
+                success = "PONG" in reply_lines
+                if not success:
+                    self.display_errors[id] = reply or "Bez odpovědi na PING."
+                    # A USB-CDC handle may remain marked open after a cable was
+                    # removed. Drop it here so the next independent retry opens
+                    # a fresh connection instead of writing to a stale handle.
+                    self.disconnect_display(id)
+                return success, reply or "Bez odpovědi na PING."
+            except Exception as error:
+                self.display_errors[id] = str(error)
+                self._log(f"ID-{id} {_port} PING error {error}")
+                self.disconnect_display(id)
+                return False, str(error)
 
     def send_display_latest(self, id, text):
         """Queue at most the newest pending message for one display."""
@@ -588,6 +716,16 @@ class USBManager:
             time.sleep(0.2)
 
         setattr(self, connection_name, None)
+
+    def reset_display(self, id):
+        """Release exactly one panel port so the app can reopen and restore it."""
+        if id not in self.display_locks:
+            return False
+        with self.display_locks[id]:
+            self._log(f"Display {id} manual reset requested")
+            self.disconnect_display(id)
+            self.display_errors[id] = ""
+        return True
 
 
     def disconnect_displays(self):

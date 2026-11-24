@@ -1,5 +1,16 @@
 # Historie změn
 
+## 1.0.39 – 24. 11. 2026
+
+- Nastavení nyní obsahuje položku Debug mezi Nápovědou a Kontrolou aktualizace. Zobrazuje živý stav GATE a ID-1 až ID-4, nalezené COM porty, chyby, fronty a historii událostí programu a USB. Tlačítko Ověřit USB (PING) uloží do historie příkaz a odpověď každého zařízení.
+- Pod každým tlačítkem TEST ID-1 až TEST ID-4 je nové tlačítko RESET ID-x, které ručně uvolní a obnoví pouze zvolený panel.
+- USB nastavení obsahuje RESET BRÁNY. Uvolní pouze port brány a obnoví čtení i aktivní režim PLAYOFF nebo LAPS.
+- Každý panel ID-1 až ID-4 má samostatný timeout sériové odpovědi. Po neúspěšné obnově zůstane odpojený panel červený a další pokus se provede po krátké prodlevě, aby stav neskákal mezi červenou a žlutou.
+- Obnova USB používá pro čtení brány samostatné ukončovací řízení konkrétního sériového spojení. Staré vlákno po odpojení nemůže číst nově otevřený COM port a zachytit událost určenou pro novou bránu.
+- Každý panel má vlastní zámek odesílání a připojování, takže chybné nebo pomalé zařízení nezablokuje zápis do ostatních panelů.
+- Po obnově USB panel dostane zelený stav až po své odpovědi PONG. Pokud port jen zdánlivě zůstává otevřený, ale neodpoví, aplikace jeho zastaralé spojení zavře a obnovu zopakuje.
+- Firmware měřicí brány `Arduino/gate semaphore/fw1.6/fw1.6.ino` podporuje diagnostický příkaz `ping` a vrací `pong` bez změny závodu nebo stavu semaforu; původní `fw1.5` zůstává beze změny.
+
 ## 1.0.38 – 23. 11. 2026
 
 - START nelze odeslat během probíhající obnovy USB brány; aplikace vyčká na potvrzený stav GATE.

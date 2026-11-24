@@ -195,12 +195,24 @@ class RoboImportMenuTests(unittest.TestCase):
                 "Export do PDF LAPS",
                 "Celá obrazovka",
                 "Nápověda",
+                "Debug",
                 "Kontrola aktualizace",
             )
             for label in labels:
                 self.assertIn(label, entries)
                 self.assertTrue(app.settings_menu.entrycget(entries[label], "image"))
-            self.assertEqual(len(app.menu_icons), 13)
+            self.assertEqual(len(app.menu_icons), 14)
+
+    def test_debug_menu_is_between_help_and_update(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(profile)
+            labels = [
+                app.settings_menu.entrycget(index, "label")
+                for index in range(app.settings_menu.index("end") + 1)
+                if app.settings_menu.type(index) != "separator"
+            ]
+            self.assertLess(labels.index("Nápověda"), labels.index("Debug"))
+            self.assertLess(labels.index("Debug"), labels.index("Kontrola aktualizace"))
 
     def test_usb_defaults_use_115200_for_gate_and_displays(self):
         with tempfile.TemporaryDirectory() as profile:

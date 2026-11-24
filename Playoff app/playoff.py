@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.38"                                         # current version of the application
-APP_date          = "23.11.2026"                                     # current version date
+APP_current       = "1.0.39"                                         # current version of the application
+APP_date          = "24.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -21,6 +21,7 @@ import time
 import threading
 import unicodedata
 import webbrowser
+from collections import deque
 from datetime import datetime
 import certifi
 
@@ -446,6 +447,7 @@ WINNER_TEXT_COLOR = "#000000"
 DEFAULT_USB_PORT           = ""
 DEFAULT_USB_BAUD           = 115200
 DEFAULT_USB_TIMEOUT        = 10.0
+DEFAULT_PANEL_TIMEOUT      = 1.0
 
 DEFAULT_USB_DISPLAY_A_BAUD = 115200
 DEFAULT_USB_DISPLAY_B_BAUD = 115200
@@ -602,6 +604,15 @@ def normalize_panel_scroll_ms(value, default):
     except (TypeError, ValueError):
         return default
     return min(PANEL_SCROLL_MS_OPTIONS, key=lambda option: abs(option - value))
+
+
+def normalize_panel_timeout(value, default=DEFAULT_PANEL_TIMEOUT):
+    """Return a safe per-panel serial read timeout in seconds."""
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError):
+        return default
+    return min(30.0, max(0.05, timeout))
 
 
 def load_panel_content_modes(data, name, default):
@@ -814,6 +825,9 @@ class PlayoffApp:
     def __init__(self, root):
         self.root = root
         root.title("Playoff generátor by Martin Pihrt © www.pihrt.com")
+        self.debug_events = deque(maxlen=800)
+        self.debug_lock = threading.Lock()
+        self.record_debug_event(f"Aplikace spuštěna, verze {APP_current}.")
 
         # state
         self.bracket = None
@@ -897,6 +911,7 @@ class PlayoffApp:
         # blocks the Tkinter interface or the remaining panels.
         self.panel_sync_state = {display_id: "disconnected" for display_id in range(1, 5)}
         self.panel_sync_pending = set()
+        self.panel_retry_after = {display_id: 0.0 for display_id in range(1, 5)}
         # store usb settings for saving into setup file
         self.usb_port = DEFAULT_USB_PORT
         self.usb_baud = DEFAULT_USB_BAUD
@@ -907,10 +922,14 @@ class PlayoffApp:
         self.display_port_b = ""
         self.display_baud_a = DEFAULT_USB_DISPLAY_A_BAUD
         self.display_baud_b = DEFAULT_USB_DISPLAY_B_BAUD
+        self.display_timeout_a = DEFAULT_PANEL_TIMEOUT
+        self.display_timeout_b = DEFAULT_PANEL_TIMEOUT
         self.matrix_port_a = ""
         self.matrix_port_b = ""
         self.matrix_baud_a = DEFAULT_MATRIX_DISPLAY_A_BAUD
         self.matrix_baud_b = DEFAULT_MATRIX_DISPLAY_B_BAUD
+        self.matrix_timeout_a = DEFAULT_PANEL_TIMEOUT
+        self.matrix_timeout_b = DEFAULT_PANEL_TIMEOUT
         self.display_content_a = "lap_a"
         self.display_content_b = "lap_b"
         self.matrix_content_a = "countdown"
@@ -1381,6 +1400,12 @@ class PlayoffApp:
             compound='left',
             command=self.show_help,
         )
+        self.settings_menu.add_command(
+            label='Debug',
+            image=self.menu_icons['debug'],
+            compound='left',
+            command=self.open_debug_dialog,
+        )
         
         self.settings_menu.add_command(
             label='Kontrola aktualizace',
@@ -1511,10 +1536,14 @@ class PlayoffApp:
                 self.display_port_b = s.get('display_port_b', self.display_port_b)
                 self.display_baud_a = s.get('display_baud_a', self.display_baud_a)
                 self.display_baud_b = s.get('display_baud_b', self.display_baud_b)
+                self.display_timeout_a = normalize_panel_timeout(s.get('display_timeout_a'), self.display_timeout_a)
+                self.display_timeout_b = normalize_panel_timeout(s.get('display_timeout_b'), self.display_timeout_b)
                 self.matrix_port_a = s.get('matrix_port_a', self.matrix_port_a)
                 self.matrix_port_b = s.get('matrix_port_b', self.matrix_port_b)
                 self.matrix_baud_a = s.get('matrix_baud_a', self.matrix_baud_a)
                 self.matrix_baud_b = s.get('matrix_baud_b', self.matrix_baud_b)
+                self.matrix_timeout_a = normalize_panel_timeout(s.get('matrix_timeout_a'), self.matrix_timeout_a)
+                self.matrix_timeout_b = normalize_panel_timeout(s.get('matrix_timeout_b'), self.matrix_timeout_b)
                 self.display_scroll_ms_a = normalize_panel_scroll_ms(s.get('display_scroll_ms_a'), DEFAULT_SEVEN_SEGMENT_SCROLL_MS)
                 self.display_scroll_ms_b = normalize_panel_scroll_ms(s.get('display_scroll_ms_b'), DEFAULT_SEVEN_SEGMENT_SCROLL_MS)
                 self.matrix_scroll_ms_a = normalize_panel_scroll_ms(s.get('matrix_scroll_ms_a'), DEFAULT_MATRIX_SCROLL_MS)
@@ -1735,13 +1764,126 @@ class PlayoffApp:
         rectangle(update, 2, 10, 6, 14, '#388e3c')
         icons['update'] = update
 
+        debug = image()
+        rectangle(debug, 2, 2, 13, 13, '#455a64')
+        rectangle(debug, 4, 4, 11, 11, '#eceff1')
+        for x, y in ((6, 6), (7, 6), (8, 6), (9, 6), (6, 8), (7, 8), (8, 8), (9, 8), (6, 10), (7, 10), (8, 10), (9, 10)):
+            debug.put('#1565c0', (x, y))
+        icons['debug'] = debug
+
         return icons
 
     def _now(self):
         return time.strftime("%H:%M:%S")
 
     def _log(self, msg: str, param=""):
-        print(f"[playoff {self._now()}] {msg} {param}", file=sys.stderr)
+        entry = f"{msg} {param}".rstrip()
+        self.record_debug_event(entry)
+        print(f"[playoff {self._now()}] {entry}", file=sys.stderr)
+
+    def record_debug_event(self, message):
+        """Keep a bounded, thread-safe diagnostic history without storing secrets."""
+        try:
+            with self.debug_lock:
+                self.debug_events.append(f"{datetime.now():%d.%m.%Y %H:%M:%S}  {message}")
+        except Exception:
+            pass
+
+    def open_debug_dialog(self):
+        """Show live USB state, detected COM ports and the application event log."""
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title("Debug – Playoff")
+        dlg.transient(self.root)
+        dlg.geometry("1050x700")
+
+        outer = tk.Frame(dlg)
+        outer.pack(fill="both", expand=True, padx=10, pady=10)
+        summary_var = tk.StringVar(value="Načítám stav USB…")
+        tk.Label(outer, textvariable=summary_var, justify="left", anchor="w", font=("Consolas", 10)).pack(fill="x")
+
+        ports_frame = tk.LabelFrame(outer, text="Nalezené COM porty", padx=6, pady=5)
+        ports_frame.pack(fill="x", pady=(8, 6))
+        ports_text = tk.Text(ports_frame, height=6, wrap="none", font=("Consolas", 9), state="disabled")
+        ports_text.pack(fill="x")
+
+        log_frame = tk.LabelFrame(outer, text="Události programu a USB", padx=6, pady=5)
+        log_frame.pack(fill="both", expand=True, pady=(0, 8))
+        scrollbar = tk.Scrollbar(log_frame)
+        scrollbar.pack(side="right", fill="y")
+        log_text = tk.Text(log_frame, wrap="none", yscrollcommand=scrollbar.set, font=("Consolas", 9), state="disabled")
+        log_text.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=log_text.yview)
+
+        def clear_log():
+            with self.debug_lock:
+                self.debug_events.clear()
+            self.record_debug_event("Historie debug událostí byla vymazána ručně.")
+
+        def probe_usb():
+            if not self.usb:
+                self.record_debug_event("USB test nelze spustit: USB modul není dostupný.")
+                return
+
+            def worker():
+                self.record_debug_event("Začíná diagnostický PING panelů ID-1 až ID-4.")
+                for display_id in self.configured_display_ids():
+                    success, detail = self.usb.probe_display(display_id)
+                    self.record_debug_event(f"ID-{display_id} PING: {'PONG' if success else 'CHYBA'} – {detail}")
+                if self.usb.handler.is_open():
+                    try:
+                        self.usb.handler.send(b"ping\n")
+                        self.record_debug_event("GATE PING odeslán; odpověď pong je v historii, pokud je v bráně nahrán firmware s podporou PING.")
+                    except Exception as error:
+                        self.record_debug_event(f"GATE PING chyba: {error}")
+                else:
+                    self.record_debug_event("GATE PING přeskočen: brána není otevřená.")
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        buttons = tk.Frame(outer)
+        buttons.pack(fill="x", side="bottom")
+        tk.Button(buttons, text="Vymazat historii", command=clear_log).pack(side="left")
+        tk.Button(buttons, text="Ověřit USB (PING)", command=probe_usb).pack(side="left", padx=6)
+        tk.Button(buttons, text="Zavřít", command=dlg.destroy).pack(side="right")
+
+        def refresh():
+            if not dlg.winfo_exists():
+                return
+            snapshot = self.usb.diagnostic_snapshot() if self.usb else None
+            if snapshot is None:
+                summary_var.set("USB modul není dostupný.")
+                port_lines = ["USB modul není dostupný."]
+            else:
+                gate = snapshot["gate"]
+                panel_parts = []
+                for display_id, panel in snapshot["panels"].items():
+                    state = "otevřen" if panel["open"] else "zavřen"
+                    detail = panel["error"] or "bez chyby"
+                    panel_parts.append(f"ID-{display_id}: {panel['port'] or 'nepoužívá se'} / {state} / {detail}")
+                summary_var.set(
+                    f"Aktualizováno: {snapshot['at']}\n"
+                    f"GATE: {gate['port'] or 'nepoužívá se'} / {gate['baud']} Bd / {'otevřen' if gate['open'] else 'zavřen'} / čtení: {'běží' if gate['reader'] else 'stojí'}\n"
+                    + "\n".join(panel_parts)
+                )
+                port_lines = [
+                    f"{port['device']:<8} {port['description']:<35} VID:PID={port['vid'] or '-'}:{port['pid'] or '-'}  S/N={port['serial_number'] or '-'}"
+                    for port in snapshot["available_ports"]
+                ] or ["Žádný COM port nebyl nalezen."]
+            ports_text.config(state="normal")
+            ports_text.delete("1.0", tk.END)
+            ports_text.insert("1.0", "\n".join(port_lines))
+            ports_text.config(state="disabled")
+            with self.debug_lock:
+                entries = list(self.debug_events)
+            log_text.config(state="normal")
+            log_text.delete("1.0", tk.END)
+            log_text.insert("1.0", "\n".join(entries))
+            log_text.see(tk.END)
+            log_text.config(state="disabled")
+            dlg.after(750, refresh)
+
+        refresh()
 
     def on_close(self):
         if self.usb:
@@ -2440,6 +2582,9 @@ class PlayoffApp:
         """Reset and restore one panel without blocking the GUI or other ports."""
         if not self.usb or display_id not in self.configured_display_ids():
             return False
+        retry_after = getattr(self, "panel_retry_after", {}).get(display_id, 0.0)
+        if time.monotonic() < retry_after:
+            return False
         pending = getattr(self, "panel_sync_pending", None)
         if pending is None:
             pending = self.panel_sync_pending = set()
@@ -2473,6 +2618,12 @@ class PlayoffApp:
                 success = bool(sender(display_id, commands[1]))
             if success:
                 success = bool(sender(display_id, commands[2]))
+            if success:
+                probe = getattr(self.usb, "probe_display", None)
+                if callable(probe):
+                    success, detail = probe(display_id)
+                    if not success:
+                        self._log(f"PANEL ID-{display_id} PING ERROR: {detail}")
         except Exception as exc:
             self._log(f"PANEL ID-{display_id} SYNC ERROR: {exc}")
             success = False
@@ -2491,6 +2642,9 @@ class PlayoffApp:
         if not hasattr(self, "panel_sync_state"):
             self.panel_sync_state = {}
         self.panel_sync_state[display_id] = "ready" if success else "disconnected"
+        if not hasattr(self, "panel_retry_after"):
+            self.panel_retry_after = {}
+        self.panel_retry_after[display_id] = 0.0 if success else time.monotonic() + 5.0
         self.update_display_status(display_id, "ready" if success else False)
 
     def refresh_panels_for_content(self, content):
@@ -3723,6 +3877,7 @@ class PlayoffApp:
         )
         port_vars = {}
         baud_vars = {}
+        panel_timeout_vars = {}
         scroll_speed_vars = {}
         playoff_content_vars = {}
         laps_content_vars = {}
@@ -3741,12 +3896,15 @@ class PlayoffApp:
         tk.Label(panels_box, text="Panel", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", padx=4)
         tk.Label(panels_box, text="COM port", font=("Arial", 9, "bold")).grid(row=0, column=1, sticky="w", padx=4)
         tk.Label(panels_box, text="Baud", font=("Arial", 9, "bold")).grid(row=0, column=2, sticky="w", padx=4)
-        tk.Label(panels_box, text="Posun (ms)", font=("Arial", 9, "bold")).grid(row=0, column=3, sticky="w", padx=4)
-        tk.Label(panels_box, text="PLAYOFF", font=("Arial", 9, "bold")).grid(row=0, column=4, sticky="w", padx=4)
-        tk.Label(panels_box, text="LAPS", font=("Arial", 9, "bold")).grid(row=0, column=5, sticky="w", padx=4)
+        tk.Label(panels_box, text="Timeout (s)", font=("Arial", 9, "bold")).grid(row=0, column=3, sticky="w", padx=4)
+        tk.Label(panels_box, text="Posun (ms)", font=("Arial", 9, "bold")).grid(row=0, column=4, sticky="w", padx=4)
+        tk.Label(panels_box, text="PLAYOFF", font=("Arial", 9, "bold")).grid(row=0, column=5, sticky="w", padx=4)
+        tk.Label(panels_box, text="LAPS", font=("Arial", 9, "bold")).grid(row=0, column=6, sticky="w", padx=4)
         for row, (display_id, title, port_name, baud_name, content_name) in enumerate(panel_specs, start=1):
             port_vars[display_id] = tk.StringVar(value=usb_port_choice(getattr(self, port_name)))
             baud_vars[display_id] = tk.StringVar(value=str(getattr(self, baud_name)))
+            timeout_name = {1: "display_timeout_a", 2: "display_timeout_b", 3: "matrix_timeout_a", 4: "matrix_timeout_b"}[display_id]
+            panel_timeout_vars[display_id] = tk.StringVar(value=str(getattr(self, timeout_name)))
             scroll_speed_vars[display_id] = tk.StringVar(value=str(self.panel_scroll_speed(display_id)))
             playoff_content_vars[display_id] = tk.StringVar(value=PANEL_CONTENT_LABELS[self.panel_content(display_id, "playoff")])
             laps_content_vars[display_id] = tk.StringVar(value=PANEL_CONTENT_LABELS[self.panel_content(display_id, "laps")])
@@ -3758,27 +3916,28 @@ class PlayoffApp:
             combo.grid(row=row, column=1, padx=4, pady=4, sticky="w")
             port_combos.append(combo)
             tk.Entry(panels_box, textvariable=baud_vars[display_id], width=9).grid(row=row, column=2, padx=4, pady=4, sticky="w")
+            tk.Entry(panels_box, textvariable=panel_timeout_vars[display_id], width=7).grid(row=row, column=3, padx=4, pady=4, sticky="w")
             ttk.Combobox(
                 panels_box,
                 textvariable=scroll_speed_vars[display_id],
                 values=[str(value) for value in PANEL_SCROLL_MS_OPTIONS],
                 state="readonly",
                 width=8,
-            ).grid(row=row, column=3, padx=4, pady=4, sticky="w")
+            ).grid(row=row, column=4, padx=4, pady=4, sticky="w")
             ttk.Combobox(
                 panels_box,
                 textvariable=playoff_content_vars[display_id],
                 values=content_labels,
                 state="readonly",
                 width=28,
-            ).grid(row=row, column=4, padx=4, pady=4, sticky="w")
+            ).grid(row=row, column=5, padx=4, pady=4, sticky="w")
             ttk.Combobox(
                 panels_box,
                 textvariable=laps_content_vars[display_id],
                 values=content_labels,
                 state="readonly",
                 width=28,
-            ).grid(row=row, column=5, padx=4, pady=4, sticky="w")
+            ).grid(row=row, column=6, padx=4, pady=4, sticky="w")
 
         def selected_content(display_id, mode):
             label = (playoff_content_vars if mode == "playoff" else laps_content_vars)[display_id].get()
@@ -3807,6 +3966,21 @@ class PlayoffApp:
             for combo in port_combos:
                 combo["values"] = values
 
+        def reset_gate():
+            assigned = validate_ports()
+            if assigned is None:
+                return
+            if not assigned[0]:
+                messagebox.showwarning("Brána není používána", "Pro měřicí bránu není zvolený COM port.", parent=dlg)
+                return
+            if not self.usb:
+                messagebox.showerror("USB", "USB modul není dostupný.", parent=dlg)
+                return
+            self.usb.reset_gate()
+            self.gate_sync_state = "disconnected"
+            self.record_debug_event("GATE: ruční reset z USB nastavení.")
+            self.schedule_gate_resync()
+
         def test_panel(display_id):
             assigned = validate_ports()
             if assigned is None:
@@ -3820,14 +3994,35 @@ class PlayoffApp:
             except ValueError:
                 messagebox.showerror("Neplatná rychlost", f"Rychlost panelu ID-{display_id} musí být celé číslo.", parent=dlg)
                 return
-            if not self.usb or not self.usb.send_display_to_port(display_id, f"TXT:ID-{display_id}", port, baud):
+            timeout = normalize_panel_timeout(panel_timeout_vars[display_id].get())
+            if not self.usb or not self.usb.send_display_to_port(display_id, f"TXT:ID-{display_id}", port, baud, timeout):
                 detail = self.usb.display_error(display_id) if self.usb else "USB modul není dostupný."
                 messagebox.showerror("Panel se nepodařilo připojit", detail or f"Panel ID-{display_id} se nepodařilo otevřít.", parent=dlg)
 
+        def reset_panel(display_id):
+            if not self.usb:
+                messagebox.showerror("USB", "USB modul není dostupný.", parent=dlg)
+                return
+            assigned = validate_ports()
+            if assigned is None:
+                return
+            if not assigned[display_id]:
+                messagebox.showwarning("Panel není používán", f"Pro panel ID-{display_id} není zvolený COM port.", parent=dlg)
+                return
+            self.usb.reset_display(display_id)
+            self.panel_sync_state[display_id] = "disconnected"
+            self.panel_retry_after[display_id] = 0.0
+            self.record_debug_event(f"ID-{display_id}: ruční reset z USB nastavení.")
+            self.schedule_panel_resync(display_id)
+
         test_box = tk.Frame(outer)
         test_box.pack(fill="x", pady=8)
+        tk.Button(gate_box, text="RESET BRÁNY", command=reset_gate).grid(row=1, column=0, columnspan=2, padx=4, pady=(6, 0), sticky="w")
         for display_id in range(1, 5):
-            tk.Button(test_box, text=f"TEST ID-{display_id}", command=lambda current=display_id: test_panel(current)).pack(side="left", padx=3)
+            panel_buttons = tk.Frame(test_box)
+            panel_buttons.pack(side="left", padx=3)
+            tk.Button(panel_buttons, text=f"TEST ID-{display_id}", command=lambda current=display_id: test_panel(current)).pack()
+            tk.Button(panel_buttons, text=f"RESET ID-{display_id}", command=lambda current=display_id: reset_panel(current)).pack(pady=(3, 0))
         tk.Button(test_box, text="Obnovit porty", command=refresh_ports).pack(side="right", padx=3)
 
         def save_settings():
@@ -3837,6 +4032,7 @@ class PlayoffApp:
             try:
                 gate_baud = int(gate_baud_var.get())
                 panel_bauds = {display_id: int(baud_vars[display_id].get()) for display_id in range(1, 5)}
+                panel_timeouts = {display_id: normalize_panel_timeout(panel_timeout_vars[display_id].get()) for display_id in range(1, 5)}
                 panel_speeds = {display_id: int(scroll_speed_vars[display_id].get()) for display_id in range(1, 5)}
                 timeout = float(timeout_var.get())
             except ValueError:
@@ -3848,6 +4044,8 @@ class PlayoffApp:
             for display_id, (_title, port_name, baud_name, content_name) in enumerate(tuple(spec[1:] for spec in panel_specs), start=1):
                 setattr(self, port_name, assigned[display_id])
                 setattr(self, baud_name, panel_bauds[display_id])
+                timeout_name = {1: "display_timeout_a", 2: "display_timeout_b", 3: "matrix_timeout_a", 4: "matrix_timeout_b"}[display_id]
+                setattr(self, timeout_name, panel_timeouts[display_id])
                 speed_name = {1: "display_scroll_ms_a", 2: "display_scroll_ms_b", 3: "matrix_scroll_ms_a", 4: "matrix_scroll_ms_b"}[display_id]
                 speed_default = DEFAULT_SEVEN_SEGMENT_SCROLL_MS if display_id in (1, 2) else DEFAULT_MATRIX_SCROLL_MS
                 setattr(self, speed_name, normalize_panel_scroll_ms(panel_speeds[display_id], speed_default))
@@ -3860,8 +4058,10 @@ class PlayoffApp:
                 usb_port=self.usb_port, usb_baud=self.usb_baud, usb_timeout=self.usb_timeout,
                 display_port_a=self.display_port_a, display_port_b=self.display_port_b,
                 display_baud_a=self.display_baud_a, display_baud_b=self.display_baud_b,
+                display_timeout_a=self.display_timeout_a, display_timeout_b=self.display_timeout_b,
                 matrix_port_a=self.matrix_port_a, matrix_port_b=self.matrix_port_b,
                 matrix_baud_a=self.matrix_baud_a, matrix_baud_b=self.matrix_baud_b,
+                matrix_timeout_a=self.matrix_timeout_a, matrix_timeout_b=self.matrix_timeout_b,
                 display_scroll_ms_a=self.display_scroll_ms_a, display_scroll_ms_b=self.display_scroll_ms_b,
                 matrix_scroll_ms_a=self.matrix_scroll_ms_a, matrix_scroll_ms_b=self.matrix_scroll_ms_b,
                 display_content_a=self.display_content_a, display_content_b=self.display_content_b,
@@ -3963,10 +4163,14 @@ class PlayoffApp:
             'display_port_b': self.display_port_b,
             'display_baud_a': self.display_baud_a,
             'display_baud_b': self.display_baud_b,
+            'display_timeout_a': self.display_timeout_a,
+            'display_timeout_b': self.display_timeout_b,
             'matrix_port_a': self.matrix_port_a,
             'matrix_port_b': self.matrix_port_b,
             'matrix_baud_a': self.matrix_baud_a,
             'matrix_baud_b': self.matrix_baud_b,
+            'matrix_timeout_a': self.matrix_timeout_a,
+            'matrix_timeout_b': self.matrix_timeout_b,
             'display_scroll_ms_a': self.display_scroll_ms_a,
             'display_scroll_ms_b': self.display_scroll_ms_b,
             'matrix_scroll_ms_a': self.matrix_scroll_ms_a,
@@ -4108,10 +4312,14 @@ class PlayoffApp:
         self.display_port_b = data.get('display_port_b', self.display_port_b)
         self.display_baud_a = data.get('display_baud_a', self.display_baud_a)
         self.display_baud_b = data.get('display_baud_b', self.display_baud_b)
+        self.display_timeout_a = normalize_panel_timeout(data.get('display_timeout_a'), self.display_timeout_a)
+        self.display_timeout_b = normalize_panel_timeout(data.get('display_timeout_b'), self.display_timeout_b)
         self.matrix_port_a = data.get('matrix_port_a', self.matrix_port_a)
         self.matrix_port_b = data.get('matrix_port_b', self.matrix_port_b)
         self.matrix_baud_a = data.get('matrix_baud_a', self.matrix_baud_a)
         self.matrix_baud_b = data.get('matrix_baud_b', self.matrix_baud_b)
+        self.matrix_timeout_a = normalize_panel_timeout(data.get('matrix_timeout_a'), self.matrix_timeout_a)
+        self.matrix_timeout_b = normalize_panel_timeout(data.get('matrix_timeout_b'), self.matrix_timeout_b)
         self.display_scroll_ms_a = normalize_panel_scroll_ms(data.get('display_scroll_ms_a'), DEFAULT_SEVEN_SEGMENT_SCROLL_MS)
         self.display_scroll_ms_b = normalize_panel_scroll_ms(data.get('display_scroll_ms_b'), DEFAULT_SEVEN_SEGMENT_SCROLL_MS)
         self.matrix_scroll_ms_a = normalize_panel_scroll_ms(data.get('matrix_scroll_ms_a'), DEFAULT_MATRIX_SCROLL_MS)
@@ -5332,6 +5540,7 @@ class PlayoffApp:
             "- Pravá část dialogu ukazuje nalezenou bránu a LED displeje\n"
             "- Nastavení Baud rate (výchozí 115200)\n"
             "- Timeout odpovědi (výchozí 10 s)\n\n"
+            "- TEST ID-x ověří právě zvolený port bez nutnosti uložit nastavení; RESET ID-x uzavře pouze tento panel a obnoví jeho aktuální obsah\n\n"
             "Tlačítko START:\n"
             "- Odešle text 'start' do zařízení\n"
             "- Očekává zpět text 'ok'\n"
@@ -5415,6 +5624,11 @@ class PlayoffApp:
             "- Samostatné okno ukazuje stav stahování, velikost a průběh v procentech\n"
             "- Stažený instalátor se před spuštěním ověří podle velikosti a SHA-256\n"
             "- Při chybě lze stahování zopakovat nebo znovu spustit původní Playoff\n\n"
+
+            "=== DEBUG ===\n"
+            "Nastavení → Debug\n"
+            "- Zobrazuje zjištěné COM porty, stav GATE a každého panelu ID-1 až ID-4, fronty odesílání i historii událostí programu a USB\n"
+            "- Historii lze vymazat; okno ji při otevření průběžně aktualizuje\n\n"
 
             "=== ČAS A DATUM ===\n"
             "- V horní liště se zobrazuje aktuální datum a čas v reálném čase\n"

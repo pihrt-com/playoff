@@ -11,9 +11,9 @@ V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadávám
 
 Import pro předkolo používá výsledky soutěžního systému [ROBO](https://github.com/pihrt-com/robo).
 
-## Aktuální změny – 23. 11. 2026
+## Aktuální změny – 24. 11. 2026
 
-Po návratu USB měřicí brány aplikace obnoví komunikaci, nejprve bráně odešle synchronizaci a potom aktivní režim PLAYOFF nebo LAPS. Firmware potvrdí připravenost zprávou `ready_playoff` nebo `ready_laps`; GATE proto zůstává žlutý až do potvrzení a při neúspěchu je červený. Tlačítko START během synchronizace příkaz neodešle, takže pozdější obnova nemůže právě zahájenou jízdu zrušit. Firmware zároveň před obnovením bezpečně ukončí případný rozběhnutý semafor, takže po odpojení USB není nutný ruční RESET Arduina. Aktuální firmware nahrajte ze souboru `Arduino/gate semaphore/fw1.5/fw1.5.ino`. Panely zůstávají označené ID1 až ID4 a každý se po návratu obnovuje samostatně.
+V Nastavení je mezi Nápovědou a Kontrolou aktualizace nové okno Debug. Průběžně ukazuje nalezené COM porty, stav GATE a panelů ID-1 až ID-4, chyby, fronty odesílání a historii událostí programu i USB. Tlačítko `Ověřit USB (PING)` odešle bezpečný dotaz a zaznamená přijaté `PONG` z každého panelu a `pong` z brány s firmwarem `Arduino/gate semaphore/fw1.6`. Po automatické obnově panel nezelená pouze po zápisu na COM port, ale až po odpovědi `PONG`; při chybě nebo tichém starém spojení se handle zavře a další pokus jej otevře znovu. V USB nastavení je pod každým TEST ID-x nové tlačítko RESET ID-x a u brány RESET BRÁNY; každé tlačítko uvolní a obnoví pouze své zařízení. Každý panel ID-1 až ID-4 má vlastní timeout sériové odpovědi. Odpojený panel po neúspěšné obnově zůstane červený a další pokus proběhne až po krátké prodlevě, takže se indikátor trvale nestřídá mezi červenou a žlutou. Čtečka měřicí brány při návratu USB ukončí původní vlákno nad starým portem dříve, než začne číst nové spojení; události START a OK tak nemohou zůstat na zastaralém čtení.
 
 ## Aplikace
 
