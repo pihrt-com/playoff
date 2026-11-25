@@ -434,9 +434,11 @@ class LiveLEDTests(unittest.TestCase):
         self.assertEqual(app.usb.messages, [])
 
     def test_matrix_firmware_reserves_top_row_for_diacritics(self):
+        from test_firmware_layout import firmware_sketches
+
+        folder = firmware_sketches("matrix display")[-1]
         firmware = (
-            Path(__file__).resolve().parents[1]
-            / "Arduino" / "matrix display" / "fw1.0" / "fw1.0.ino"
+            folder / f"{folder.name}.ino"
         ).read_text(encoding="utf-8")
 
         self.assertIn("font5x7[base - 32][col]) << 1", firmware)

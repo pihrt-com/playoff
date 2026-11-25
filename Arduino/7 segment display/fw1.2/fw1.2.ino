@@ -245,7 +245,7 @@ void processCommand(char *cmd)
   if(strcmp(cmd,"CLS")==0){ mode=MODE_TEXT; clearDisplay(); Serial.println(F("OK")); return; }
   if(strcmp(cmd,"TEST")==0){ for(int i=0;i<7;i++) disp[i]=127; refreshDisplay(); Serial.println(F("OK")); return; }
   if(strcmp(cmd,"PING")==0){ Serial.println(F("PONG")); return; }
-  if(strcmp(cmd,"VER")==0){ Serial.println(F("FW 1.1")); return; }
+  if(strcmp(cmd,"VER")==0){ Serial.println(F("FW 1.2")); return; }
 
   if(strcmp(cmd,"STAT")==0)
   {
