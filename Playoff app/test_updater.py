@@ -29,10 +29,11 @@ class UpdateManifestTests(unittest.TestCase):
             (app_dir / "version.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(manifest["version"], "1.0.40")
-        self.assertEqual(playoff.APP_current, manifest["version"])
-        self.assertIn("/releases/download/1.0.40/", manifest["url"])
-        self.assertTrue(manifest["url"].endswith("PlayoffSetup_1.0.40.exe"))
+        version = manifest["version"]
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        self.assertEqual(playoff.APP_current, version)
+        self.assertEqual(manifest["url"],
+                         f"https://github.com/pihrt-com/playoff/releases/download/{version}/PlayoffSetup_{version}.exe")
         self.assertEqual(len(manifest["sha256"]), 64)
         self.assertTrue(all(char in "0123456789abcdef" for char in manifest["sha256"]))
         self.assertGreater(manifest["size"], 0)
@@ -40,8 +41,8 @@ class UpdateManifestTests(unittest.TestCase):
         installer = (app_dir / "installer_playoff.iss").read_text(
             encoding="utf-8"
         )
-        self.assertIn("AppVersion=1.0.40", installer)
-        self.assertIn("OutputBaseFilename=PlayoffSetup_1.0.40", installer)
+        self.assertIn(f"AppVersion={version}", installer.splitlines())
+        self.assertIn(f"OutputBaseFilename=PlayoffSetup_{version}", installer.splitlines())
 
     def test_installer_preserves_existing_desktop_shortcut_during_update(self):
         installer = (Path(__file__).resolve().parent / "installer_playoff.iss").read_text(

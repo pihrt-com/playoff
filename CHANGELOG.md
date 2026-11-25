@@ -1,6 +1,6 @@
 # Historie změn
 
-## Připravované změny
+## 1.0.41 – 25. 11. 2026
 
 - Nabídka Zvuky přidává vestavěná pípnutí a úložiště WAV a MP3. Pro každou událost lze zvolit zvuk, zapnutí, hlasitost a ověřit přehrání tlačítkem Test.
 - Zvuková upozornění pokrývají START a chybu startu, vypršení odpočtů, nastavitelný předstih v LAPS, zapnutí PROMO, vybraná kliknutí a výpadek nebo obnovu každého zařízení USB. Přehrávání běží mimo vlákno uživatelského rozhraní.
