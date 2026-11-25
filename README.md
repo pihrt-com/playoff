@@ -13,7 +13,13 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 25. 11. 2026
 
-Playoff 1.0.40 opravuje otevření USB portů displejů a čekání na spuštění Arduino. Ověření panelu zpracuje odpověď PONG i při rozdělení sériového přenosu. Firmware brány 1.7 podporuje dotaz na verzi a popisuje nastavení laserových vstupů pro ostrou bránu a testovací nepájivé pole.
+Ve vývojové verzi přibylo nastavení zvuků pro PLAYOFF, LAPS, PROMO, provozní kliknutí a změny spojení USB. Nastavení lze přenést v ZIPu s vlastními zvuky a obrázkovým pozadím.
+
+### Zvuky a přenos nastavení
+
+V nabídce **Nastavení → Zvuky** zvolte vestavěné pípnutí nebo přidejte vlastní WAV či MP3 na kartě **Knihovna zvuků**. Události jsou ve výchozím stavu vypnuté. U každé lze samostatně nastavit zvuk a hlasitost 0–100 %. **Test** přehraje vybraný zvuk i u vypnuté události. Upozornění LAPS zazní nejvýše jednou v každém cyklu, pokud je předstih kratší než celý odpočet.
+
+**Uložit do souboru (pouze nastavení)** vytvoří soubor .setup nebo JSON se stavem soutěže, volbami zvuků a odkazy na místní média. **Uložit do složky (ZIP)** přibalí celou knihovnu vlastních zvuků a právě použité obrázkové pozadí. Na druhém počítači otevřete ZIP příkazem **Načíst ze souboru**, který přijímá i původní .setup nebo JSON. Export může obsahovat uložený klíč ROBO a údaje soutěžících.
 
 V Nastavení je mezi Nápovědou a Kontrolou aktualizace nové okno Debug. Průběžně ukazuje nalezené COM porty, stav GATE a panelů ID-1 až ID-4, chyby, fronty odesílání a historii událostí programu i USB. Tlačítko `Ověřit USB (PING)` odešle bezpečný dotaz a zaznamená přijaté `PONG` z každého panelu a `pong` z brány s firmwarem `Arduino/gate semaphore/fw1.6`. Po automatické obnově panel nezelená pouze po zápisu na COM port, ale až po odpovědi `PONG`; při chybě nebo tichém starém spojení se handle zavře a další pokus jej otevře znovu. V USB nastavení je pod každým TEST ID-x nové tlačítko RESET ID-x a u brány RESET BRÁNY; každé tlačítko uvolní a obnoví pouze své zařízení. Každý panel ID-1 až ID-4 má vlastní timeout sériové odpovědi. Odpojený panel po neúspěšné obnově zůstane červený a další pokus proběhne až po krátké prodlevě, takže se indikátor trvale nestřídá mezi červenou a žlutou. Čtečka měřicí brány při návratu USB ukončí původní vlákno nad starým portem dříve, než začne číst nové spojení; události START a OK tak nemohou zůstat na zastaralém čtení.
 

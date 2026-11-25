@@ -22,8 +22,11 @@ import threading
 import unicodedata
 import webbrowser
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from datetime import datetime
 import certifi
+import playoff_sounds as sounds
 
 try:
     from reportlab.pdfgen import canvas as rl_canvas
@@ -823,6 +826,13 @@ class Bracket:
 # --- App ---
 class PlayoffApp:
     def __init__(self, root):
+        self.sound_settings = sounds.normalize_sounds(None)
+        self.laps_sound_warning_seconds = 10
+        self.laps_sound_warning_played = False
+        self.sound_usb_states = {}
+        self.sound_player = sounds.SoundPlayer()
+        self.media_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="PlayoffMedia")
+        self.media_job = None
         self.root = root
         root.title("Playoff generátor by Martin Pihrt © www.pihrt.com")
         self.debug_events = deque(maxlen=800)
@@ -1307,10 +1317,16 @@ class PlayoffApp:
             command=self.load_setup,
         )
         self.settings_menu.add_command(
-            label='Uložit do souboru',
+            label='Uložit do souboru (pouze nastavení)',
             image=self.menu_icons['save'],
             compound='left',
             command=self.save_setup,
+        )
+        self.settings_menu.add_command(
+            label='Uložit do složky (ZIP)',
+            image=self.menu_icons['save'],
+            compound='left',
+            command=self.save_portable_setup,
         )
 
         # timer enable
@@ -1368,6 +1384,12 @@ class PlayoffApp:
             image=self.menu_icons['usb'],
             compound='left',
             command=self.open_usb_dialog,
+        )
+        self.settings_menu.add_command(
+            label='Zvuky',
+            image=self.menu_icons['speaker'],
+            compound='left',
+            command=self.open_sounds_dialog,
         )
 
         self.settings_menu.add_separator()
@@ -1529,6 +1551,9 @@ class PlayoffApp:
                 with open(settings_path, 'r', encoding='utf-8') as f:
                     s = json.load(f)
 
+                self.load_sound_settings(s)
+                self.bg_path = s.get('bg_path')
+                self.restore_background()
                 self.usb_port = s.get('usb_port', self.usb_port)
                 self.usb_baud = s.get('usb_baud', self.usb_baud)
                 self.usb_timeout = s.get('usb_timeout', self.usb_timeout)
@@ -1709,6 +1734,15 @@ class PlayoffApp:
         rectangle(usb, 7, 11, 8, 15, '#455a64')
         icons['usb'] = usb
 
+        speaker = image()
+        rectangle(speaker, 1, 6, 4, 10, '#1976d2')
+        for x in range(4, 8):
+            rectangle(speaker, x, 9 - x, x + 1, 7 + x, '#1976d2')
+        for x, y in ((10, 6), (11, 7), (11, 8), (10, 9),
+                     (12, 4), (13, 5), (14, 6), (14, 9), (13, 10), (12, 11)):
+            speaker.put('#f9a825', (x, y))
+        icons['speaker'] = speaker
+
         fullscreen = image()
         rectangle(fullscreen, 1, 1, 6, 3, '#1565c0')
         rectangle(fullscreen, 1, 1, 3, 6, '#1565c0')
@@ -1886,6 +1920,8 @@ class PlayoffApp:
         refresh()
 
     def on_close(self):
+        self.sound_player.close()
+        self.media_executor.shutdown(wait=False, cancel_futures=True)
         if self.usb:
             self.usb.disconnect_displays()
             self.usb.disconnect()
@@ -2162,6 +2198,7 @@ class PlayoffApp:
             if not messagebox.askyesno('Přepsat?', 'V cílovém poli osmifinále už je jiný tým. Přepsat?'):
                 return
         target.text = winner
+        self.play_sound("click")
         self.redraw()
 
     def check_for_update(self):
@@ -2704,6 +2741,7 @@ class PlayoffApp:
 
     def update_usb_status(self, state):
         """Show red for disconnect, yellow while reconnecting and green when ready."""
+        self.notify_usb_sound("GATE", getattr(self, "usb_port", ""), state)
         try:
             color = {
                 "ready": "green",
@@ -2879,6 +2917,9 @@ class PlayoffApp:
             self.start_btn.pack(side='right', padx=4)               
 
     def update_display_status(self, disp_id, state):
+        port_names = ("display_port_a", "display_port_b", "matrix_port_a", "matrix_port_b")
+        if 1 <= disp_id <= len(port_names):
+            self.notify_usb_sound(f"ID{disp_id}", getattr(self, port_names[disp_id - 1], ""), state)
         try:
             color = {
                 "ready": "green",
@@ -3074,6 +3115,7 @@ class PlayoffApp:
 
     def on_start(self):
         if not self.gate_ready_for_start():
+            self.play_sound("start_error")
             self.status_var.set("Brána se synchronizuje, vyčkejte na zelený GATE")
             self.status_label.config(fg="#f57c00")
             return
@@ -3118,10 +3160,12 @@ class PlayoffApp:
                 if ok:
                     # START packet was successfully sent
                     # WAITING FOR "ok" FROM ARDUINO
+                    self.play_sound("start")
                     self.status_var.set('START odeslán')
                     self.status_label.config(fg='orange')
 
                 else:
+                    self.play_sound("start_error")
                     if reason == 'timeout':
                         self.status_var.set('Chyba spojení (timeout)')
                     elif isinstance(reason, str) and reason.startswith('open_error'):
@@ -3203,6 +3247,7 @@ class PlayoffApp:
 
             else:
 
+                self.play_sound("start_error")
                 self.status_var.set('Chyba spojení')
                 self.status_label.config(fg='red')
 
@@ -3216,6 +3261,7 @@ class PlayoffApp:
 
         except Exception as e:
 
+            self.play_sound("start_error")
             self.status_var.set(f'Chyba: {e}')
             self.status_label.config(fg='red')
 
@@ -4118,9 +4164,195 @@ class PlayoffApp:
             messagebox.showerror("Chyba", "Počet týmů není platné číslo.")
 
     # --- save / load setup ---
+    def load_sound_settings(self, data):
+        self.sound_settings = sounds.normalize_sounds(data.get("sounds"))
+        self.laps_sound_warning_seconds = sounds.bounded_int(
+            data.get("laps_sound_warning_seconds"), 1, 3599, 10)
+
+    def notify_usb_sound(self, device, port, state):
+        states = getattr(self, "sound_usb_states", None)
+        if states is None:
+            return
+        previous_port, previous = states.get(device, ("", None))
+        if previous_port != port:
+            previous = None
+        if not port:
+            states.pop(device, None)
+        elif state == "syncing":
+            states[device] = (port, previous)
+        else:
+            if state is True:
+                return
+            ready = state == "ready"
+            states[device] = (port, ready)
+            if previous is not None and previous != ready:
+                self.play_sound(f"{device}_{'restored' if ready else 'lost'}")
+
+    def play_sound(self, event):
+        assignment = getattr(self, "sound_settings", {}).get(event)
+        if assignment and assignment["enabled"] and assignment["volume"]:
+            job = self.sound_player.play(assignment["sound"], assignment["volume"])
+            self.report_sound_result(job, event)
+
+    def report_sound_result(self, job, event, dialog=None):
+        if dialog is not None and not dialog.winfo_exists():
+            return
+        if not job.done():
+            self.root.after(75, self.report_sound_result, job, event, dialog)
+            return
+        try:
+            job.result()
+        except Exception as error:
+            self._log(f"Zvuk ({event}): {error}")
+            if dialog is not None:
+                messagebox.showerror("Test zvuku", str(error), parent=dialog)
+
+    def run_media_job(self, operation, on_success, title="Chyba", dialog=None):
+        if self.media_job is not None:
+            messagebox.showinfo("Playoff", "Probíhá zpracování souboru. Zkuste to za chvíli.", parent=dialog)
+            return
+        job = self.media_job = self.media_executor.submit(operation)
+
+        def check():
+            if not job.done():
+                self.root.after(75, check)
+                return
+            self.media_job = None
+            if dialog is not None and not dialog.winfo_exists():
+                return
+            try:
+                on_success(job.result())
+            except Exception as error:
+                messagebox.showerror(title, str(error), parent=dialog)
+
+        self.root.after(75, check)
+
+    def open_sounds_dialog(self):
+        dialog = tk.Toplevel(self.root)
+        self.set_playoff_icon(dialog)
+        dialog.title("Zvuky")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        tabs = ttk.Notebook(dialog)
+        tabs.pack(fill="both", expand=True, padx=10, pady=8)
+        general = ttk.Frame(tabs, padding=8)
+        usb = ttk.Frame(tabs, padding=8)
+        library = ttk.Frame(tabs, padding=8)
+        tabs.add(general, text="Události")
+        tabs.add(usb, text="USB")
+        tabs.add(library, text="Knihovna zvuků")
+        selections = {}
+        labels = {}
+        warning = tk.StringVar(dialog, value=str(self.laps_sound_warning_seconds))
+
+        def test_sound(sound, volume):
+            try:
+                volume = int(volume)
+                if not 0 <= volume <= 100:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Hlasitost", "Zadejte hodnotu 0 až 100 %.", parent=dialog)
+                return
+            self.report_sound_result(self.sound_player.play(sound, volume), sound, dialog)
+
+        for frame in (general, usb):
+            frame.columnconfigure(1, weight=1)
+            for column, title in enumerate(("Událost", "Zvuk", "Zapnuto", "Hlasitost (%)")):
+                ttk.Label(frame, text=title).grid(row=0, column=column, padx=4, sticky="w")
+            events = [event for event in sounds.EVENTS if
+                      (event.endswith(("_lost", "_restored"))) == (frame is usb)]
+            for row, event in enumerate(events, start=1):
+                item = self.sound_settings[event]
+                enabled = tk.BooleanVar(dialog, value=item["enabled"])
+                volume = tk.StringVar(dialog, value=str(item["volume"]))
+                choice = ttk.Combobox(frame, state="readonly", width=35)
+                ttk.Label(frame, text=sounds.EVENTS[event]).grid(row=row, column=0, padx=4, pady=2, sticky="w")
+                choice.grid(row=row, column=1, padx=4, sticky="ew")
+                ttk.Checkbutton(frame, variable=enabled).grid(row=row, column=2)
+                ttk.Spinbox(frame, from_=0, to=100, textvariable=volume, width=5).grid(row=row, column=3)
+                ttk.Button(frame, text="Test", command=lambda c=choice, v=volume:
+                           test_sound(labels[c.get()], v.get())).grid(row=row, column=4, padx=4)
+                selections[event] = (choice, enabled, volume)
+
+        ttk.Label(general, text="Předstih upozornění LAPS (s)").grid(row=9, column=0, padx=4, pady=8, sticky="w")
+        ttk.Spinbox(general, from_=1, to=3599, textvariable=warning, width=7).grid(row=9, column=1, sticky="w", padx=4)
+        library.columnconfigure(0, weight=1)
+        library.rowconfigure(1, weight=1)
+        ttk.Label(library, text="Vestavěné zvuky a vlastní soubory WAV nebo MP3").grid(row=0, column=0, sticky="w")
+        listing = tk.Listbox(library, height=9, exportselection=False)
+        listing.grid(row=1, column=0, columnspan=2, pady=6, sticky="nsew")
+        scrollbar = ttk.Scrollbar(library, orient="vertical", command=listing.yview)
+        scrollbar.grid(row=1, column=2, sticky="ns")
+        listing.configure(yscrollcommand=scrollbar.set)
+
+        def refresh_library(select=None):
+            assigned = {event: labels.get(choice.get(), self.sound_settings[event]["sound"])
+                        for event, (choice, _, _) in selections.items()}
+            available = sounds.sound_library()
+            listing.delete(0, "end")
+            for index, (sound, name) in enumerate(available.items()):
+                listing.insert("end", name)
+                if sound == select:
+                    listing.selection_set(index)
+                    listing.see(index)
+            for sound in assigned.values():
+                available.setdefault(sound, f"Chybí: {sound[66:]}")
+            labels.clear()
+            labels.update({name: sound for sound, name in available.items()})
+            for event, (choice, _, _) in selections.items():
+                choice.configure(values=[name for sound, name in available.items()
+                                         if not name.startswith("Chybí:") or sound == assigned[event]])
+                choice.set(available[assigned[event]])
+
+        def import_sound():
+            filename = filedialog.askopenfilename(parent=dialog,
+                filetypes=[("Zvuky WAV a MP3", "*.wav *.mp3")])
+            if filename:
+                self.run_media_job(lambda: sounds.add_sound(filename), refresh_library,
+                                   title="Přidat zvuk", dialog=dialog)
+
+        def test_library_sound():
+            selection = listing.curselection()
+            if selection:
+                test_sound(labels[listing.get(selection[0])], "75")
+
+        def save():
+            try:
+                seconds = int(warning.get())
+                settings = {event: {"sound": labels[choice.get()], "enabled": enabled.get(),
+                                    "volume": int(volume.get())}
+                            for event, (choice, enabled, volume) in selections.items()}
+                if not 1 <= seconds <= 3599 or any(not 0 <= item["volume"] <= 100 for item in settings.values()):
+                    raise ValueError("Hlasitost může být 0 až 100 % a předstih 1 až 3599 sekund.")
+                self.persist_user_settings(raise_errors=True, sounds=settings, laps_sound_warning_seconds=seconds)
+            except (OSError, ValueError) as error:
+                messagebox.showerror("Uložit zvuky", str(error), parent=dialog)
+                return
+            self.sound_settings = settings
+            self.laps_sound_warning_seconds = seconds
+            dialog.destroy()
+
+        ttk.Button(library, text="Přidat zvuk…", command=import_sound).grid(row=2, column=0, sticky="w")
+        ttk.Button(library, text="Test", command=test_library_sound).grid(row=2, column=1, sticky="e")
+        buttons = ttk.Frame(dialog, padding=(10, 0, 10, 10))
+        buttons.pack(fill="x")
+        ttk.Button(buttons, text="Uložit", command=save).pack(side="right")
+        ttk.Button(buttons, text="Zavřít", command=dialog.destroy).pack(side="right", padx=6)
+        refresh_library()
+
     def save_setup(self):
+        self.export_setup(portable=False)
+
+    def save_portable_setup(self):
+        self.export_setup(portable=True)
+
+    def export_setup(self, portable):
         self._log("SAVE_SETUP CALLED")
-        fname = filedialog.asksaveasfilename(defaultextension='.setup', filetypes=[('Playoff setup', '.setup'), ('JSON', '.json')])
+        types = [('Přenosné nastavení Playoff', '*.zip')] if portable else [
+            ('Playoff setup', '*.setup'), ('JSON', '*.json')]
+        fname = filedialog.asksaveasfilename(
+            defaultextension='.zip' if portable else '.setup', filetypes=types)
 
         if not fname:
             return
@@ -4209,6 +4441,8 @@ class PlayoffApp:
             'laps_max_teams': self.laps_max_teams,
             'laps_active_team_a': self.laps_active_team_a,
             'laps_teams': self.laps_teams,
+            'sounds': self.sound_settings,
+            'laps_sound_warning_seconds': self.laps_sound_warning_seconds,
         }
         if (self.bracket and self.pre_round_enabled and self.bracket.pre_rounds):
             data['pre_rounds'] = [
@@ -4227,25 +4461,44 @@ class PlayoffApp:
                     rd.append({'a': m.a.text, 'b': m.b.text})
                 data['rounds'].append(rd)
         try:
-            with open(fname, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            if portable:
+                snapshot = deepcopy(data)
+                background = self.bg_image
+                self.run_media_job(lambda: sounds.save_portable_setup(fname, snapshot, background),
+                                   lambda _: messagebox.showinfo('Hotovo', f'Soubor byl uložen: {fname}'))
+                return
+            else:
+                with open(fname, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
             messagebox.showinfo('Hotovo', f'Soubor byl uložen: {fname}')
         except Exception as e:
             messagebox.showerror('Chyba', str(e))
 
     def load_setup(self):
         self._log("LOAD setup.json")
-        fname = filedialog.askopenfilename(filetypes=[('Playoff setup', '.setup .json')])
+        fname = filedialog.askopenfilename(filetypes=[
+            ('Nastavení Playoff', '*.setup *.json *.zip'), ('Všechny soubory', '*')])
         if not fname:
             return
+        if os.path.splitext(fname)[1].lower() == '.zip':
+            def read_zip():
+                data = sounds.load_setup_file(fname)
+                return data, self.read_background(data.get('bg_path'))
+
+            self.run_media_job(read_zip, lambda result: self.apply_setup(*result, portable=True),
+                               title='Nepodařilo se načíst ZIP')
+            return
         try:
-            with open(fname, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            data = sounds.load_setup_file(fname)
         except Exception as e:
             messagebox.showerror('Chyba', f'Nepodařilo se načíst soubor: {e}')
             self._log('Chyba', f'Nepodařilo se načíst soubor: {e}')
             return
+        self.apply_setup(data)
+
+    def apply_setup(self, data, background=None, *, portable=False):
         self.stop_countdowns_for_mode_change()
+        self.load_sound_settings(data)
         # rebuild bracket with exact count
         n = data.get('team_count', 0)
         self.odd_behavior = data.get('odd_behavior', 'manual')
@@ -4401,12 +4654,11 @@ class PlayoffApp:
                 matches[m_idx].a.text = mdata.get('a', '')
                 matches[m_idx].b.text = mdata.get('b', '')
 
-        # try load bg image if exists
-        if self.bg_path and PIL_AVAILABLE and os.path.exists(self.bg_path):
-            try:
-                self.bg_image = Image.open(self.bg_path).convert('RGBA')
-            except Exception:
-                self.bg_image = None
+        if portable:
+            self.bg_image = background
+            self.bg_tk = None
+        else:
+            self.restore_background()
 
         self.current_winner = data.get('winner', '')
         
@@ -4428,6 +4680,10 @@ class PlayoffApp:
 
         self.root.update_idletasks()
         self.root.after(50, self.redraw)
+        self.persist_user_settings(
+            sounds=self.sound_settings, laps_sound_warning_seconds=self.laps_sound_warning_seconds,
+            bg_path=self.bg_path,
+        )
         messagebox.showinfo('Hotovo', 'Soubor byl načten')
         self._log('Hotovo', 'Soubor byl načten')
 
@@ -4707,6 +4963,7 @@ class PlayoffApp:
             return False
 
         self.promo_active = True
+        self.play_sound("promo")
         self.promo_scroll_position = 1
         if self.promo_mode == "continuous":
             self.promo_after_id = self.root.after(
@@ -4768,7 +5025,7 @@ class PlayoffApp:
             return self.stop_promo()
         return self.start_promo()
 
-    def persist_user_settings(self, **updates):
+    def persist_user_settings(self, *, raise_errors=False, **updates):
         try:
             spath = os.path.join(os.path.expanduser('~'), '.playoff_settings.json')
             data = {}
@@ -4786,7 +5043,8 @@ class PlayoffApp:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception:
-            pass
+            if raise_errors:
+                raise
 
     def update_timer_visibility(self):
         try:
@@ -4877,6 +5135,7 @@ class PlayoffApp:
 
         self.stop_laps_countdown(reset=False)
         self.laps_countdown_seconds = maximum
+        self.laps_sound_warning_played = False
         self.laps_countdown_running = True
         self.update_promo_button_state()
         self.timer_label.config(
@@ -4906,10 +5165,17 @@ class PlayoffApp:
 
         cycle_restarted = self.laps_countdown_seconds <= 1
         if cycle_restarted:
+            self.play_sound("laps_end")
+            self.laps_sound_warning_played = False
             self.laps_countdown_seconds = maximum
             self.stop_laps_countdown_blink()
         else:
             self.laps_countdown_seconds -= 1
+            warning = getattr(self, "laps_sound_warning_seconds", 10)
+            if (warning < maximum and self.laps_countdown_seconds <= warning
+                    and not getattr(self, "laps_sound_warning_played", False)):
+                self.laps_sound_warning_played = True
+                self.play_sound("laps_warning")
 
         self.timer_label.config(
             text=self.seconds_to_time(self.laps_countdown_seconds),
@@ -5063,6 +5329,8 @@ class PlayoffApp:
                 self.start_blinking()
                 return
             self.current_seconds -= 1
+            if self.current_seconds == 0:
+                self.play_sound("playoff_end")
             try:
                 self.timer_label.config(text=self.seconds_to_time(self.current_seconds))
             except Exception:
@@ -5342,6 +5610,7 @@ class PlayoffApp:
                     return
 
             target.text = winner
+            self.play_sound("click")
             self.update_third_place_from_semifinal()
             self.redraw()
             return
@@ -5351,6 +5620,7 @@ class PlayoffApp:
 
         winner_match.a.text = winner
         winner_match.b.text = ""  
+        self.play_sound("click")
 
         self.update_third_place_from_semifinal()
         self.redraw()
@@ -5366,6 +5636,7 @@ class PlayoffApp:
                 return
 
         self.third_place["winner"] = val
+        self.play_sound("click")
         self.redraw()    
 
     def edit_third_place_title(self):
@@ -5424,6 +5695,20 @@ class PlayoffApp:
         self.canvas.delete('all')
 
     # --- background functions ---
+    def restore_background(self):
+        self.bg_tk = None
+        self.bg_image = self.read_background(self.bg_path)
+
+    @staticmethod
+    def read_background(path):
+        if path and PIL_AVAILABLE:
+            try:
+                with Image.open(path) as image:
+                    return image.convert('RGBA')
+            except (OSError, ValueError):
+                pass
+        return None
+
     def load_bg_image(self):
         if not PIL_AVAILABLE:
             messagebox.showerror('Chyba python Pillow', 'Pillow není nainstalován. Nainstaluj: pip install pillow')
@@ -5436,6 +5721,7 @@ class PlayoffApp:
             self.bg_path = path
             self.bg_image = img
             self.bg_tk = None
+            self.persist_user_settings(bg_path=self.bg_path)
             messagebox.showinfo('Načteno', f'Načteno: {os.path.basename(path)}')
             self.redraw()
         except Exception as e:
@@ -5445,6 +5731,7 @@ class PlayoffApp:
         self.bg_path = None
         self.bg_image = None
         self.bg_tk = None
+        self.persist_user_settings(bg_path=None)
         self.redraw()
         messagebox.showinfo('Hotovo', 'Pozadí bylo odstraněno')
 
@@ -5612,11 +5899,19 @@ class PlayoffApp:
             "- Přepne aplikaci na fullscreen\n"
             "- Klávesa ESC režim ukončí\n\n"
 
+            "=== ZVUKY ===\n"
+            "Nastavení → Zvuky\n"
+            "- V knihovně jsou vestavěná pípnutí a lze přidat vlastní WAV nebo MP3.\n"
+            "- Každá událost má výběr zvuku, přepínač, hlasitost 0–100 % a tlačítko Test.\n"
+            "- Předstih v LAPS se zadává v sekundách a upozornění zazní jednou za cyklus.\n\n"
+
             "=== UKLÁDÁNÍ A NAČÍTÁNÍ ===\n"
-            "Nastavení → Uložit do souboru\n"
-            "- Uloží kompletní stav pavouka, pozadí, USB, odpočet, pojmenování týmů i historii LAPS\n\n"
+            "Nastavení → Uložit do souboru (pouze nastavení)\n"
+            "- Uloží stav soutěže a nastavení do .setup nebo JSON včetně odkazů na vlastní média.\n\n"
+            "Nastavení → Uložit do složky (ZIP)\n"
+            "- Přidá do ZIPu knihovnu vlastních zvuků a právě použité obrázkové pozadí.\n\n"
             "Nastavení → Načíst ze souboru\n"
-            "- Obnoví veškerý uložený obsah\n\n"
+            "- Načte .setup, JSON nebo ZIP včetně přibalených médií.\n\n"
 
             "=== AKTUALIZACE ===\n"
             "Nastavení → Kontrola aktualizace\n"
@@ -6516,6 +6811,7 @@ class PlayoffApp:
         self._load_laps_team_pair(active_team_a, store_current=False, redraw=False)
 
     def change_laps_team_pair(self, step):
+        self.play_sound("click")
         target = self.laps_active_team_a + (2 if step > 0 else -2)
         target = max(1, min(self.laps_max_teams - 1, target))
         if target == self.laps_active_team_a:

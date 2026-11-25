@@ -2,11 +2,15 @@ import tempfile
 import tkinter as tk
 import unittest
 import os
+import json
+import time
+from pathlib import Path
 from unittest import mock
 
 from pypdf import PdfReader
 
 import playoff
+import playoff_sounds as sounds
 
 
 SAMPLE_PAYLOAD = {
@@ -189,8 +193,10 @@ class RoboImportMenuTests(unittest.TestCase):
                 "Tloušťka čar",
                 "Zamknout editaci týmů",
                 "Načíst ze souboru",
-                "Uložit do souboru",
+                "Uložit do souboru (pouze nastavení)",
+                "Uložit do složky (ZIP)",
                 "USB nastavení – brána a panely",
+                "Zvuky",
                 "Export do PDF PLAYOFF",
                 "Export do PDF LAPS",
                 "Celá obrazovka",
@@ -201,7 +207,64 @@ class RoboImportMenuTests(unittest.TestCase):
             for label in labels:
                 self.assertIn(label, entries)
                 self.assertTrue(app.settings_menu.entrycget(entries[label], "image"))
-            self.assertEqual(len(app.menu_icons), 14)
+            self.assertEqual(entries["Zvuky"], entries["USB nastavení – brána a panely"] + 1)
+            self.assertEqual(app.settings_menu.type(entries["Zvuky"] + 1), "separator")
+
+    def test_sounds_dialog_and_zip_restore_through_menu(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(profile)
+            self.addCleanup(app.media_executor.shutdown)
+            self.addCleanup(app.sound_player.close)
+            entries = {
+                app.settings_menu.entrycget(index, "label"): index
+                for index in range(app.settings_menu.index("end") + 1)
+                if app.settings_menu.type(index) != "separator"
+            }
+            app.settings_menu.invoke(entries["Zvuky"])
+            dialog = next(widget for widget in self.root.winfo_children()
+                          if isinstance(widget, tk.Toplevel) and widget.title() == "Zvuky")
+            tabs = next(widget for widget in dialog.winfo_children()
+                        if isinstance(widget, playoff.ttk.Notebook))
+            self.assertEqual([tabs.tab(tab, "text") for tab in tabs.tabs()],
+                             ["Události", "USB", "Knihovna zvuků"])
+            dialog.destroy()
+
+            def finish_io():
+                until = time.monotonic() + 5
+                while app.media_job is not None and time.monotonic() < until:
+                    self.root.update()
+                    time.sleep(0.01)
+                self.assertIsNone(app.media_job)
+
+            folder = Path(profile)
+            filename = str(folder / "test.zip")
+            file_dialog = playoff.filedialog
+            with mock.patch.object(sounds, "media_root", return_value=folder / "source"):
+                sound = sounds.add_sound(sounds.sound_path("short"))
+                app.sound_settings["start"] = {"sound": sound, "enabled": False, "volume": 41}
+                app.laps_sound_warning_seconds = 8
+                app.bg_image = playoff.Image.new("RGB", (3, 2), "blue")
+                with mock.patch.object(file_dialog, "asksaveasfilename", return_value=filename), \
+                     mock.patch.object(playoff.messagebox, "showinfo"), \
+                     mock.patch.object(playoff.messagebox, "showerror") as error:
+                    app.settings_menu.invoke(entries["Uložit do složky (ZIP)"])
+                    finish_io()
+                    error.assert_not_called()
+
+            app.load_sound_settings({})
+            app.bg_image = None
+            with mock.patch.object(sounds, "media_root", return_value=folder / "target"), \
+                 mock.patch.object(file_dialog, "askopenfilename", return_value=filename), \
+                 mock.patch.object(playoff.messagebox, "showinfo"), \
+                 mock.patch.object(playoff.messagebox, "showerror") as error:
+                app.settings_menu.invoke(entries["Načíst ze souboru"])
+                finish_io()
+                error.assert_not_called()
+                self.assertTrue(sounds.sound_path(sound).is_file())
+            self.assertEqual(app.bg_image.getpixel((0, 0)), (0, 0, 255, 255))
+            saved = json.loads((folder / ".playoff_settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["sounds"]["start"], {"sound": sound, "enabled": False, "volume": 41})
+            self.assertEqual(saved["laps_sound_warning_seconds"], 8)
 
     def test_debug_menu_is_between_help_and_update(self):
         with tempfile.TemporaryDirectory() as profile:

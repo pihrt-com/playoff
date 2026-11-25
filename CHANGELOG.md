@@ -1,5 +1,11 @@
 # Historie změn
 
+## Připravované změny
+
+- Nabídka Zvuky přidává vestavěná pípnutí a úložiště WAV a MP3. Pro každou událost lze zvolit zvuk, zapnutí, hlasitost a ověřit přehrání tlačítkem Test.
+- Zvuková upozornění pokrývají START a chybu startu, vypršení odpočtů, nastavitelný předstih v LAPS, zapnutí PROMO, vybraná kliknutí a výpadek nebo obnovu každého zařízení USB. Přehrávání běží mimo vlákno uživatelského rozhraní.
+- Přenosný ZIP ukládá nastavení, vlastní zvuky a použité obrázkové pozadí. Stávající příkaz Načíst ze souboru otevírá ZIP i původní soubory .setup a JSON.
+
 ## 1.0.40 – 25. 11. 2026
 
 - Opraveno otevření USB portů panelů a čekání na spuštění Arduino, aby sedmisegmentové displeje komunikovaly a zobrazovaly hodnoty.
