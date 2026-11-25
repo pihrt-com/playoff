@@ -1,7 +1,7 @@
 {
-  "version": "1.0.39",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.39/PlayoffSetup_1.0.39.exe",
-  "sha256": "0d83d2f3acb242c64bcff1ecbcaf8c2d9833d980b378db9d3646bae2cc4b46bb",
-  "size": 38495076,
-  "notes": "Přidáno okno Debug se stavem USB a historií událostí, ruční reset brány i každého panelu, samostatné timeouty panelů a odolnější obnova pěti USB zařízení po odpojení."
+  "version": "1.0.40",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.40/PlayoffSetup_1.0.40.exe",
+  "sha256": "a64b9ec2e0b159117338498bdff3d15b8d921b02dd676c6f41a1aa5a45ca8ad3",
+  "size": 38493188,
+  "notes": "Opraveno připojování USB displejů a ověřování jejich odpovědi po spuštění. Firmware brány umožňuje zjistit verzi a obsahuje popis nastavení laserových vstupů."
 }

@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.39"                                         # current version of the application
-APP_date          = "24.11.2026"                                     # current version date
+APP_current       = "1.0.40"                                         # current version of the application
+APP_date          = "25.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -447,7 +447,7 @@ WINNER_TEXT_COLOR = "#000000"
 DEFAULT_USB_PORT           = ""
 DEFAULT_USB_BAUD           = 115200
 DEFAULT_USB_TIMEOUT        = 10.0
-DEFAULT_PANEL_TIMEOUT      = 1.0
+DEFAULT_PANEL_TIMEOUT      = 10.0
 
 DEFAULT_USB_DISPLAY_A_BAUD = 115200
 DEFAULT_USB_DISPLAY_B_BAUD = 115200

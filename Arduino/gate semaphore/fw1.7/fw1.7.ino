@@ -108,7 +108,7 @@ int warnBeepOnMs   = 100;
 int warnBeepOffMs  = 100;
 int warnStepMs     = 120;
 
-bool laserActiveLow = false;
+bool laserActiveLow = true;  // true: ostrá ROBO brána; false: testovací nepájivé pole
 bool laserActiveHigh = true;
 bool useInternalPullup = true;
 

@@ -1,5 +1,12 @@
 # Historie změn
 
+## 1.0.40 – 25. 11. 2026
+
+- Opraveno otevření USB portů panelů a čekání na spuštění Arduino, aby sedmisegmentové displeje komunikovaly a zobrazovaly hodnoty.
+- Ověření PING přijímá i odpověď rozdělenou mezi více sériových přenosů.
+- Výchozí timeout panelů ID-1 až ID-4 je 10 sekund; uložené individuální hodnoty zůstávají zachovány.
+- Firmware brány 1.7 podporuje příkaz VER a u nastavení laserových vstupů popisuje ostrou bránu i testovací nepájivé pole.
+
 ## 1.0.39 – 24. 11. 2026
 
 - Nastavení nyní obsahuje položku Debug mezi Nápovědou a Kontrolou aktualizace. Zobrazuje živý stav GATE a ID-1 až ID-4, nalezené COM porty, chyby, fronty a historii událostí programu a USB. Tlačítko Ověřit USB (PING) uloží do historie příkaz a odpověď každého zařízení.

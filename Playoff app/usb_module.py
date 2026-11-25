@@ -459,11 +459,11 @@ class USBManager:
                 3: "matrix_timeout_a",
                 4: "matrix_timeout_b",
             }.get(display_id)
-            value = getattr(self.app, timeout_name, 1.0) if timeout_name else 1.0
+            value = getattr(self.app, timeout_name, 10.0) if timeout_name else 10.0
         try:
             return min(30.0, max(0.05, float(value)))
         except (TypeError, ValueError):
-            return 1.0
+            return 10.0
 
     def _connect_display(self, display_id, port_override=None, baud_override=None, timeout_override=None):
         lock = self.display_connect_locks.get(display_id)
@@ -513,14 +513,12 @@ class USBManager:
                 write_timeout=timeout
             )
             display.port = port
-            if self.prevent_reset:
-                try:
-                    display.dtr = False
-                    display.rts = False
-                except Exception:
-                    pass
+            # Some CH340/Nano boards remain in reset with DTR deasserted.
+            # Assert it before opening and allow the bootloader and sketch to start.
+            display.dtr = True
+            display.rts = False
             display.open()
-            time.sleep(1)
+            time.sleep(3)
             display.reset_input_buffer()
             display.reset_output_buffer()
         except Exception as e:
@@ -639,7 +637,8 @@ class USBManager:
                     waiting = getattr(ser, "in_waiting", 0)
                     if waiting:
                         reply_bytes += ser.read(waiting)
-                        break
+                        if any(line.strip().upper() == b"PONG" for line in reply_bytes.splitlines()):
+                            break
                     time.sleep(0.02)
                 if not reply_bytes:
                     # One final bounded read also supports serial adapters

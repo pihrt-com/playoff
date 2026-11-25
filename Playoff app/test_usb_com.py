@@ -177,7 +177,7 @@ class USBDisplayTests(unittest.TestCase):
         self.assertIsNone(manager.display_a)
         self.assertIs(manager.display_b, created[1])
         self.assertTrue(manager.display_b.is_open)
-        self.assertFalse(created[0].dtr)
+        self.assertTrue(created[0].dtr)
         self.assertFalse(created[0].rts)
 
     def test_matrix_panel_connects_independently_from_seven_segment_panels(self):
