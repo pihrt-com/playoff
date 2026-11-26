@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.42"                                         # current version of the application
+APP_current       = "1.0.43"                                         # current version of the application
 APP_date          = "26.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
@@ -136,6 +136,18 @@ def update_notes_text(update_info):
 
 TEAM_TABLE_DEFAULT_TITLE = "Účastníci soutěže"
 TEAM_TABLE_DEFAULT_HEADERS = ("ID", "Škola / adresa školy", "Jméno soutěžícího", "Nejlepší čas jízdy")
+LAPS_DEFAULT_HEADERS = ("ID", "Jízda", "Vloženo", "Čas", "Platnost")
+
+
+def normalize_laps_headers(value):
+    value = value if isinstance(value, dict) else {}
+    result = {}
+    for lane in ("a", "b"):
+        raw = value.get(lane)
+        raw = raw if isinstance(raw, (list, tuple)) else ()
+        result[lane] = [str(raw[i]).strip() if i < len(raw) and raw[i] is not None and str(raw[i]).strip() else default
+                        for i, default in enumerate(LAPS_DEFAULT_HEADERS)]
+    return result
 TEAM_RECORD_FIELDS = ("id", "school", "participant", "best_time")
 DEFAULT_LINE_WIDTH = 4
 
@@ -866,6 +878,7 @@ class PlayoffApp:
         self.team_names = []          # Team naming database
         self.team_table_title = TEAM_TABLE_DEFAULT_TITLE
         self.team_table_headers = list(TEAM_TABLE_DEFAULT_HEADERS)
+        self.laps_headers = normalize_laps_headers(None)
         self.pre_round_enabled = True
         self.robo_import_endpoint = ROBO_IMPORT_DEFAULT_ENDPOINT
         self.robo_import_api_key = ""
@@ -1601,6 +1614,7 @@ class PlayoffApp:
                     s.get('laps_max_teams', self.laps_max_teams),
                     self.laps_max_teams,
                 )
+                self.laps_headers = normalize_laps_headers(s.get('laps_headers'))
                 promo_valid, promo_text, _promo_error = validate_promo_text(
                     s.get('promo_text', self.promo_text)
                 )
@@ -4433,6 +4447,7 @@ class PlayoffApp:
             'team_names': normalize_team_records(self.team_names),
             'team_table_title': self.team_table_title,
             'team_table_headers': self.get_team_table_headers(),
+            'laps_headers': normalize_laps_headers(getattr(self, 'laps_headers', None)),
             # THIRD place
             'third_place_enabled': self.third_place_enabled,
             'third_place': self.third_place,
@@ -4528,6 +4543,7 @@ class PlayoffApp:
         self.team_names = normalize_team_records(data.get('team_names', []))
         self.team_table_title = str(data.get('team_table_title', TEAM_TABLE_DEFAULT_TITLE) or TEAM_TABLE_DEFAULT_TITLE)
         self.team_table_headers = normalize_team_table_headers(data.get('team_table_headers'))
+        self.laps_headers = normalize_laps_headers(data.get('laps_headers'))
         self.pre_round_enabled = data.get('pre_round_enabled', True)
         self.pre_round_var.set(self.pre_round_enabled)
         self.robo_import_endpoint = str(
@@ -4690,7 +4706,7 @@ class PlayoffApp:
         self.root.after(50, self.redraw)
         self.persist_user_settings(
             sounds=self.sound_settings, laps_sound_warning_seconds=self.laps_sound_warning_seconds,
-            bg_path=self.bg_path,
+            bg_path=self.bg_path, laps_headers=self.laps_headers,
         )
         messagebox.showinfo('Hotovo', 'Soubor byl načten')
         self._log('Hotovo', 'Soubor byl načten')
@@ -5519,6 +5535,36 @@ class PlayoffApp:
         dlg.bind("<Escape>", lambda _event: dlg.destroy())
         self.root.wait_window(dlg)
 
+    def edit_laps_header(self, lane, index):
+        if self.lock_edit:
+            return
+        headers = normalize_laps_headers(getattr(self, "laps_headers", None))
+        dlg = tk.Toplevel(self.root)
+        self.set_playoff_icon(dlg)
+        dlg.title(f"Změnit záhlaví LAPS – {lane.upper()}")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        tk.Label(dlg, text="Záhlaví:").pack(padx=10, pady=(10, 4))
+        entry = tk.Entry(dlg, width=40)
+        entry.insert(0, headers[lane][index])
+        entry.pack(padx=10, pady=4)
+        entry.focus_set()
+
+        def on_ok():
+            headers[lane][index] = entry.get().strip() or LAPS_DEFAULT_HEADERS[index]
+            self.laps_headers = headers
+            self.persist_user_settings(laps_headers=headers)
+            dlg.destroy()
+            self.redraw()
+
+        buttons = tk.Frame(dlg)
+        buttons.pack(pady=10)
+        tk.Button(buttons, text="OK", width=10, command=on_ok).pack(side="left", padx=6)
+        tk.Button(buttons, text="Zrušit", width=10, command=dlg.destroy).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda _event: on_ok())
+        dlg.bind("<Escape>", lambda _event: dlg.destroy())
+        self.root.wait_window(dlg)
+
 
     # --- editing UI (wide dialog) ---
     def edit_slot_dialog(self, r_idx, m_idx, side):
@@ -5861,6 +5907,7 @@ class PlayoffApp:
             "=== TÝMY A HISTORIE V LAPS ===\n"
             "- Modrá tlačítka Team, + a − přepínají dvojice týmů 1/2, 3/4 a dále; vedle tlačítek je aktuální dvojice vždy viditelná\n"
             "- Každý tým má vlastní historii a vlastní pokračující číslování ve sloupci Jízda\n"
+            "- Kliknutím na modré záhlaví změníš název jednotlivého sloupce zvlášť pro A a B\n"
             "- Přepnutí na jinou dvojici původní výsledky nesmaže; po návratu se znovu zobrazí\n"
             "- Nad tabulkami se při přesné shodě ID zobrazí škola a soutěžící z Pojmenování týmů\n"
             "- Nastavení → LAPS → LAPS max počet týmů přijímá sudé číslo nejméně 2\n"
@@ -6894,8 +6941,8 @@ class PlayoffApp:
         self.timer_window = None
         self.canvas.update_idletasks()
 
-        w = self.canvas.winfo_width()
-        h = self.canvas.winfo_height()
+        w = max(900, self.canvas.winfo_width())
+        h = max(600, self.canvas.winfo_height())
         mid = w // 2
 
         if self.font_scale == "small":
@@ -7128,37 +7175,56 @@ class PlayoffApp:
             outline="#0b6bd6"
         )
 
-        self.canvas.create_text(
-            left_x1 + 8,
-            top_y + 5 + header_h / 2,
-            anchor="w",
-            text=" ID  Jízda   Vloženo                       Čas",
-            fill="white",
-            font=header_font
-        )
-        self.canvas.create_text(
-            left_x2 - validity_margin - validity_column_width / 2,
-            top_y + 5 + header_h / 2,
-            text="Platnost",
-            fill="white",
-            font=header_font,
-        )
+        headers = normalize_laps_headers(getattr(self, "laps_headers", None))
+        header_metrics = tkfont.Font(root=self.root, font=header_font)
+        row_metrics = tkfont.Font(root=self.root, font=row_font)
 
-        self.canvas.create_text(
-            right_x1 + 8,
-            top_y + 5 + header_h / 2,
-            anchor="w",
-            text=" ID  Jízda   Vloženo                       Čas",
-            fill="white",
-            font=header_font
-        )
-        self.canvas.create_text(
-            right_x2 - validity_margin - validity_column_width / 2,
-            top_y + 5 + header_h / 2,
-            text="Platnost",
-            fill="white",
-            font=header_font,
-        )
+        def column_points(x1, x2):
+            start = x1 + 8
+            end = max(start + 4, x2 - validity_margin - validity_column_width)
+            width = end - start
+            return [start, start + width * .10, start + width * .26,
+                    start + width * .63, end, x2 - validity_margin]
+
+        def fit_cell(label, width, metrics):
+            label = str(label)
+            if metrics.measure(label) <= width - 4:
+                return label
+            while label and metrics.measure(label + "…") > width - 4:
+                label = label[:-1]
+            return label + "…" if label else ""
+
+        # Keep default labels readable in narrow columns at every font scale.
+        smallest = min(column_points(left_x1, left_x2)[1] - column_points(left_x1, left_x2)[0],
+                       column_points(left_x1, left_x2)[2] - column_points(left_x1, left_x2)[1])
+        while header_metrics.cget("size") > 7 and max(header_metrics.measure("ID"), header_metrics.measure("Jízda")) > smallest - 6:
+            header_metrics.configure(size=header_metrics.cget("size") - 1)
+        header_font = ("Arial", header_metrics.cget("size"), "bold")
+        for lane, x1, x2 in (("a", left_x1, left_x2), ("b", right_x1, right_x2)):
+            points = column_points(x1, x2)
+            for index, label in enumerate(headers[lane]):
+                left, right = points[index], points[index + 1]
+                tag = f"laps_header_{lane}_{index}"
+                self.canvas.create_rectangle(left, top_y, right, top_y + header_h + 5,
+                                             fill="#0b6bd6", outline="", tags=tag)
+                self.canvas.create_text((left + right) / 2, top_y + 5 + header_h / 2,
+                                        text=fit_cell(label, right - left, header_metrics), fill="white", font=header_font, tags=tag)
+                self.canvas.tag_bind(tag, "<Button-1>", lambda _event, side=lane, column=index:
+                                     self.edit_laps_header(side, column))
+
+        def draw_record(record, x1, x2, y):
+            points = column_points(x1, x2)
+            values = (record['id'], record.get('ride', 1), record['date'],
+                      f"{record['time']} ({int(record.get('ms', 0))}ms)")
+            for index, value in enumerate(values):
+                left, right = points[index], points[index + 1]
+                size = row_font[1]
+                metrics = tkfont.Font(root=self.root, font=row_font)
+                while size > 6 and metrics.measure(str(value)) > right - left - 4:
+                    size -= 1
+                    metrics.configure(size=size)
+                self.canvas.create_text((left + right) / 2, y, text=fit_cell(value, right - left, metrics),
+                                        font=(row_font[0], size), fill="black")
 
         # --------------------------------------------------
         # DYNAMIC ROW COUNT
@@ -7200,22 +7266,7 @@ class PlayoffApp:
                 outline=""
             )
 
-            txt = (
-                f"{rec['id']:>3}   "
-                f"{rec.get('ride', 1):>3}   "
-                f"{rec['date']}   "
-                f"{rec['time']}   "
-                f"({ms}ms)"
-            )
-
-            self.canvas.create_text(
-                left_x1 + 8,
-                y,
-                anchor="w",
-                text=txt,
-                font=row_font,
-                fill="black"
-            )
+            draw_record(rec, left_x1, left_x2, y)
 
             ride_id = rec.get("ride", 1)
             action_tag = f"lap_validity_a_{rec['id']}_{ride_id}"
@@ -7282,22 +7333,7 @@ class PlayoffApp:
                 outline=""
             )
 
-            txt = (
-                f"{rec['id']:>3}   "
-                f"{rec.get('ride', 1):>3}   "
-                f"{rec['date']}   "
-                f"{rec['time']}   "
-                f"({ms}ms)"
-            )
-
-            self.canvas.create_text(
-                right_x1 + 8,
-                y,
-                anchor="w",
-                text=txt,
-                font=row_font,
-                fill="black"
-            )                
+            draw_record(rec, right_x1, right_x2, y)
 
             ride_id = rec.get("ride", 1)
             action_tag = f"lap_validity_b_{rec['id']}_{ride_id}"
@@ -7925,7 +7961,6 @@ class PlayoffApp:
             table_w * 0.29,
             table_w * 0.23,
         )
-        headers = ("ID", "Jízda", "Vloženo", "Čas", "Platnost")
 
         def fit_text(text, width, font_size):
             text = str(text or "")
@@ -7942,6 +7977,7 @@ class PlayoffApp:
                 state = self._ensure_laps_team_state(team_id)
                 records = list(state.get("records", []))
                 lane = "A" if team_id % 2 else "B"
+                headers = normalize_laps_headers(getattr(self, "laps_headers", None))[lane.lower()]
                 best_time = best_valid_lap_ms(records)
 
                 pdf.setFillColor(black)
@@ -7965,7 +8001,7 @@ class PlayoffApp:
                     pdf.rect(x, table_top - header_h, width, header_h, stroke=1, fill=1)
                     pdf.setFillColor(HexColor("#ffffff"))
                     pdf.setFont("DejaVu", 11)
-                    pdf.drawCentredString(x + width / 2, table_top - header_h / 2 - 4, header)
+                    pdf.drawCentredString(x + width / 2, table_top - header_h / 2 - 4, fit_text(header, width, 11))
                     x += width
 
                 available_rows_h = table_top - header_h - footer_h - margin

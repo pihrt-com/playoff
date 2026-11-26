@@ -218,6 +218,8 @@ class LapsMenuAndSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as profile:
             app = self.make_real_app(self.root, profile)
             app.laps_max_teams = 6
+            app.laps_headers = {"a": ["Číslo A", "Jízda A", "Datum A", "Čas A", "Stav A"],
+                                "b": ["Číslo B", "Jízda B", "Datum B", "Čas B", "Stav B"]}
             app.team_names = [{
                 "id": "1",
                 "school": "SPŠ elektrotechnická",
@@ -250,6 +252,7 @@ class LapsMenuAndSetupTests(unittest.TestCase):
             with open(setup_path, "r", encoding="utf-8") as saved_file:
                 saved = json.load(saved_file)
             self.assertEqual(saved["laps_max_teams"], 6)
+            self.assertEqual(saved["laps_headers"], app.laps_headers)
             self.assertEqual(saved["laps_active_team_a"], 3)
             self.assertEqual(saved["laps_teams"]["1"]["records"][0]["ms"], 12000)
             self.assertEqual(saved["laps_teams"]["4"]["next_ride"], 2)
@@ -258,9 +261,12 @@ class LapsMenuAndSetupTests(unittest.TestCase):
 
             app.clear_all_laps_history(confirm=False)
             app.laps_max_teams = 40
+            app.laps_headers = playoff.normalize_laps_headers(None)
             with mock.patch.object(playoff.filedialog, "askopenfilename", return_value=setup_path), mock.patch.object(playoff.messagebox, "showinfo"):
                 app.load_setup()
             self.assertEqual(app.laps_max_teams, 6)
+            self.assertEqual(app.laps_headers["a"][0], "Číslo A")
+            self.assertEqual(app.laps_headers["b"][4], "Stav B")
             self.assertEqual(app.laps_active_team_a, 3)
             self.assertEqual(app.laps_b[0]["id"], 4)
             self.assertEqual(app.lap_id_b, 2)
@@ -284,6 +290,10 @@ class LapsMenuAndSetupTests(unittest.TestCase):
             self.assertIn("Team", text_items)
             self.assertIn("1-2", text_items)
             self.assertIn("Platnost", text_items)
+            for lane in ("a", "b"):
+                for index in range(5):
+                    self.assertTrue(app.canvas.find_withtag(f"laps_header_{lane}_{index}"))
+
             header_text = next(text for text in text_items if "Jízda" in text)
             self.assertEqual(
                 app.canvas.itemcget(text_items["Platnost"], "font"),
@@ -302,6 +312,27 @@ class LapsMenuAndSetupTests(unittest.TestCase):
                 if app.canvas.type(item) == "text"
             ]
             self.assertEqual(pair_labels, ["3-4"])
+
+    def test_edit_laps_headers_are_independent_and_persisted(self):
+        with tempfile.TemporaryDirectory() as profile:
+            app = self.make_real_app(self.root, profile)
+            app.view_mode = "laps"
+
+            def fill_dialog():
+                dialog = next(widget for widget in self.root.winfo_children()
+                              if isinstance(widget, tk.Toplevel) and widget.title() == "Změnit záhlaví LAPS – A")
+                entry = next(widget for widget in dialog.winfo_children() if isinstance(widget, tk.Entry))
+                entry.delete(0, "end")
+                entry.insert(0, "Tým")
+                frame = next(widget for widget in dialog.winfo_children() if isinstance(widget, tk.Frame))
+                next(widget for widget in frame.winfo_children() if widget.cget("text") == "OK").invoke()
+
+            self.root.after(10, fill_dialog)
+            app.edit_laps_header("a", 0)
+            self.assertEqual(app.laps_headers["a"][0], "Tým")
+            self.assertEqual(app.laps_headers["b"][0], "ID")
+            with open(os.path.join(profile, ".playoff_settings.json"), encoding="utf-8") as saved_file:
+                self.assertEqual(json.load(saved_file)["laps_headers"]["a"][0], "Tým")
 
     def test_laps_canvas_shows_school_and_participant_only_for_matching_ids(self):
         with tempfile.TemporaryDirectory() as profile:

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.42",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.42/PlayoffSetup_1.0.42.exe",
-  "sha256": "5cbe800089888e35918bc8a3a6426c3e1cf42577417711aceda901acea3fe556",
-  "size": 38554405,
-  "notes": "Knihovna umožňuje přidat více zvuků WAV a MP3 najednou. Tlačítko Stop zvuku zastaví přehrávané zvuky v hlavním okně i nastavení."
+  "version": "1.0.43",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.43/PlayoffSetup_1.0.43.exe",
+  "sha256": "004021e12e6169b8219eced8ad8eb27bdba9c9e5fc5dcc56cc82bb2a2430846a",
+  "size": 38559317,
+  "notes": "V tabulkách LAPS lze kliknutím přejmenovat všechna záhlaví sloupců samostatně pro dráhu A a B. Názvy se ukládají a zobrazují také v exportu PDF."
 }

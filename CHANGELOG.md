@@ -1,5 +1,9 @@
 # Historie změn
 
+## 1.0.43 – 26. 11. 2026
+
+- Modrá záhlaví tabulek LAPS lze přejmenovat kliknutím, každé samostatně pro dráhu A a B. Názvy se ukládají v nastavení a projektu a používají se i v PDF exportu.
+
 ## 1.0.42 – 26. 11. 2026
 
 - Knihovna zvuků umožňuje hromadný výběr a import více souborů WAV a MP3; chyby jednotlivých souborů zobrazí po dokončení importu.

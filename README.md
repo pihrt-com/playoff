@@ -13,6 +13,8 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 26. 11. 2026
 
+V Playoff 1.0.43 lze kliknutím přejmenovat jednotlivá modrá záhlaví tabulek LAPS samostatně pro A a B. Změny se ukládají do nastavení i projektu a zobrazí se také v exportu PDF.
+
 Firmware `Arduino/gate semaphore/fw1.9` vytváří na pinu 46 Arduina Mega obdélníkový signál přibližně 1 kHz pro vstup zesilovače. Časovač jej generuje nezávisle na přerušení při aktualizaci RGB LED. Signál sleduje společné pípání obou drah, zatímco pin 26 nadále ovládá aktivní pípák. Pin 46 není určen pro přímé připojení reproduktoru; vstup zesilovače musí být vhodný pro logický signál 0–5 V a mít společnou zem s Arduinem. Předchozí firmware 1.8 používá pin 28.
 
 Playoff 1.0.41 přidává nastavení zvuků pro PLAYOFF, LAPS, PROMO, provozní kliknutí a změny spojení USB. Nastavení lze přenést v ZIPu s vlastními zvuky a obrázkovým pozadím.
