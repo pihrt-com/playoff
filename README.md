@@ -11,7 +11,9 @@ V aplikaci lze generovat pavouka až pro 28 týmů. Levým tlačítkem zadávám
 
 Import pro předkolo používá výsledky soutěžního systému [ROBO](https://github.com/pihrt-com/robo).
 
-## Aktuální změny – 25. 11. 2026
+## Aktuální změny – 26. 11. 2026
+
+Firmware `Arduino/gate semaphore/fw1.8` přidává na pin 28 Arduina Mega obdélníkový signál přibližně 1 kHz pro vstup zesilovače. Sleduje společné pípání obou drah, zatímco pin 26 nadále ovládá aktivní pípák. Pin 28 není určen pro přímé připojení reproduktoru; vstup zesilovače musí být vhodný pro logický signál 0–5 V a mít společnou zem s Arduinem.
 
 Playoff 1.0.41 přidává nastavení zvuků pro PLAYOFF, LAPS, PROMO, provozní kliknutí a změny spojení USB. Nastavení lze přenést v ZIPu s vlastními zvuky a obrázkovým pozadím.
 
