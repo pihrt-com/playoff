@@ -13,7 +13,7 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 26. 11. 2026
 
-Firmware `Arduino/gate semaphore/fw1.8` přidává na pin 28 Arduina Mega obdélníkový signál přibližně 1 kHz pro vstup zesilovače. Sleduje společné pípání obou drah, zatímco pin 26 nadále ovládá aktivní pípák. Pin 28 není určen pro přímé připojení reproduktoru; vstup zesilovače musí být vhodný pro logický signál 0–5 V a mít společnou zem s Arduinem.
+Firmware `Arduino/gate semaphore/fw1.9` vytváří na pinu 46 Arduina Mega obdélníkový signál přibližně 1 kHz pro vstup zesilovače. Časovač jej generuje nezávisle na přerušení při aktualizaci RGB LED. Signál sleduje společné pípání obou drah, zatímco pin 26 nadále ovládá aktivní pípák. Pin 46 není určen pro přímé připojení reproduktoru; vstup zesilovače musí být vhodný pro logický signál 0–5 V a mít společnou zem s Arduinem. Předchozí firmware 1.8 používá pin 28.
 
 Playoff 1.0.41 přidává nastavení zvuků pro PLAYOFF, LAPS, PROMO, provozní kliknutí a změny spojení USB. Nastavení lze přenést v ZIPu s vlastními zvuky a obrázkovým pozadím.
 
