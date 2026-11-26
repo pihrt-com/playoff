@@ -1,7 +1,7 @@
 {
-  "version": "1.0.41",
-  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.41/PlayoffSetup_1.0.41.exe",
-  "sha256": "ffa93af47ae9e1ee38b9db0c7b6c8cb14124d3ec346048dad58ec370be0d7101",
-  "size": 42260658,
-  "notes": "Playoff přidává zvuky pro start, odpočet, PROMO, provozní kliknutí a výpadek či obnovu USB. Každé události lze přiřadit vestavěný nebo vlastní zvuk WAV či MP3, nastavit jeho hlasitost a vyzkoušet přehrání. Přenosné nastavení v ZIPu obsahuje také vlastní zvuky a obrázkové pozadí."
+  "version": "1.0.42",
+  "url": "https://github.com/pihrt-com/playoff/releases/download/1.0.42/PlayoffSetup_1.0.42.exe",
+  "sha256": "5cbe800089888e35918bc8a3a6426c3e1cf42577417711aceda901acea3fe556",
+  "size": 38554405,
+  "notes": "Knihovna umožňuje přidat více zvuků WAV a MP3 najednou. Tlačítko Stop zvuku zastaví přehrávané zvuky v hlavním okně i nastavení."
 }

@@ -100,6 +100,17 @@ def add_sound(source):
     return sound
 
 
+def add_sounds(sources):
+    """Import each file independently and report failures without losing successes."""
+    added, errors = [], []
+    for source in sources:
+        try:
+            added.append(add_sound(source))
+        except (OSError, ValueError) as error:
+            errors.append(f"{Path(source).name}: {error}")
+    return added, errors
+
+
 def sound_path(sound):
     if sound not in BUILTINS:
         if not SOUND_ID.fullmatch(sound):
@@ -149,11 +160,18 @@ class SoundPlayer:
         self.stopping.set()
         self.executor.shutdown(wait=False, cancel_futures=True)
 
+    def stop(self):
+        """Stop current sounds without disabling future playback."""
+        self.stopping.set()
+        self.stopping = threading.Event()
+
     @staticmethod
     def _play(sound, volume, stopping=None):
         import time
         from uuid import uuid4
 
+        if stopping is not None and stopping.is_set():
+            return
         path = sound_path(sound)
         if os.name != "nt":
             raise RuntimeError("Přehrávání vyžaduje Windows.")
@@ -171,6 +189,8 @@ class SoundPlayer:
         command(f'open "{path}" type mpegvideo alias {alias}')
         try:
             command(f"setaudio {alias} volume to {volume * 10}")
+            if stopping is not None and stopping.is_set():
+                return
             command(f"play {alias}")
             deadline = time.monotonic() + 120
             while time.monotonic() < deadline and command(f"status {alias} mode") == "playing":

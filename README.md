@@ -17,6 +17,8 @@ Firmware `Arduino/gate semaphore/fw1.9` vytváří na pinu 46 Arduina Mega obdé
 
 Playoff 1.0.41 přidává nastavení zvuků pro PLAYOFF, LAPS, PROMO, provozní kliknutí a změny spojení USB. Nastavení lze přenést v ZIPu s vlastními zvuky a obrázkovým pozadím.
 
+Playoff 1.0.42 umožňuje vybrat a přidat více zvukových souborů najednou. Tlačítko Stop zvuku v horní liště a v dialogu Zvuky zastaví právě přehrávané zvuky.
+
 ### Zvuky a přenos nastavení
 
 V nabídce **Nastavení → Zvuky** zvolte vestavěné pípnutí nebo přidejte vlastní WAV či MP3 na kartě **Knihovna zvuků**. Události jsou ve výchozím stavu vypnuté. U každé lze samostatně nastavit zvuk a hlasitost 0–100 %. **Test** přehraje vybraný zvuk i u vypnuté události. Upozornění LAPS zazní nejvýše jednou v každém cyklu, pokud je předstih kratší než celý odpočet.

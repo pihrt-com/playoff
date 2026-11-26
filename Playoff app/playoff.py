@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Martin Pihrt'
 
-APP_current       = "1.0.41"                                         # current version of the application
-APP_date          = "25.11.2026"                                     # current version date
+APP_current       = "1.0.42"                                         # current version of the application
+APP_date          = "26.11.2026"                                     # current version date
 update_check_link = "https://raw.githubusercontent.com/pihrt-com/playoff/refs/heads/main/Playoff%20app/version.json"    # path to JSON with APP version
 
 import tkinter as tk
@@ -1492,6 +1492,7 @@ class PlayoffApp:
         )
 
         self.start_btn.pack(side='right', padx=4)
+        tk.Button(toolbar, text="Stop zvuku", command=self.sound_player.stop).pack(side="right", padx=4)
         if not USB_AVAILABLE:
             self.start_btn.config(state='disabled')
             self.status_var.set('USB modul chybí')
@@ -4306,10 +4307,16 @@ class PlayoffApp:
                 choice.set(available[assigned[event]])
 
         def import_sound():
-            filename = filedialog.askopenfilename(parent=dialog,
+            filenames = filedialog.askopenfilenames(parent=dialog,
                 filetypes=[("Zvuky WAV a MP3", "*.wav *.mp3")])
-            if filename:
-                self.run_media_job(lambda: sounds.add_sound(filename), refresh_library,
+            if filenames:
+                def import_finished(result):
+                    added, errors = result
+                    refresh_library(added[-1] if added else None)
+                    if errors:
+                        messagebox.showwarning("Import zvuků", "Nepodařilo se přidat:\n" + "\n".join(errors), parent=dialog)
+
+                self.run_media_job(lambda: sounds.add_sounds(filenames), import_finished,
                                    title="Přidat zvuk", dialog=dialog)
 
         def test_library_sound():
@@ -4337,6 +4344,7 @@ class PlayoffApp:
         ttk.Button(library, text="Test", command=test_library_sound).grid(row=2, column=1, sticky="e")
         buttons = ttk.Frame(dialog, padding=(10, 0, 10, 10))
         buttons.pack(fill="x")
+        ttk.Button(buttons, text="Stop zvuku", command=self.sound_player.stop).pack(side="left")
         ttk.Button(buttons, text="Uložit", command=save).pack(side="right")
         ttk.Button(buttons, text="Zavřít", command=dialog.destroy).pack(side="right", padx=6)
         refresh_library()
@@ -5903,6 +5911,7 @@ class PlayoffApp:
             "Nastavení → Zvuky\n"
             "- V knihovně jsou vestavěná pípnutí a lze přidat vlastní WAV nebo MP3.\n"
             "- Každá událost má výběr zvuku, přepínač, hlasitost 0–100 % a tlačítko Test.\n"
+            "- V knihovně lze přidat více souborů WAV nebo MP3 najednou. Stop zvuku zastaví právě přehrávané zvuky.\n"
             "- Předstih v LAPS se zadává v sekundách a upozornění zazní jednou za cyklus.\n\n"
 
             "=== UKLÁDÁNÍ A NAČÍTÁNÍ ===\n"

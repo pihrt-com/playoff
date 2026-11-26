@@ -1,5 +1,10 @@
 # Historie změn
 
+## 1.0.42 – 26. 11. 2026
+
+- Knihovna zvuků umožňuje hromadný výběr a import více souborů WAV a MP3; chyby jednotlivých souborů zobrazí po dokončení importu.
+- Tlačítko Stop zvuku v hlavní liště i nastavení zvuků zastaví právě přehrávané zvuky; následující přehrávání zůstává dostupné.
+
 ## 1.0.41 – 25. 11. 2026
 
 - Nabídka Zvuky přidává vestavěná pípnutí a úložiště WAV a MP3. Pro každou událost lze zvolit zvuk, zapnutí, hlasitost a ověřit přehrání tlačítkem Test.

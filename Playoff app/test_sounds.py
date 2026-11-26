@@ -10,6 +10,43 @@ import playoff
 import playoff_sounds as sounds
 
 
+def test_multiple_sound_import_keeps_successes_when_one_file_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(sounds, "media_root", lambda: tmp_path / "library")
+    first = tmp_path / "first.wav"
+    second = tmp_path / "second.mp3"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    added, errors = sounds.add_sounds([first, tmp_path / "missing.wav", second])
+    assert len(added) == 2
+    assert len(errors) == 1 and "missing.wav" in errors[0]
+    assert all(sounds.sound_path(sound).is_file() for sound in added)
+
+
+def test_stop_interrupts_current_sounds_and_allows_new_playback(monkeypatch):
+    started = threading.Event()
+    stopped = threading.Event()
+
+    def playback(sound, volume, stopping):
+        started.set()
+        if stopping.wait(2):
+            stopped.set()
+
+    monkeypatch.setattr(sounds.SoundPlayer, "_play", staticmethod(playback))
+    player = sounds.SoundPlayer()
+    try:
+        first = player.play("short", 75)
+        assert started.wait(1)
+        player.stop()
+        assert stopped.wait(1)
+        first.result(timeout=1)
+        assert not player.stopping.is_set()
+        second = player.play("long", 75)
+        player.stop()
+        second.result(timeout=2)
+    finally:
+        player.close()
+
+
 def test_portable_setup_round_trip_on_an_empty_profile(tmp_path, monkeypatch):
     source_profile = tmp_path / "source"
     target_profile = tmp_path / "target"
