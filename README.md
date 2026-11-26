@@ -13,6 +13,8 @@ Import pro předkolo používá výsledky soutěžního systému [ROBO](https://
 
 ## Aktuální změny – 26. 11. 2026
 
+Firmware `Arduino/matrix display/fw1.1` bezpečněji zpracovává UTF-8 a příliš dlouhé příkazy, přidává vybraná turecká písmena a převádí německé ß na SS. Nepodporované znaky včetně čínských se zobrazí jako otazník. Kontrola GitHub Actions ověřuje názvy vydání proti číslům verzí při vytvoření či úpravě vydání a při změnách hlavní větve.
+
 V Playoff 1.0.43 lze kliknutím přejmenovat jednotlivá modrá záhlaví tabulek LAPS samostatně pro A a B. Změny se ukládají do nastavení i projektu a zobrazí se také v exportu PDF.
 
 Firmware `Arduino/gate semaphore/fw1.9` vytváří na pinu 46 Arduina Mega obdélníkový signál přibližně 1 kHz pro vstup zesilovače. Časovač jej generuje nezávisle na přerušení při aktualizaci RGB LED. Signál sleduje společné pípání obou drah, zatímco pin 26 nadále ovládá aktivní pípák. Pin 46 není určen pro přímé připojení reproduktoru; vstup zesilovače musí být vhodný pro logický signál 0–5 V a mít společnou zem s Arduinem. Předchozí firmware 1.8 používá pin 28.
